@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../../src/config.ts";
-import { qmdSyncCommand } from "../../src/cli/qmd.ts";
 import type { PluginBase } from "../../src/plugins/index.ts";
 import type { ShellExecResult } from "../../src/shell.ts";
 import {
@@ -117,10 +116,6 @@ describe("qmd sync label selection", () => {
     expect(qmdSyncLabels(base.config, "")).toEqual(["index:code"]);
     expect(qmdSyncLabels(base.config, "other")).toEqual(["other"]);
     rmSync(root, { recursive: true, force: true });
-  });
-
-  it("exposes the lexical-only mode as --no-embed", () => {
-    expect(qmdSyncCommand.args).toHaveProperty("no-embed");
   });
 });
 

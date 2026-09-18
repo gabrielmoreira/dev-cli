@@ -25,7 +25,7 @@ export const qmdSyncCommand = defineCommand({
     const code = await plugin.run({
       subcommand: "sync",
       label: String(args.label ?? ""),
-      noEmbed: args["no-embed"],
+      noEmbed: args.embed === false,
     });
     return typeof code === "number" ? code : 0;
   },

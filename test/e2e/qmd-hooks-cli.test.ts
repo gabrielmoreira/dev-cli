@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
@@ -163,6 +163,48 @@ hooks:
     await rm(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(
       () => {},
     );
+  });
+
+  it("does not run vector embedding when qmd sync receives --no-embed", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "dev-cli-qmd-no-embed-"));
+    const qmdScript = join(rootDir, "qmd-stub");
+    const callsFile = join(rootDir, "qmd-calls.log");
+
+    try {
+      await fs.writeText(qmdScript, '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$QMD_CALLS"\n');
+      await chmod(qmdScript, 0o755);
+      await fs.writeText(
+        join(rootDir, "dev.yaml"),
+        [
+          "sources:",
+          `  - url: ${JSON.stringify(bareRemotePath)}`,
+          "    branch: main",
+          "    labels:",
+          '      "index:demo": {}',
+          "plugins:",
+          "  qmd:",
+          `    command: ${JSON.stringify(qmdScript)}`,
+          "    config_dir: scoped",
+          "",
+        ].join("\n"),
+      );
+
+      const syncProc = Bun.spawn(
+        ["bun", "run", cliPath, "qmd", "sync", "index:demo", "--no-embed", "--root", rootDir],
+        {
+          env: { ...process.env, QMD_CALLS: callsFile },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+
+      expect(await syncProc.exited).toBe(0);
+      const calls = (await fs.readText(callsFile)).trim().split("\n");
+      expect(calls).toContain("update");
+      expect(calls).not.toContain("embed");
+    } finally {
+      await rm(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 
   it("handles missing optional tooling gracefully without failing mount operation", async () => {
