@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ui } from "../../src/ui.ts";
@@ -30,6 +30,137 @@ describe("smart CLI input", () => {
     console.log = originalLog;
     console.error = originalError;
     await rm(root, { recursive: true, force: true });
+  });
+
+  test("guides an argument-free init with an editable default root path", async () => {
+    const home = join(root, "home");
+    const selectedRoot = join(home, "engineering");
+    await mkdir(home, { recursive: true });
+    await mkdir(join(home, "dev"), { recursive: true });
+    const text = spyOn(ui, "text").mockResolvedValueOnce(selectedRoot);
+    const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(false);
+
+    const exitCode = await runCli({
+      argv: ["init"],
+      cwd: home,
+      env: { HOME: home, USERPROFILE: home },
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(text).toHaveBeenCalledWith("Dev root path", join(home, "dev"));
+    expect(existsSync(join(selectedRoot, "dev.yaml"))).toBe(true);
+    expect(existsSync(join(selectedRoot, "AGENTS.md"))).toBe(true);
+    expect(confirm).toHaveBeenCalledWith("Add a provider now?", true);
+    text.mockRestore();
+    confirm.mockRestore();
+  });
+
+  test("offers to update the current root or create another one", async () => {
+    const existingRoot = join(root, "existing-root");
+    const nested = join(existingRoot, "ws", "current-task");
+    await mkdir(nested, { recursive: true });
+    await writeFile(join(existingRoot, "dev.yaml"), "sync_strategy: ff-only\n");
+    const select = spyOn(ui, "select").mockResolvedValueOnce("update");
+    const text = spyOn(ui, "text");
+    const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(false);
+
+    const exitCode = await runCli({
+      argv: ["init"],
+      cwd: nested,
+      env: { HOME: root, USERPROFILE: root },
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(select).toHaveBeenCalledWith("A dev root already exists here", [
+      { label: `Update ${existingRoot}`, value: "update" },
+      { label: "Create another dev root", value: "create" },
+    ]);
+    expect(text).not.toHaveBeenCalled();
+    expect(await Bun.file(join(existingRoot, "dev.yaml")).text()).toBe("sync_strategy: ff-only\n");
+    select.mockRestore();
+    text.mockRestore();
+    confirm.mockRestore();
+  });
+
+  test("makes a newly created guided root the global default", async () => {
+    const existingRoot = join(root, "current-root");
+    const nested = join(existingRoot, "ws", "current-task");
+    const newRoot = join(root, "next-root");
+    await mkdir(nested, { recursive: true });
+    expect(
+      await runCli({
+        argv: ["init", existingRoot, "--alias", "current"],
+        cwd: root,
+        env: { HOME: root, USERPROFILE: root },
+        isTTY: false,
+      }),
+    ).toBe(0);
+    const select = spyOn(ui, "select").mockResolvedValueOnce("create");
+    const text = spyOn(ui, "text").mockResolvedValueOnce(newRoot);
+    const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(false);
+
+    expect(
+      await runCli({
+        argv: ["init"],
+        cwd: nested,
+        env: { HOME: root, USERPROFILE: root },
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+
+    expect(existsSync(join(newRoot, "dev.yaml"))).toBe(true);
+    expect(await Bun.file(join(root, ".dev.toml")).text()).toContain('default_root = "next-root"');
+    select.mockRestore();
+    text.mockRestore();
+    confirm.mockRestore();
+  });
+  test("adds a provider and synchronizes its inventory before init completes", async () => {
+    const home = join(root, "onboarding-home");
+    const selectedRoot = join(home, "dev");
+    await mkdir(home, { recursive: true });
+    const text = spyOn(ui, "text")
+      .mockResolvedValueOnce(selectedRoot)
+      .mockResolvedValueOnce("example-owner");
+    const select = spyOn(ui, "select").mockResolvedValueOnce("github");
+    const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json([
+        {
+          id: 1,
+          name: "example-repository",
+          full_name: "example-owner/example-repository",
+          clone_url: "https://github.com/example-owner/example-repository.git",
+          default_branch: "main",
+        },
+      ]),
+    );
+
+    const exitCode = await runCli({
+      argv: ["init"],
+      cwd: home,
+      env: { HOME: home, USERPROFILE: home, GITHUB_TOKEN: "test-token" },
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    const config = await Bun.file(join(selectedRoot, "dev.yaml")).text();
+    expect(config).toContain("type: github");
+    expect(config).toContain("owner: example-owner");
+    expect(await cache.loadAllCachedInventories(selectedRoot)).toMatchObject([
+      { name: "example-repository", default_branch: "main" },
+    ]);
+    expect(logs.join("\n")).toContain("Synchronized repository inventory");
+    expect(request).toHaveBeenCalledTimes(1);
+    text.mockRestore();
+    select.mockRestore();
+    confirm.mockRestore();
+    request.mockRestore();
   });
 
   test("collects a missing workspace name before creating it in an interactive terminal", async () => {

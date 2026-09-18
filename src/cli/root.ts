@@ -9,11 +9,15 @@ import {
   unregisterGlobalRoot,
 } from "../global.ts";
 import { ui } from "../ui.ts";
-import { getActiveConfig, getAmbient } from "./context.ts";
+import { providerAddCommand } from "./provider.ts";
+import { syncInventoryCommand } from "./sync.ts";
+import { canPrompt, getActiveConfig, getAmbient, type AmbientContext } from "./context.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 const ROOT_AGENTS_CONTENT = `# dev CLI Root
+
+These instructions apply only inside this dev root and its descendants. They are not global machine or user instructions.
 
 This directory is managed by dev CLI. It contains task workspaces under \`ws/\` and canonical repository mirrors under \`mirrors/\`.
 
@@ -27,7 +31,7 @@ This directory is managed by dev CLI. It contains task workspaces under \`ws/\` 
 
 - \`dev current\`: show the active dev root.
 - \`dev ws list\`: list workspaces.
-- \`dev ws init <name> --description "<objective>"\`: create a workspace.
+- \`dev ws init <name> --desc "<objective>"\`: create a workspace.
 - \`dev ws add <url-or-name>\`: add a repository to the current workspace.
 - \`dev ws status\`: compare declared and checked-out workspace state.
 - \`dev ws start [name]\`: start or focus OMP in HerdR for a workspace.
@@ -41,11 +45,46 @@ This directory is managed by dev CLI. It contains task workspaces under \`ws/\` 
 - Do not edit \`.dev/\` or \`mirrors/\` directly. Use dev CLI commands so metadata and worktrees stay consistent.
 `;
 
+type ExistingRootChoice = "update" | "create";
+
+function nextDefaultRoot(homeDir: string): string {
+  const defaultRoot = resolve(homeDir, "dev");
+  if (!fs.exists(defaultRoot)) return defaultRoot;
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${defaultRoot}-${suffix}`;
+    if (!fs.exists(candidate)) return candidate;
+  }
+}
+
+async function resolveInitTarget(
+  path: string | undefined,
+  ambient: AmbientContext,
+  homeDir: string,
+): Promise<string> {
+  if (path) return resolve(ambient.cwd, path);
+  if (!canPrompt(ambient)) return resolve(homeDir, "dev");
+
+  const current = getActiveConfig();
+  let createAnother = false;
+  if (current.rootSource === "file") {
+    const choice = await ui.select<ExistingRootChoice>("A dev root already exists here", [
+      { label: `Update ${current.root}`, value: "update" },
+      { label: "Create another dev root", value: "create" },
+    ]);
+    if (choice === "update") return current.root;
+    createAnother = true;
+  }
+
+  const initial = createAnother ? nextDefaultRoot(homeDir) : resolve(homeDir, "dev");
+  const selected = await ui.text("Dev root path", initial);
+  return resolve(ambient.cwd, selected?.trim() || initial);
+}
+
 export const initCommand = defineCommand({
   meta: {
     name: "init",
     description:
-      "Initialize a dev root with dev.yaml and AGENTS.md, then register it in ~/.dev.toml",
+      "Initialize or update a dev root; without arguments, guide providers and inventory",
   },
   args: {
     path: {
@@ -64,7 +103,13 @@ export const initCommand = defineCommand({
   async run({ args }) {
     const ambient = getAmbient();
     const homeDir = ambient.env.HOME || ambient.env.USERPROFILE || ambient.cwd;
-    const targetDir = args.path ? resolve(ambient.cwd, args.path) : resolve(homeDir, "dev");
+    const guided =
+      canPrompt(ambient) && !args.path && !args.alias && !args.adoOrg && !args.githubOwner;
+    const targetDir = guided
+      ? await resolveInitTarget(args.path, ambient, homeDir)
+      : args.path
+        ? resolve(ambient.cwd, args.path)
+        : resolve(homeDir, "dev");
     await fs.ensureDir(targetDir);
 
     const alias = args.alias || basename(targetDir);
@@ -105,7 +150,7 @@ export const initCommand = defineCommand({
     const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);
     const globalConfig = await loadGlobalConfig(globalPath);
     globalConfig.roots[alias] = { path: targetDir.replace(/\\/g, "/") };
-    if (!globalConfig.default_root || args.alias) {
+    if (!globalConfig.default_root || args.alias || guided) {
       globalConfig.default_root = alias;
     }
     await saveGlobalConfig(globalConfig, globalPath);
@@ -129,7 +174,15 @@ export const initCommand = defineCommand({
       },
     });
 
-    return 0;
+    if (!guided || !(await ui.confirm("Add a provider now?", true))) return 0;
+
+    do {
+      const providerResult = await runNestedCommand(providerAddCommand, ["--root", targetDir]);
+      if (typeof providerResult === "number" && providerResult !== 0) return providerResult;
+    } while (await ui.confirm("Add another provider?", false));
+
+    const syncResult = await runNestedCommand(syncInventoryCommand, ["--root", targetDir]);
+    return typeof syncResult === "number" ? syncResult : 0;
   },
 });
 

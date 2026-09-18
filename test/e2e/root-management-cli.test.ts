@@ -72,6 +72,7 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
     expect(fs.exists(agentsPath)).toBe(true);
     const content = await fs.readText(agentsPath);
     expect(content).toContain("# dev CLI Root");
+    expect(content).toContain("These instructions apply only inside this dev root");
     expect(content).toContain("`dev --help`");
     expect(content).toContain("`dev --help --llms`");
     expect(content).toContain("Read `ws.md` before starting work");

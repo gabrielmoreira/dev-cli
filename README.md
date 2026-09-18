@@ -20,26 +20,30 @@ dev --help
 ## Quick start
 
 ```bash
-dev init
-dev provider add
-dev sync inventory
+dev init # choose the root and provider; sync the repository catalog
 
-dev ws init payment-fix --desc "Investigate payment retries"
-cd ~/dev/ws/payment-fix
-dev ws add
+dev ws init oss-oh-my-pi --desc "Contribute to Oh My Pi"
+cd ~/dev/ws/oss-oh-my-pi
+dev ws add https://github.com/can1357/oh-my-pi # mount the repository
 
-dev status
-dev sync
+dev status # inspect the workspace
+dev sync   # safely fast-forward clean mounts
 ```
 
-`provider add`, `ws add`, and `ws init` prompt for missing values in an
-interactive terminal. Pass explicit arguments in scripts.
+This creates a task workspace for editing Oh My Pi without turning the dev root
+itself into a project checkout. Commands still accept explicit arguments for
+scripts and repeatable automation.
 
 ---
 
 ## What `dev init` creates
 
-With no path, `dev init` creates `~/dev`, writes `dev.yaml` and `AGENTS.md`, and
+With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an
+editable path, detects when you are already inside a dev root, and lets you update
+that root or create another one. It can then add providers and synchronizes their
+repository inventory before returning.
+
+After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, then
 registers the root in `~/.dev.toml`.
 
 `dev.yaml` is the root configuration: defaults, providers, sources, labels,
@@ -48,12 +52,13 @@ hooks, and plugins. Generated repositories and caches do not belong there.
 ```text
 ~/dev/
 ├── dev.yaml
+├── AGENTS.md # instructions only for this dev root and its descendants
 ├── ws/       # task workspaces; each contains ws.md and isolated worktrees
 └── mirrors/  # canonical reference checkouts managed by dev
 ```
 
 Work inside `ws/`. Do not edit `mirrors/` directly. Directories are created when
-first needed.
+first needed. `AGENTS.md` is not a global machine or user configuration.
 
 For separate clients or contexts, create more roots and select the default:
 
@@ -143,10 +148,10 @@ dev sync   # fast-forward safe mounts
 
 ### Open the right OMP in HerdR
 
-From a HerdR pane, start work without manually recreating terminal context:
+From a HerdR pane, open OMP in the workspace created above:
 
 ```bash
-dev ws start payment-fix
+dev ws start oss-oh-my-pi
 ```
 
 `dev` uses the dev workspace directory as the pane working directory. It focuses an
