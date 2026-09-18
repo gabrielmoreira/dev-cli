@@ -52,6 +52,20 @@ The repository is an isolated worktree ready for code review, local changes,
 tests, and a contribution branch. The URI may use any Git-supported scheme, such
 as `https:`, `http:`, `ssh:`, `git:`, or `file:`.
 
+A GitHub or Azure DevOps pull request URL continues from the PR source branch.
+`dev` reads the PR metadata, uses the head repository for forks, and suggests a
+searchable name in the form `pr-<number>-<repo>-<branch-slug>`:
+
+```bash
+dev ws init https://github.com/gabrielmoreira/tiny-asl-machine/pull/52
+dev ws init https://dev.azure.com/org/project/_git/repo/pullrequest/1234
+```
+
+Suggested names target 64 characters by shortening only the branch suffix. Pass
+`--desc` to replace the generated `Continue PR #<number>: <title>` objective.
+Use `dev pr checkout --review` instead when the PR needs an isolated local review
+branch.
+
 ---
 
 ## What `dev init` creates
@@ -175,25 +189,25 @@ confirmed once before `dev.yaml` is updated. The same label can drive
 
 ## Commands
 
-| Command                         | What it does                                                       |
-| ------------------------------- | ------------------------------------------------------------------ |
-| `dev ws init [name\|URI]`       | Create a workspace from blank, selected repositories, or a workset |
-| `dev ws add [name\|URI]`        | Mount a repository into the current or selected workspace          |
-| `dev workset list\|show`        | Inspect reusable repository plans from `dev.yaml`                  |
-| `dev ws start [query]`          | Fuzzy-select, start, or focus OMP in HerdR for a workspace         |
-| `dev status`                    | Show mount status (clean / dirty / ahead / behind)                 |
-| `dev sync`                      | Update the current workspace, or sync inventory outside it         |
-| `dev ls`                        | List all workspaces (`dev ws list` also works)                     |
-| `dev go [query]`                | Fuzzy-select a workspace by recent creation and change directory   |
-| `dev ws remove [mount]`         | Select and confirm a mount (`--force` with explicit input in CI)   |
-| `dev pr`                        | Show open pull requests assigned to the authenticated reviewer     |
-| `dev pr -i`                     | Select one repository, then show its pull requests                 |
-| `dev pr --label <label>`        | Show pull requests for sources carrying a label                    |
-| `dev wi`                        | Show cached work items; `--refresh` selects a provider and project |
-| `dev qmd sync [label]`          | Sync one label, or every assigned `index:*` label when omitted     |
-| `dev root add\|remove <target>` | Register or unregister a root without deleting its files           |
-| `dev provider list`             | Show configured providers                                          |
-| `dev doctor`                    | Check environment, tools, and credential status                    |
+| Command                           | What it does                                                       |
+| --------------------------------- | ------------------------------------------------------------------ |
+| `dev ws init [name\|URI\|PR-URL]` | Create a workspace from blank, repository, PR, or workset          |
+| `dev ws add [name\|URI]`          | Mount a repository into the current or selected workspace          |
+| `dev workset list\|show`          | Inspect reusable repository plans from `dev.yaml`                  |
+| `dev ws start [query]`            | Fuzzy-select, start, or focus OMP in HerdR for a workspace         |
+| `dev status`                      | Show mount status (clean / dirty / ahead / behind)                 |
+| `dev sync`                        | Update the current workspace, or sync inventory outside it         |
+| `dev ls`                          | List all workspaces (`dev ws list` also works)                     |
+| `dev go [query]`                  | Fuzzy-select a workspace by recent creation and change directory   |
+| `dev ws remove [mount]`           | Select and confirm a mount (`--force` with explicit input in CI)   |
+| `dev pr`                          | Show open pull requests assigned to the authenticated reviewer     |
+| `dev pr -i`                       | Select one repository, then show its pull requests                 |
+| `dev pr --label <label>`          | Show pull requests for sources carrying a label                    |
+| `dev wi`                          | Show cached work items; `--refresh` selects a provider and project |
+| `dev qmd sync [label]`            | Sync one label, or every assigned `index:*` label when omitted     |
+| `dev root add\|remove <target>`   | Register or unregister a root without deleting its files           |
+| `dev provider list`               | Show configured providers                                          |
+| `dev doctor`                      | Check environment, tools, and credential status                    |
 
 ---
 

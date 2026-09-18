@@ -9,7 +9,16 @@ import { isExplicitSource, resolveInputSource } from "../inventory.ts";
 import type { RuntimeConfig } from "../config.ts";
 import * as cache from "../cache.ts";
 import { resolveJumpTarget } from "../nav.ts";
-import { resolveExtraHeader } from "../credentials.ts";
+import {
+  CredentialError,
+  getGitExtraHeader,
+  resolveAzureDevOpsCredential,
+  resolveExtraHeader,
+  resolveGitHubCredential,
+} from "../credentials.ts";
+import { createAzureDevOps } from "../ado.ts";
+import { createGitHubClient } from "../github.ts";
+import * as prWorkspace from "../pr-workspace.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveConfirmation, resolveTextInput } from "./input.ts";
@@ -22,13 +31,50 @@ import {
 } from "./workspace-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
+async function resolvePullRequestPlan(
+  config: RuntimeConfig,
+  value: string,
+): Promise<{ plan: prWorkspace.PullRequestWorkspacePlan; extraHeader?: string } | undefined> {
+  if (!prWorkspace.parsePullRequestUrl(value)) return undefined;
+  let extraHeader: string | undefined;
+  const plan = await prWorkspace.resolvePullRequestWorkspacePlan(value, {
+    getGitHubPullRequest: async (reference) => {
+      let token: string | undefined;
+      try {
+        token = (await resolveGitHubCredential(config)).token;
+      } catch (error) {
+        if (!(error instanceof CredentialError)) throw error;
+      }
+      return await createGitHubClient({ token }).getPullRequest(
+        reference.owner,
+        reference.repository,
+        reference.pullRequestId,
+      );
+    },
+    getAzureDevOpsPullRequest: async (reference) => {
+      const credential = await resolveAzureDevOpsCredential(config);
+      extraHeader = getGitExtraHeader(credential);
+      return await createAzureDevOps({
+        organization: reference.organization,
+        token: credential.token,
+      }).getPullRequest(reference.repository, reference.pullRequestId, {
+        project: reference.project,
+      });
+    },
+  });
+  return plan ? { plan, extraHeader } : undefined;
+}
 export const wsInitCommand = defineCommand({
   meta: {
     name: "init",
     description: "Initialize a new workspace with ws.md and .local/",
   },
   args: {
-    name: { type: "positional", description: "Workspace name or repository URI", required: false },
+    name: {
+      type: "positional",
+      description: "Workspace name, repository URI, or pull request URL",
+      required: false,
+    },
     desc: { type: "string", description: "Workspace description" },
     root: { type: "string", description: "Explicit dev root directory" },
     workset: { type: "string", description: "Initialize from a configured workset" },
@@ -46,8 +92,23 @@ export const wsInitCommand = defineCommand({
     let reviewPlan = false;
 
     if (rawName && isExplicitSource(rawName)) {
-      mounts = [{ source: rawName, path: git.deriveDefaultMountPath(rawName) }];
-      suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
+      const resolvedPullRequest = await resolvePullRequestPlan(config, rawName);
+      if (resolvedPullRequest) {
+        const { plan } = resolvedPullRequest;
+        mounts = [
+          {
+            source: plan.source,
+            branch: plan.branch,
+            path: plan.repository,
+            extraHeader: resolvedPullRequest.extraHeader,
+          },
+        ];
+        suggestedName = plan.workspaceName;
+        suggestedDescription = plan.description;
+      } else {
+        mounts = [{ source: rawName, path: git.deriveDefaultMountPath(rawName) }];
+        suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
+      }
       rawName = undefined;
     } else if (args.workset) {
       const resolved = await resolveWorksetMounts(config, args.workset);
@@ -116,7 +177,7 @@ export const wsInitCommand = defineCommand({
       required: {
         command: "ws init",
         field: "name",
-        usage: "dev ws init <name|repository-uri> [--workset <name>]",
+        usage: "dev ws init <name|repository-uri|pull-request-url> [--workset <name>]",
         description: "Workspace name",
       },
       ambient,
@@ -158,7 +219,7 @@ export const wsInitCommand = defineCommand({
             source: mount.source,
             path: mount.path,
             branch: mount.branch,
-            extraHeader: await resolveExtraHeader(config, mount.source),
+            extraHeader: mount.extraHeader ?? (await resolveExtraHeader(config, mount.source)),
             trustedScopes: config.trustedScopes,
             globalHooks: config.hooks,
           }),
@@ -200,6 +261,7 @@ interface PlannedMount {
   branch?: string;
   path: string;
   reason?: string;
+  extraHeader?: string;
 }
 
 function renderMountPlan(title: string, mounts: PlannedMount[]): string {

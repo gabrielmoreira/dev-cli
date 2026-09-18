@@ -223,6 +223,121 @@ describe("smart CLI input", () => {
     prompt.mockRestore();
   });
 
+  test("creates a workspace from a GitHub pull request URL on its source branch", async () => {
+    const source = join(root, "pr-source.git");
+    const seed = join(root, "pr-seed");
+    await git.runGit(["init", "--bare", source]);
+    await git.runGit(["init", "-b", "feature/pr-url", seed]);
+    await git.runGit(["config", "user.name", "PR Workspace Test"], { cwd: seed });
+    await git.runGit(["config", "user.email", "pr@example.com"], { cwd: seed });
+    await writeFile(join(seed, "README.md"), "# pull request branch\n");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "feat: seed pull request branch"], { cwd: seed });
+    await git.runGit(["remote", "add", "origin", source], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "feature/pr-url"], { cwd: seed });
+
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        id: 100,
+        number: 52,
+        title: "Make transitions deterministic",
+        state: "open",
+        head: {
+          ref: "feature/pr-url",
+          repo: { name: "contributor-fork", clone_url: source },
+        },
+        base: { ref: "main" },
+      }),
+    );
+
+    const exitCode = await runCli({
+      argv: [
+        "ws",
+        "init",
+        "https://github.com/gabrielmoreira/tiny-asl-machine/pull/52",
+        "--root",
+        root,
+        "--json",
+      ],
+      cwd: root,
+      env: { GITHUB_TOKEN: "test-token" },
+      isTTY: false,
+    });
+
+    const workspaceName = "pr-52-tiny-asl-machine-feature-pr-url";
+    const workspacePath = join(root, "ws", workspaceName);
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(workspacePath, "tiny-asl-machine", "README.md"))).toBe(true);
+    const workspace = await manifest.readWorkspace(join(workspacePath, "ws.md"));
+    expect(workspace.manifest.description).toBe("Continue PR #52: Make transitions deterministic");
+    expect(workspace.manifest.mounts[0]).toMatchObject({
+      path: "tiny-asl-machine",
+      source,
+      revision: { mode: "track", branch: "feature/pr-url" },
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    request.mockRestore();
+  });
+
+  test("creates a workspace from an Azure DevOps pull request URL on its source branch", async () => {
+    const source = join(root, "ado-pr-source.git");
+    const seed = join(root, "ado-pr-seed");
+    await git.runGit(["init", "--bare", source]);
+    await git.runGit(["init", "-b", "users/gabriel/update-auth", seed]);
+    await git.runGit(["config", "user.name", "ADO PR Workspace Test"], { cwd: seed });
+    await git.runGit(["config", "user.email", "ado-pr@example.com"], { cwd: seed });
+    await writeFile(join(seed, "README.md"), "# Azure pull request branch\n");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "feat: seed Azure pull request branch"], { cwd: seed });
+    await git.runGit(["remote", "add", "origin", source], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "users/gabriel/update-auth"], { cwd: seed });
+
+    let authorization = "";
+    const request = spyOn(globalThis, "fetch").mockImplementation((async (_input, init) => {
+      authorization = String((init?.headers as Record<string, string>)?.Authorization ?? "");
+      return Response.json({
+        pullRequestId: 18637,
+        status: "active",
+        title: "Update authentication flow",
+        sourceRefName: "refs/heads/users/gabriel/update-auth",
+        targetRefName: "refs/heads/main",
+        creationDate: "2026-09-18T00:00:00Z",
+        url: "https://dev.azure.com/nn-apps/retail-app/_apis/git/pullRequests/18637",
+        repository: {
+          id: "repo-id",
+          name: "retail-app-bff-monorepo",
+          remoteUrl: source,
+        },
+      });
+    }) as typeof fetch);
+
+    const exitCode = await runCli({
+      argv: [
+        "ws",
+        "init",
+        "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-monorepo/pullrequest/18637",
+        "--root",
+        root,
+        "--json",
+      ],
+      cwd: root,
+      env: { AZURE_DEVOPS_PAT: "test-pat" },
+      isTTY: false,
+    });
+
+    const workspaceName = "pr-18637-retail-app-bff-monorepo-users-gabriel-update-auth";
+    const workspacePath = join(root, "ws", workspaceName);
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(workspacePath, "retail-app-bff-monorepo", "README.md"))).toBe(true);
+    const workspace = await manifest.readWorkspace(join(workspacePath, "ws.md"));
+    expect(workspace.manifest.mounts[0]).toMatchObject({
+      path: "retail-app-bff-monorepo",
+      source,
+      revision: { mode: "track", branch: "users/gabriel/update-auth" },
+    });
+    expect(authorization).toBe(`Basic ${Buffer.from(":test-pat").toString("base64")}`);
+    request.mockRestore();
+  });
   test("creates workspaces under the configured workspace prefix", async () => {
     await writeFile(
       join(root, "dev.yaml"),
@@ -253,7 +368,7 @@ describe("smart CLI input", () => {
     expect(exitCode).toBe(1);
     expect(errors.join("\n")).toContain('"code": "INTERACTION_REQUIRED"');
     expect(errors.join("\n")).toContain('"field": "name"');
-    expect(errors.join("\n")).toContain("dev ws init <name|repository-uri>");
+    expect(errors.join("\n")).toContain("dev ws init <name|repository-uri|pull-request-url>");
   });
 
   test("selects a workspace when interactive context is ambiguous", async () => {

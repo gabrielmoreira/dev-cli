@@ -83,6 +83,14 @@ export interface AdoWorkItem {
   };
 }
 
+export interface AdoPullRequestRepository {
+  id: string;
+  name: string;
+  url?: string;
+  remoteUrl?: string;
+  webUrl?: string;
+}
+
 export interface AdoPullRequest {
   pullRequestId: number;
   codeReviewId?: number;
@@ -100,10 +108,9 @@ export interface AdoPullRequest {
     uniqueName?: string;
     imageUrl?: string;
   };
-  repository?: {
-    id: string;
-    name: string;
-    url?: string;
+  repository?: AdoPullRequestRepository;
+  forkSource?: {
+    repository?: AdoPullRequestRepository;
   };
 }
 

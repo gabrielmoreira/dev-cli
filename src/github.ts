@@ -30,6 +30,11 @@ export interface GitHubRawPullRequest {
   head?: {
     ref: string;
     sha?: string;
+    repo?: {
+      name: string;
+      clone_url?: string;
+      html_url?: string;
+    } | null;
   };
   base?: {
     ref: string;
