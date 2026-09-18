@@ -40,8 +40,8 @@ The primary goal of `dev` is to remain **small, readable, direct, and easy to ch
 git clone https://github.com/gabrielmoreira/dev-cli.git
 cd dev-cli
 
-# Install dependencies
-bun install
+# Install exact dependencies
+mise run install
 ```
 
 ---
@@ -63,11 +63,16 @@ bun run src/cli.ts ws list --root /tmp/test-dev
 bun run src/cli.ts --help --llms
 ```
 
-To link the CLI globally in your local environment:
+To install the current checkout globally for manual testing:
 
 ```bash
-bun link
-# Now you can run `dev` directly in your shell
+bun install -g .
+```
+
+Alternatively, keep the checkout uninstalled and expose it through a global Mise task:
+
+```bash
+eval "$(mise run dev -- shell-init zsh --runner mise)"
 ```
 
 ---

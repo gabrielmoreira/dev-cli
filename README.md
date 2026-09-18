@@ -2,9 +2,13 @@
 
 Fast developer CLI for multi-repository workspaces.
 
+## Install
+
+Install the latest release globally with Mise:
+
 ```bash
-bun install -g .   # install globally
-dev --help         # explore commands
+mise use -g github:gabrielmoreira/dev-cli
+dev --help
 ```
 
 ---
@@ -26,14 +30,39 @@ Pull the repository catalog locally (enables name-based search):
 dev sync inventory
 ```
 
-Enable parent-shell navigation once in your shell profile. Use the Mise runner
-when the CLI is exposed through the global `dev` task instead of an installed
-binary:
+Enable parent-shell navigation once in your shell profile:
 
 ```bash
-eval "$(dev shell-init zsh)"                         # globally installed binary
-eval "$(mise run dev -- shell-init zsh --runner mise)" # global Mise task
+eval "$(dev shell-init zsh)"
 ```
+
+---
+
+## Highlights
+
+### Open the right OMP in HerdR
+
+From a HerdR pane, start work without manually recreating terminal context:
+
+```bash
+dev ws start payment-fix
+```
+
+`dev` uses the dev workspace directory as the pane working directory. It focuses an
+existing ready OMP for that workspace, starts OMP in an available matching pane, or
+creates the HerdR workspace and agent when neither exists.
+
+### Build QMD collections from repository labels
+
+Turn every source carrying a label into a reconciled QMD collection:
+
+```bash
+dev qmd sync docs
+dev qmd sync docs --noEmbed # lexical-only indexing, useful in CI
+```
+
+For QMD commands outside the managed sync flow, use
+`dev qmd x <qmd-arguments>`; `dev` supplies the scoped registry environment.
 
 ---
 
@@ -97,6 +126,7 @@ That's it for 80% of daily use.
 | `dev pr -i`                     | Select one repository, then show its pull requests                 |
 | `dev pr --label <label>`        | Show pull requests for a reusable dev-cli repository workset       |
 | `dev wi`                        | Show cached work items; `--refresh` selects a provider and project |
+| `dev qmd sync [label]`          | Reconcile QMD collections from repository labels                   |
 | `dev root add\|remove <target>` | Register or unregister a root without deleting its files           |
 | `dev provider list`             | Show configured providers                                          |
 | `dev doctor`                    | Check environment, tools, and credential status                    |
