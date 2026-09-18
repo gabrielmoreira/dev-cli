@@ -13,6 +13,7 @@ import { detectWorkspaceFromCwd } from "../ws.ts";
 import { ui } from "../ui.ts";
 import { CliInputRequiredError } from "./input.ts";
 import { qmdCommand } from "./qmd.ts";
+import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
 
 export { type AmbientContext, detectWorkspaceFromCwd };
@@ -154,6 +155,7 @@ const COMMAND_GROUPS = {
   wi: wiCommand,
   provider: providerCommand,
   qmd: qmdCommand,
+  workset: worksetCommand,
   root: rootCommand,
 } as const;
 
@@ -207,6 +209,7 @@ export const mainCommand = defineCommand({
     hardware: hardwareCommand,
     "shell-init": shellInitCommand,
     qmd: qmdCommand,
+    workset: worksetCommand,
   },
 });
 

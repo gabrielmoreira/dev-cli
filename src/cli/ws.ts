@@ -5,14 +5,15 @@ import * as herdr from "../herdr.ts";
 import * as git from "../git.ts";
 import * as fs from "../fs.ts";
 import * as manifest from "../manifest.ts";
-import { isExplicitSource } from "../inventory.ts";
+import { isExplicitSource, resolveInputSource } from "../inventory.ts";
+import type { RuntimeConfig } from "../config.ts";
 import * as cache from "../cache.ts";
 import { resolveJumpTarget } from "../nav.ts";
 import { resolveExtraHeader } from "../credentials.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveConfirmation, resolveTextInput } from "./input.ts";
-import { resolveRepositoryInput, resolveRepositoryInputs } from "./repository-input.ts";
+import { resolveRepositoryInputs } from "./repository-input.ts";
 import {
   resolveWorkspaceInput,
   resolveWorkspaceMountInput,
@@ -29,52 +30,92 @@ export const wsInitCommand = defineCommand({
     name: { type: "positional", description: "Workspace name or repository URI", required: false },
     desc: { type: "string", description: "Workspace description" },
     root: { type: "string", description: "Explicit dev root directory" },
+    workset: { type: "string", description: "Initialize from a configured workset" },
+    yes: { type: "boolean", description: "Accept the generated mount plan" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const ambient = getAmbient();
-    let repositorySource: string | undefined;
-    let repositoryFromArgument = false;
+    const inventory = canPrompt(ambient) ? await cache.loadAllCachedInventories(config.root) : [];
     let rawName = args.name;
+    let suggestedName: string | undefined;
+    let suggestedDescription: string | undefined;
+    let mounts: PlannedMount[] = [];
+    let reviewPlan = false;
 
     if (rawName && isExplicitSource(rawName)) {
-      repositorySource = rawName;
-      repositoryFromArgument = true;
+      mounts = [{ source: rawName, path: git.deriveDefaultMountPath(rawName) }];
+      suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
       rawName = undefined;
+    } else if (args.workset) {
+      const resolved = await resolveWorksetMounts(config, args.workset);
+      if ("error" in resolved) {
+        ui.error(`Error: ${resolved.error}`);
+        return 1;
+      }
+      mounts = resolved.mounts;
+      suggestedName = args.workset;
+      suggestedDescription = resolved.description;
+      reviewPlan = canPrompt(ambient);
     } else if (!rawName && canPrompt(ambient)) {
-      const mode = await ui.select("How do you want to start?", [
+      const choices = [
         { label: "Blank workspace", value: "blank" },
-        { label: "From a repository URI", value: "repository" },
-      ]);
-      if (mode === "repository") {
-        repositorySource = (
-          await resolveRepositoryInput({
-            root: config.root,
-            message: "Select repository",
-            required: {
-              command: "ws init",
-              field: "repository",
-              usage: "dev ws init <repository-uri>",
-              description: "Repository URI",
-            },
-            ambient,
-          })
-        ).value;
+        { label: "Select repositories", value: "repositories" },
+        ...(Object.keys(config.worksets).length > 0
+          ? [{ label: "Workset", value: "workset" }]
+          : []),
+      ];
+      const mode = await ui.select("How do you want to start?", choices);
+      if (mode === "repositories") {
+        const selected = await resolveRepositoryInputs({
+          root: config.root,
+          message: "Select repositories",
+          required: {
+            command: "ws init",
+            field: "repository",
+            usage: "dev ws init <repository-uri>",
+            description: "Repository",
+          },
+          ambient,
+        });
+        mounts = selected.value.map((source) => ({
+          source,
+          branch: inventory.find((record) => record.url === source)?.default_branch,
+          path: git.deriveDefaultMountPath(source),
+        }));
+        if (mounts.length === 1) {
+          suggestedName = ws.deriveWorkspaceNameFromRepository(mounts[0]!.source);
+        }
+        reviewPlan = true;
+      } else if (mode === "workset") {
+        const worksetName = await ui.select(
+          "Select workset",
+          Object.entries(config.worksets).map(([name, workset]) => ({
+            label: `${name} (${workset.members.length})${workset.description ? ` — ${workset.description}` : ""}`,
+            value: name,
+          })),
+        );
+        const resolved = await resolveWorksetMounts(config, worksetName);
+        if ("error" in resolved) {
+          ui.error(`Error: ${resolved.error}`);
+          return 1;
+        }
+        mounts = resolved.mounts;
+        suggestedName = worksetName;
+        suggestedDescription = resolved.description;
+        reviewPlan = true;
       }
     }
 
-    const suggestedName = repositorySource
-      ? ws.deriveWorkspaceNameFromRepository(repositorySource)
-      : undefined;
     const name = await resolveTextInput({
-      value: repositoryFromArgument ? suggestedName : rawName,
+      value: rawName ?? (!canPrompt(ambient) ? suggestedName : undefined),
       message: "Workspace name",
       initial: suggestedName,
       required: {
         command: "ws init",
         field: "name",
-        usage: "dev ws init <name|repository-uri>",
+        usage: "dev ws init <name|repository-uri> [--workset <name>]",
         description: "Workspace name",
       },
       ambient,
@@ -82,8 +123,20 @@ export const wsInitCommand = defineCommand({
     const description =
       args.desc ??
       (canPrompt(ambient)
-        ? (await ui.text("Workspace description (optional)"))?.trim()
-        : undefined);
+        ? (await ui.text("Workspace description (optional)", suggestedDescription))?.trim()
+        : suggestedDescription);
+
+    if (reviewPlan && mounts.length > 0) {
+      const reviewed = await reviewMountPlan(config, mounts, args.yes);
+      if (!reviewed) return 0;
+      mounts = reviewed;
+    }
+    try {
+      validateMountPlan(mounts);
+    } catch (error) {
+      ui.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      return 1;
+    }
 
     let initializedPath: string | undefined;
     try {
@@ -94,32 +147,43 @@ export const wsInitCommand = defineCommand({
         description: description || undefined,
       });
       initializedPath = result.path;
-      const mount = repositorySource
-        ? await ws.add({
+      const mounted: ws.WorkspaceAddResult[] = [];
+      for (const mount of mounts) {
+        mounted.push(
+          await ws.add({
             root: config.root,
             workspacePrefix: config.workspacePrefix,
             workspaceName: result.name,
-            source: repositorySource,
-            extraHeader: await resolveExtraHeader(config, repositorySource),
+            source: mount.source,
+            path: mount.path,
+            branch: mount.branch,
+            extraHeader: await resolveExtraHeader(config, mount.source),
             trustedScopes: config.trustedScopes,
             globalHooks: config.hooks,
-          })
-        : undefined;
+          }),
+        );
+      }
 
+      const data =
+        mounted.length === 0
+          ? result
+          : mounted.length === 1
+            ? { ...result, mount: mounted[0] }
+            : { ...result, mounts: mounted };
       ui.result({
-        data: mount ? { ...result, mount } : result,
+        data,
         json: args.json,
         text: () => {
           let out = `Initialized workspace '${result.name}' at:\n`;
           out += `  Directory: ${result.path}\n`;
           out += `  Manifest:  ${result.manifestPath}`;
-          if (mount) out += `\n  Mounted:   ${mount.mountName}`;
+          for (const mount of mounted) out += `\n  Mounted:   ${mount.mountName}`;
           return out;
         },
       });
       return 0;
     } catch (error) {
-      if (initializedPath && repositorySource) await fs.removeDir(initializedPath);
+      if (initializedPath && mounts.length > 0) await fs.removeDir(initializedPath);
       ui.error(
         error instanceof ws.WorkspaceError
           ? `Error [${error.code}]: ${error.message}`
@@ -134,15 +198,17 @@ interface PlannedMount {
   source: string;
   branch?: string;
   path: string;
+  reason?: string;
 }
 
 function renderMountPlan(title: string, mounts: PlannedMount[]): string {
   const rows = [
-    ["Repository", "Branch", "Path"],
+    ["Repository", "Branch", "Path", "Reason"],
     ...mounts.map((mount) => [
       git.deriveDefaultMountPath(mount.source),
       mount.branch ?? "(remote default)",
       mount.path,
+      mount.reason ?? "",
     ]),
   ];
   const widths = rows[0].map((_, column) =>
@@ -164,6 +230,84 @@ function duplicateMountPath(path: string, branch: string): string {
     .replace(/^-+|-+$/g, "")
     .toLowerCase();
   return `${path}-${suffix || "branch"}`;
+}
+
+async function resolveWorksetMounts(
+  config: RuntimeConfig,
+  name: string,
+): Promise<{ mounts: PlannedMount[]; description?: string } | { error: string }> {
+  const workset = config.worksets[name];
+  if (!workset) return { error: `Unknown workset '${name}'.` };
+  const mounts: PlannedMount[] = [];
+  for (const member of workset.members) {
+    const resolved = await resolveInputSource(config.root, member.source);
+    if (!resolved.sourceUrl) {
+      return { error: resolved.error ?? `Could not resolve workset source '${member.source}'.` };
+    }
+    mounts.push({
+      source: resolved.sourceUrl,
+      branch: member.ref,
+      path: member.path ?? git.deriveDefaultMountPath(resolved.sourceUrl),
+      reason: member.reason,
+    });
+  }
+  return { mounts, description: workset.description };
+}
+
+function validateMountPlan(mounts: PlannedMount[]): void {
+  const declared: manifest.MountDefinition[] = [];
+  for (const mount of mounts) {
+    const planned = ws.planMount({
+      source: mount.source,
+      path: mount.path,
+      branch: mount.branch,
+      existingMounts: declared,
+    });
+    declared.push({
+      path: planned.mountName,
+      source: mount.source,
+      revision: planned.revision ?? { mode: "lock", commit: "HEAD" },
+    });
+  }
+}
+
+async function reviewMountPlan(
+  config: RuntimeConfig,
+  mounts: PlannedMount[],
+  confirmed: boolean | undefined,
+): Promise<PlannedMount[] | undefined> {
+  ui.log(renderMountPlan("Selected repositories", mounts));
+  const selected = await ui.multiSelect("Select repositories to customize", [
+    { label: "Continue with defaults", value: "defaults" },
+    ...mounts.map((mount, index) => ({
+      label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "remote default"} → ${mount.path})`,
+      value: String(index),
+    })),
+  ]);
+  for (const value of selected.filter((candidate) => candidate !== "defaults")) {
+    const mount = mounts[Number(value)];
+    if (!mount) continue;
+    const extraHeader = await resolveExtraHeader(config, mount.source);
+    const remote = await git.listRemoteBranches({ source: mount.source, extraHeader });
+    if (remote.branches.length > 0) {
+      mount.branch = await ui.select(
+        `Branch for ${git.deriveDefaultMountPath(mount.source)}`,
+        remote.branches.map((branch) => ({
+          label: branch === remote.defaultBranch ? `${branch} (default)` : branch,
+          value: branch,
+        })),
+      );
+    }
+    mount.path =
+      (await ui.text(
+        `Workspace path for ${git.deriveDefaultMountPath(mount.source)}`,
+        mount.path,
+      )) ?? mount.path;
+  }
+  validateMountPlan(mounts);
+  ui.log(renderMountPlan("Workspace plan", mounts));
+  if (!confirmed && !(await ui.confirm("Create this workspace?", true))) return undefined;
+  return mounts;
 }
 
 export const wsAddCommand = defineCommand({

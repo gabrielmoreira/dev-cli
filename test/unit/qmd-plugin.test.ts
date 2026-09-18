@@ -3,12 +3,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../../src/config.ts";
+import { qmdSyncCommand } from "../../src/cli/qmd.ts";
 import type { PluginBase } from "../../src/plugins/index.ts";
 import type { ShellExecResult } from "../../src/shell.ts";
 import {
   createQmdPlugin,
   parseQmdConfig,
   qmdEnv,
+  qmdSyncLabels,
   reconcileCollections,
 } from "../../src/plugins/qmd.ts";
 
@@ -53,7 +55,7 @@ interface Harness {
 function makeHarness(devYaml?: string): Harness {
   const root = mkdtempSync(join(tmpdir(), "dev-cli-qmd-"));
   if (devYaml) writeFileSync(join(root, "dev.yaml"), devYaml);
-  const config = resolveConfig({ cwd: root, env: {} });
+  const config = resolveConfig({ rootFlag: root, cwd: root, env: {} });
   const shell = makeFakeShell();
   const base = {
     root,
@@ -95,6 +97,30 @@ describe("qmd plugin config", () => {
     expect(shell.calls[0]?.bin).toBe("qmd");
     expect(shell.calls[0]?.args).toEqual(["mise", "exec", "-q", "--", "status"]);
     rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe("qmd sync label selection", () => {
+  it("uses every assigned index label when none is explicit", () => {
+    const { base, root } = makeHarness(
+      [
+        "label_defs:",
+        '  "index:docs": {}',
+        "sources:",
+        "  - url: https://github.com/org/code",
+        "    labels:",
+        '      "index:code": {}',
+        "      other: {}",
+      ].join("\n"),
+    );
+
+    expect(qmdSyncLabels(base.config, "")).toEqual(["index:code"]);
+    expect(qmdSyncLabels(base.config, "other")).toEqual(["other"]);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("exposes the lexical-only mode as --no-embed", () => {
+    expect(qmdSyncCommand.args).toHaveProperty("no-embed");
   });
 });
 
@@ -162,6 +188,23 @@ describe("reconcileCollections", () => {
 
     expect(failure).toEqual({ step: "update", stderr: "update boom" });
     expect(shell.calls.some((c) => c.args[0] === "embed")).toBe(false);
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("can defer reindexing while multiple label groups are reconciled", async () => {
+    const { base, shell, root } = makeHarness();
+
+    const failure = await reconcileCollections(
+      base,
+      parseQmdConfig(undefined),
+      "wiki",
+      new Map([["wiki--docs", "P:/d"]]),
+      { update: false, embed: false },
+    );
+
+    expect(failure).toBeNull();
+    expect(shell.calls.some((call) => call.args[0] === "update")).toBe(false);
+    expect(shell.calls.some((call) => call.args[0] === "embed")).toBe(false);
     rmSync(root, { recursive: true, force: true });
   });
 });

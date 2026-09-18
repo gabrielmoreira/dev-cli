@@ -1,6 +1,7 @@
 import { join } from "node:path";
+import type { RuntimeConfig } from "../config.ts";
 import { deriveCanonicalParts } from "../paths.ts";
-import { LabelError, resolveLabeledSources } from "../labels.ts";
+import { LabelError, parseDeclaredSources, resolveLabeledSources } from "../labels.ts";
 import type { Integration, IntegrationFactory, PluginBase } from "./events.ts";
 
 export interface QmdPluginConfig {
@@ -56,6 +57,16 @@ function collectionName(label: string, checkoutPath: string): string {
   return `${label}--${repoFolder}`;
 }
 
+export function qmdSyncLabels(config: RuntimeConfig, explicitLabel: string): string[] {
+  if (explicitLabel) return [explicitLabel];
+  const labels = new Set<string>();
+  const { sources } = parseDeclaredSources(config.sources);
+  for (const source of sources) {
+    for (const label of Object.keys(source.labels)) labels.add(label);
+  }
+  return [...labels].filter((label) => label.startsWith("index:")).sort();
+}
+
 export function createQmdPlugin(base: PluginBase): Integration {
   const config = parseQmdConfig(base.config.plugins);
 
@@ -100,48 +111,52 @@ export async function syncCollections(
   config: QmdPluginConfig,
   opts: { label: string; noEmbed: boolean },
 ): Promise<number> {
-  const { label } = opts;
-  if (!label) {
-    base.ui.error("Error: label required. Usage: dev qmd sync <label> [--no-embed]");
+  const labels = qmdSyncLabels(base.config, opts.label);
+  if (labels.length === 0) {
+    base.ui.error("Error: No index:* labels configured in dev.yaml");
     return 1;
   }
 
-  let resolved;
-  try {
-    resolved = await resolveLabeledSources(base.config, label);
-  } catch (error) {
-    if (error instanceof LabelError) {
-      base.ui.error(`Error [${error.code}]: ${error.message}`);
+  for (const [index, label] of labels.entries()) {
+    let resolved;
+    try {
+      resolved = await resolveLabeledSources(base.config, label);
+    } catch (error) {
+      if (error instanceof LabelError) {
+        base.ui.error(`Error [${error.code}]: ${error.message}`);
+        return 1;
+      }
+      throw error;
+    }
+    for (const warning of resolved.warnings) base.ui.warn(`Warning: ${warning}`);
+
+    const desired = new Map<string, string>();
+    for (const source of resolved.sources) {
+      desired.set(collectionName(label, source.checkoutPath), source.checkoutPath);
+    }
+
+    const update = index === labels.length - 1;
+    const embed = update && !opts.noEmbed;
+    const failed = await reconcileCollections(base, config, label, desired, { update, embed });
+    if (failed) {
+      base.ui.error(`qmd ${failed.step} failed: ${failed.stderr}`);
       return 1;
     }
-    throw error;
-  }
-  for (const warning of resolved.warnings) base.ui.warn(`Warning: ${warning}`);
 
-  const desired = new Map<string, string>(); // collection name -> checkout path
-  for (const source of resolved.sources) {
-    desired.set(collectionName(label, source.checkoutPath), source.checkoutPath);
+    base.ui.log(`qmd sync '${label}': ${desired.size} collection(s) reconciled`);
   }
-
-  const failed = await reconcileCollections(base, config, label, desired);
-  if (failed) {
-    base.ui.error(`qmd ${failed.step} failed: ${failed.stderr}`);
-    return 1;
-  }
-
-  base.ui.log(`qmd sync '${label}': ${desired.size} collection(s) reconciled`);
   return 0;
 }
 
 /** Reconciles owned collections (`<label>--*`) toward `desired`: removes
- * stale, adds missing (idempotent — qmd exits 1 on duplicates, tolerated),
- * then updates delta and optionally embeds. Returns the first failure. */
+ * stale and adds missing entries. The caller may defer the shared update and
+ * embed passes while reconciling several label groups. */
 export async function reconcileCollections(
   base: PluginBase,
   config: QmdPluginConfig,
   label: string,
   desired: Map<string, string>,
-  opts: { embed: boolean } = { embed: true },
+  opts: { update?: boolean; embed: boolean } = { update: true, embed: true },
 ): Promise<{ step: string; stderr: string } | null> {
   const list = await qmd(base, config, ["collection", "list"]);
   const ownedNames = new Set(
@@ -164,6 +179,8 @@ export async function reconcileCollections(
     // qmd exits 1 when name or path+pattern already exists: idempotent add.
     await qmd(base, config, ["collection", "add", path, "--name", name]);
   }
+
+  if (opts.update === false) return null;
 
   const update = await qmd(base, config, ["update"]);
   if (update.exitCode !== 0) return { step: "update", stderr: update.stderr || update.stdout };

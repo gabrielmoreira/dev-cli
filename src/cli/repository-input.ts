@@ -34,16 +34,23 @@ export async function resolveRepositoryInputs(
 
   const resolved = await resolveRepositorySource({ root: options.root });
   if (resolved.matches.length > 0) {
-    return {
-      value: await ui.multiSelect(
-        options.message,
-        resolved.matches.map((record) => ({
-          label: `${record.name} — ${record.url}`,
-          value: record.url,
-        })),
-      ),
-      source: "prompt",
-    };
+    const selected = await ui.multiSelect(options.message, [
+      ...resolved.matches.map((record) => ({
+        label: `${record.name} — ${record.url}`,
+        value: record.url,
+      })),
+      { label: "Enter a repository URI or local path manually", value: MANUAL_SOURCE },
+    ]);
+    const values = selected.filter((value) => value !== MANUAL_SOURCE);
+    if (selected.includes(MANUAL_SOURCE)) {
+      const manual = await resolveTextInput({
+        message: "Repository URI or local path",
+        required: options.required,
+        ambient,
+      });
+      values.push(manual.value);
+    }
+    return { value: values, source: "prompt" };
   }
 
   const manual = await resolveTextInput({

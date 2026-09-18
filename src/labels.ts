@@ -33,10 +33,17 @@ export interface LabelDef {
   fields: Record<string, LabelFieldSchema>;
 }
 
+export interface SourceSelector {
+  url: string;
+  branch?: string;
+  pin?: string;
+  path?: string;
+}
 export interface SourceDeclaration {
   url: string;
   branch?: string;
   pin?: string;
+  path?: string;
   /** label -> assignment map (values validated against the label def). */
   labels: Record<string, Record<string, unknown>>;
 }
@@ -211,6 +218,7 @@ export function parseDeclaredSources(raw: Array<Record<string, unknown>> | undef
       url: url.trim(),
       branch: typeof entry.branch === "string" ? entry.branch : undefined,
       pin: typeof entry.pin === "string" ? entry.pin : undefined,
+      path: typeof entry.path === "string" ? entry.path : undefined,
       labels,
     });
   }
@@ -302,6 +310,7 @@ export async function resolveLabeledSources(
       source: match.source.url,
       branch: match.source.branch,
       pin: match.source.pin,
+      alias: match.source.path,
       extraHeader: options?.extraHeader,
     });
     sources.push({
@@ -321,15 +330,25 @@ export async function resolveLabeledSources(
 
 // --- dev.yaml source declaration editing (AST-preserving) ---
 
-import { parseDocument, isMap, isSeq } from "yaml";
+import { parseDocument, isMap, isSeq, type YAMLMap } from "yaml";
 
-function findSourceNode(doc: ReturnType<typeof parseDocument>, url: string) {
+function findSourceNode(
+  doc: ReturnType<typeof parseDocument>,
+  selector: SourceSelector,
+): YAMLMap | undefined {
   const seq = doc.get("sources");
   if (!isSeq(seq)) return undefined;
+  const matches: YAMLMap[] = [];
   for (const item of seq.items) {
-    if (isMap(item) && item.get("url") === url) return item;
+    if (!isMap(item) || item.get("url") !== selector.url) continue;
+    if (selector.branch !== undefined && item.get("branch") !== selector.branch) continue;
+    if (selector.pin !== undefined && item.get("pin") !== selector.pin) continue;
+    if (selector.path !== undefined && item.get("path") !== selector.path) continue;
+    matches.push(item);
   }
-  return undefined;
+  const qualified =
+    selector.branch !== undefined || selector.pin !== undefined || selector.path !== undefined;
+  return qualified || matches.length === 1 ? matches[0] : undefined;
 }
 
 /** Inserts or updates a `sources:` entry for the URL. Mutates the caller's
@@ -337,12 +356,14 @@ function findSourceNode(doc: ReturnType<typeof parseDocument>, url: string) {
  * config.writeConfig(). Only url/branch are touched. */
 export function upsertSourceDeclaration(
   doc: ReturnType<typeof parseDocument>,
-  upsert: { url: string; branch?: string },
+  upsert: SourceSelector,
 ): { changed: boolean } {
-  const existing = findSourceNode(doc, upsert.url);
+  const existing = findSourceNode(doc, upsert);
   if (existing) {
     const before = String(existing);
     if (upsert.branch !== undefined) existing.set("branch", upsert.branch);
+    if (upsert.pin !== undefined) existing.set("pin", upsert.pin);
+    if (upsert.path !== undefined) existing.set("path", upsert.path);
     return { changed: String(existing) !== before };
   }
   const existingSeq = doc.get("sources");
@@ -353,10 +374,7 @@ export function upsertSourceDeclaration(
         doc.set("sources", created);
         return created;
       })();
-  const node = doc.createNode(
-    upsert.branch !== undefined ? { url: upsert.url, branch: upsert.branch } : { url: upsert.url },
-  );
-  seq.add(node);
+  seq.add(doc.createNode(upsert));
   return { changed: true };
 }
 
@@ -366,11 +384,11 @@ export function upsertSourceDeclaration(
  * declared. */
 export function setSourceLabel(
   doc: ReturnType<typeof parseDocument>,
-  url: string,
+  selector: SourceSelector,
   label: string,
   meta: Record<string, unknown> | undefined,
 ): { changed: boolean; found: boolean } {
-  const source = findSourceNode(doc, url);
+  const source = findSourceNode(doc, selector);
   if (!source) return { changed: false, found: false };
 
   const rawLabels = source.get("labels");

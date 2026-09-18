@@ -15,6 +15,13 @@ sources:
     branch: main
 `;
 
+const YAML_WITH_MULTIPLE_REFS = `sources:
+  - url: https://github.com/org/wiki
+    branch: master
+  - url: https://github.com/org/wiki
+    branch: internal
+`;
+
 describe("label source declaration editing", () => {
   it("upserts a source declaration preserving comments", () => {
     const doc = parseDocument(YAML_WITH_COMMENTS);
@@ -39,9 +46,38 @@ describe("label source declaration editing", () => {
     expect(first.changed).toBe(false);
   });
 
+  it("keeps separate declarations for different branches of one URL", () => {
+    const doc = parseDocument(YAML_WITH_MULTIPLE_REFS);
+
+    const result = upsertSourceDeclaration(doc, {
+      url: "https://github.com/org/wiki",
+      branch: "preview",
+    });
+
+    expect(result.changed).toBe(true);
+    const sources = (doc.toJS() as { sources: Array<Record<string, unknown>> }).sources;
+    expect(sources.map((source) => source.branch)).toEqual(["master", "internal", "preview"]);
+  });
+
+  it("sets a label only on the selected branch", () => {
+    const doc = parseDocument(YAML_WITH_MULTIPLE_REFS);
+
+    const result = setSourceLabel(
+      doc,
+      { url: "https://github.com/org/wiki", branch: "internal" },
+      "docs:internal",
+      {},
+    );
+
+    expect(result).toEqual({ changed: true, found: true });
+    const sources = (doc.toJS() as { sources: Array<Record<string, unknown>> }).sources;
+    expect(sources[0]?.labels).toBeUndefined();
+    expect(sources[1]?.labels).toEqual({ "docs:internal": {} });
+  });
+
   it("sets a label with meta without losing comments", () => {
     const doc = parseDocument(YAML_WITH_COMMENTS);
-    const result = setSourceLabel(doc, "https://github.com/org/docs", "qmd_wiki", {
+    const result = setSourceLabel(doc, { url: "https://github.com/org/docs" }, "qmd_wiki", {
       role: "primary",
     });
 
@@ -55,15 +91,22 @@ describe("label source declaration editing", () => {
 
   it("reports found false for an undeclared source", () => {
     const doc = parseDocument(YAML_WITH_COMMENTS);
-    const result = setSourceLabel(doc, "https://github.com/org/ghost", "x", undefined);
+    const result = setSourceLabel(doc, { url: "https://github.com/org/ghost" }, "x", undefined);
     expect(result.found).toBe(false);
     expect(result.changed).toBe(false);
   });
 
   it("removes a label and drops the empty labels key", () => {
     const doc = parseDocument(YAML_WITH_COMMENTS);
-    setSourceLabel(doc, "https://github.com/org/api", "qmd_wiki", { role: "primary" });
-    const removed = setSourceLabel(doc, "https://github.com/org/api", "qmd_wiki", undefined);
+    setSourceLabel(doc, { url: "https://github.com/org/api" }, "qmd_wiki", {
+      role: "primary",
+    });
+    const removed = setSourceLabel(
+      doc,
+      { url: "https://github.com/org/api" },
+      "qmd_wiki",
+      undefined,
+    );
 
     expect(removed.found).toBe(true);
     expect(removed.changed).toBe(true);

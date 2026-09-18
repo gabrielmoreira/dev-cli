@@ -88,6 +88,21 @@ export type TrustedScope = z.infer<typeof TrustedScopeSchema>;
 export type GlobalHooksConfig = z.infer<typeof GlobalHooksSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
+export const WorksetMemberSchema = z.object({
+  source: z.string().min(1),
+  ref: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  reason: z.string().min(1).optional(),
+});
+
+export const WorksetDefinitionSchema = z.object({
+  description: z.string().optional(),
+  members: z.array(WorksetMemberSchema).min(1),
+});
+
+export type WorksetMember = z.infer<typeof WorksetMemberSchema>;
+export type WorksetDefinition = z.infer<typeof WorksetDefinitionSchema>;
+
 export interface RuntimeConfig {
   root: string;
   rootSource: RootSource;
@@ -106,6 +121,7 @@ export interface RuntimeConfig {
   providers: ProviderConfig[];
   labelDefs: Record<string, Record<string, unknown>>;
   sources: Array<Record<string, unknown>>;
+  worksets: Record<string, WorksetDefinition>;
   plugins: Record<string, Record<string, unknown>>;
   tokens: {
     azureDevOps?: string;
@@ -215,6 +231,7 @@ export const RawConfigFileSchema = z.object({
   label_defs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   labelDefs: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   sources: z.array(z.record(z.string(), z.unknown())).optional(),
+  worksets: z.record(z.string(), WorksetDefinitionSchema).optional(),
   plugins: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
 });
 
@@ -374,6 +391,7 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
     providers,
     labelDefs: configData.label_defs ?? configData.labelDefs ?? {},
     sources: configData.sources ?? [],
+    worksets: configData.worksets ?? {},
     plugins: configData.plugins ?? {},
     tokens: {
       azureDevOps: adoToken,

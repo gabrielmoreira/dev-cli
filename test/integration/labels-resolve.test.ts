@@ -31,6 +31,8 @@ describe("labeled source resolution integration", () => {
     await git.runGit(["config", "user.email", "seed@example.com"], { cwd: seedDir });
     await git.runGit(["remote", "add", "origin", bareRemote], { cwd: seedDir });
     await commitFile(seedDir, "guide.md", "# Wiki guide\n", "docs: guide");
+    await git.runGit(["branch", "internal"], { cwd: seedDir });
+    await git.runGit(["push", "-q", "origin", "internal"], { cwd: seedDir });
 
     config = {
       root: tempRoot,
@@ -70,6 +72,32 @@ describe("labeled source resolution integration", () => {
     expect(fs.exists(source.checkoutPath)).toBe(true);
     expect(await fs.readText(join(source.checkoutPath, "guide.md"))).toContain("Wiki guide");
     expect(fs.exists(join(tempRoot, ".dev", "repos", `${source.sourceKey}.git`))).toBe(true);
+  });
+
+  it("uses a source path alias for a second branch of the same repository", async () => {
+    const branchAwareConfig = {
+      ...config,
+      sources: [
+        { url: bareRemote, branch: "main", labels: { wiki: { role: "primary" } } },
+        {
+          url: bareRemote,
+          branch: "internal",
+          path: "wiki-docs-internal",
+          labels: { wiki: { role: "primary" } },
+        },
+      ],
+    } as RuntimeConfig;
+
+    const { sources } = await resolveLabeledSources(branchAwareConfig, "wiki");
+
+    expect(sources.map((source) => source.checkoutPath)).toEqual([
+      join(tempRoot, "mirrors", "local", "remote"),
+      join(tempRoot, "mirrors", "local", "wiki-docs-internal"),
+    ]);
+    expect(sources.map((source) => source.revision)).toEqual([
+      { mode: "track", branch: "main" },
+      { mode: "track", branch: "internal" },
+    ]);
   });
 
   it("is idempotent: second resolve returns the same checkout untouched", async () => {

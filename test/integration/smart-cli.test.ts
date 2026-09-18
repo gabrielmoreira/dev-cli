@@ -198,7 +198,9 @@ describe("smart CLI input", () => {
     await git.runGit(["remote", "add", "origin", source], { cwd: seed });
     await git.runGit(["push", "-u", "origin", "main"], { cwd: seed });
 
-    const select = spyOn(ui, "select").mockResolvedValueOnce("repository");
+    const select = spyOn(ui, "select").mockResolvedValueOnce("repositories");
+    const multiSelect = spyOn(ui, "multiSelect").mockResolvedValueOnce(["defaults"]);
+    const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(true);
     const prompt = spyOn(ui, "text")
       .mockResolvedValueOnce(source)
       .mockResolvedValueOnce("local-guided-source")
@@ -215,6 +217,8 @@ describe("smart CLI input", () => {
     expect(prompt).toHaveBeenCalledWith("Workspace name", "local-guided-source");
     expect(existsSync(join(root, "ws", "local-guided-source", "guided-source"))).toBe(true);
     select.mockRestore();
+    multiSelect.mockRestore();
+    confirm.mockRestore();
     prompt.mockRestore();
   });
 
@@ -743,7 +747,7 @@ describe("smart CLI input", () => {
     select.mockRestore();
   });
 
-  test("reports a structured missing label for non-interactive qmd sync", async () => {
+  test("reports missing index labels for argument-free qmd sync", async () => {
     const exitCode = await runCli({
       argv: ["qmd", "sync", "--root", root, "--json"],
       cwd: root,
@@ -752,7 +756,7 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(errors.join("\n")).toContain('"field": "label"');
+    expect(errors.join("\n")).toContain("No index:* labels configured");
   });
 
   test("prompts for a repository source before creating a mirror", async () => {

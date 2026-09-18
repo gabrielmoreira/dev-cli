@@ -29,6 +29,16 @@ trusted_scopes:
     repos: [app1, app2]
     install: true
     allowed_tools: [mise, bun]
+worksets:
+  app:
+    description: Mobile app with its documentation
+    members:
+      - source: https://example.test/mobile-app
+        ref: develop
+        reason: Mobile application implementation
+      - source: https://example.test/wiki
+        ref: internal
+        path: wiki-internal
 `;
     await Bun.write(join(tempDir, "dev.yaml"), yamlContent);
   });
@@ -92,6 +102,21 @@ trusted_scopes:
     expect(config.trustedScopes).toHaveLength(1);
     expect(config.trustedScopes[0].repos).toEqual(["app1", "app2"]);
     expect(config.trustedScopes[0].allowedTools).toEqual(["mise", "bun"]);
+    expect(config.worksets.app).toEqual({
+      description: "Mobile app with its documentation",
+      members: [
+        {
+          source: "https://example.test/mobile-app",
+          ref: "develop",
+          reason: "Mobile application implementation",
+        },
+        {
+          source: "https://example.test/wiki",
+          ref: "internal",
+          path: "wiki-internal",
+        },
+      ],
+    });
   });
 
   it("rejects malformed provider entries instead of silently dropping them", async () => {

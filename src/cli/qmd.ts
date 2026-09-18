@@ -2,10 +2,8 @@ import { defineCommand } from "citty";
 import { getActiveConfig } from "./context.ts";
 import { createPluginBase } from "../plugins/index.ts";
 import { createQmdPlugin } from "../plugins/qmd.ts";
-import { parseDeclaredSources } from "../labels.ts";
 import { ui } from "../ui.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
-import { resolveChoiceInput } from "./input.ts";
 
 export const qmdSyncCommand = defineCommand({
   meta: {
@@ -18,32 +16,16 @@ export const qmdSyncCommand = defineCommand({
       description: "Label whose sources become collections",
       required: false,
     },
-    noEmbed: { type: "boolean", description: "Skip vector indexing (lexical-only / CI)" },
+    "no-embed": { type: "boolean", description: "Skip vector indexing (lexical-only / CI)" },
     root: { type: "string", description: "Explicit dev root directory" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
-    const { sources } = parseDeclaredSources(config.sources);
-    const knownLabels = new Set(Object.keys(config.labelDefs));
-    for (const source of sources) {
-      for (const label of Object.keys(source.labels)) knownLabels.add(label);
-    }
-    const label = await resolveChoiceInput({
-      value: args.label,
-      choices: async () => [...knownLabels].sort().map((value) => ({ label: value, value })),
-      message: "Select repository label",
-      required: {
-        command: "qmd sync",
-        field: "label",
-        usage: "dev qmd sync [label]",
-        description: "Repository label",
-      },
-    });
     const plugin = createQmdPlugin(createPluginBase(config.root, config));
     const code = await plugin.run({
       subcommand: "sync",
-      label: label.value,
-      noEmbed: args.noEmbed,
+      label: String(args.label ?? ""),
+      noEmbed: args["no-embed"],
     });
     return typeof code === "number" ? code : 0;
   },

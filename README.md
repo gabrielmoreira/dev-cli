@@ -118,17 +118,30 @@ If `git clone <repository-url>` works, `dev ws add` can use the same access.
 
 ## Workspace model
 
-`dev ws add` mounts each repository as an isolated Git worktree. Repositories may
-appear more than once on different branches and paths while sharing one mirror.
+`dev ws init` starts from one of three plans: a blank workspace, repositories
+selected from inventory, or a configured workset. The repository picker accepts
+multiple repositories and a branch per repository. Before any worktree is
+created, `dev` shows the complete mount plan and lets you edit it.
 
 ```bash
-dev ws add alpha-service
-dev ws add billing-api --branch feature/v2
-dev ws add https://github.com/org/repo
+dev ws init
+dev ws init auth-review --workset auth
+dev ws init https://github.com/org/repo
 ```
 
-Outside a workspace, `dev` selects the sole candidate or shows a picker. Use
-`--ws <name>` for deterministic scripts.
+A workset is a named, reusable repository plan in `dev.yaml`. It records source,
+ref, optional path, and the reason each repository belongs in the set. Inspect
+the configured plans before using one:
+
+```bash
+dev workset list
+dev workset show auth
+```
+
+Each mounted repository is an isolated Git worktree. A repository may appear on
+different branches or paths across workspaces while sharing one canonical
+mirror. Outside a workspace, `dev` selects the sole candidate or shows a picker;
+use `--ws <name>` for deterministic scripts.
 
 The daily loop stays small:
 
@@ -141,21 +154,22 @@ dev sync   # fast-forward safe mounts
 
 ## Mirrors and labels
 
-A mirror is `dev`'s shared canonical checkout of a repository. Workspaces reuse
-it to create isolated worktrees, so the same repository does not need a full
-clone for every task.
+A mirror is `dev`'s shared canonical checkout of a repository. Labels are
+orthogonal metadata on declared sources: use them to select repositories by
+team, domain, surface, evidence type, or index membership without duplicating
+workspace definitions.
 
 ```bash
 dev mirror add https://github.com/can1357/oh-my-pi
-dev mirror label add oh-my-pi docs
+dev mirror label add                 # select sources, ref, label, and metadata
+dev mirror label add oh-my-pi docs   # deterministic scripted form
 dev mirror list --label docs
 ```
 
-A label is reusable metadata attached to a declared repository source. It turns
-repository lists into named sets: `dev pr --label docs` queries their pull
-requests, while `dev qmd sync docs` indexes them as QMD collections. `dev ws add`
-can select several repositories interactively, but does not filter that picker by
-label today.
+When one URI has multiple declared refs, the interactive flow asks which ref to
+label; scripts pass `--ref <branch>`. A multi-source change is previewed and
+confirmed once before `dev.yaml` is updated. The same label can drive
+`dev pr --label docs` and `dev qmd sync docs`.
 
 ---
 
@@ -163,8 +177,9 @@ label today.
 
 | Command                         | What it does                                                       |
 | ------------------------------- | ------------------------------------------------------------------ |
-| `dev ws init [name\|URI]`       | Create a blank workspace or create and mount one repository        |
+| `dev ws init [name\|URI]`       | Create a workspace from blank, selected repositories, or a workset |
 | `dev ws add [name\|URI]`        | Mount a repository into the current or selected workspace          |
+| `dev workset list\|show`        | Inspect reusable repository plans from `dev.yaml`                  |
 | `dev ws start [name]`           | Start or focus OMP in HerdR for a workspace                        |
 | `dev status`                    | Show mount status (clean / dirty / ahead / behind)                 |
 | `dev sync`                      | Update the current workspace, or sync inventory outside it         |
@@ -173,9 +188,9 @@ label today.
 | `dev ws remove [mount]`         | Select and confirm a mount (`--force` with explicit input in CI)   |
 | `dev pr`                        | Show open pull requests assigned to the authenticated reviewer     |
 | `dev pr -i`                     | Select one repository, then show its pull requests                 |
-| `dev pr --label <label>`        | Show pull requests for a reusable dev-cli repository workset       |
+| `dev pr --label <label>`        | Show pull requests for sources carrying a label                    |
 | `dev wi`                        | Show cached work items; `--refresh` selects a provider and project |
-| `dev qmd sync [label]`          | Build QMD collections from sources carrying the selected label     |
+| `dev qmd sync [label]`          | Sync one label, or every assigned `index:*` label when omitted     |
 | `dev root add\|remove <target>` | Register or unregister a root without deleting its files           |
 | `dev provider list`             | Show configured providers                                          |
 | `dev doctor`                    | Check environment, tools, and credential status                    |
@@ -218,42 +233,46 @@ creates the HerdR workspace and agent when neither exists.
 
 ### Search labeled repositories with QMD
 
-QMD syncs one repository label at a time. First declare the mirror, then attach
-any label meaningful to you; `docs` is an example, not a reserved convention:
+Install QMD through Mise, then attach an indexing label to each source that
+should be searchable:
 
 ```bash
+mise use -g npm:@tobilu/qmd
 dev mirror add https://github.com/can1357/oh-my-pi
-dev mirror label add oh-my-pi docs
+dev mirror label add oh-my-pi index:docs
 ```
 
-`mirror label add` is explicit rather than interactive: it expects a declared
-source (its inventory name or URI) and a label. Optional metadata follows as a
-comma-separated `key=value` argument when the label definition requires fields.
-
-Now reconcile every source carrying `docs` into one QMD collection per repository:
+With no positional label, sync reconciles every assigned `index:*` label. An
+explicit label remains available for targeted automation. The command removes
+stale collections owned by those labels, adds missing collections, updates the
+index once, and embeds new chunks unless `--no-embed` is set.
 
 ```bash
-dev qmd sync       # choose among known labels in an interactive terminal
-dev qmd sync docs  # select docs explicitly; deterministic for scripts
-dev qmd sync docs --noEmbed # skip vector embeddings; lexical search only
+dev qmd sync
+dev qmd sync index:docs
+dev qmd sync --no-embed
 ```
 
-For this example, the collection is `docs--oh-my-pi`. Sync removes stale
-`docs--*` collections, adds missing ones, updates the index, and embeds it unless
-`--noEmbed` is set.
-
-Add QMD context or pass any other QMD arguments through `dev qmd x`. These commands
-use the same QMD registry, scoped to this dev root by default:
+Collections are named `<label>--<checkout>`, so the example creates
+`index:docs--oh-my-pi`. Query the resulting index through the passthrough:
 
 ```bash
-dev qmd x context add qmd://docs--oh-my-pi "OMP source, architecture, and contributor documentation"
-dev qmd x query "how are tools registered?" -c docs--oh-my-pi --json -n 10
+dev qmd x query "how are tools registered?" -c index:docs--oh-my-pi --json -n 10
 dev qmd x status
 ```
 
-Everything after `dev qmd x` is passed to QMD unchanged. See the
-[QMD command reference](https://github.com/tobi/qmd#quick-start) for available
-commands and flags.
+By default, the QMD registry is scoped to the dev root. To share the index with
+direct `qmd query` calls and a `qmd mcp` server, select QMD's global registry in
+`dev.yaml`:
+
+```yaml
+plugins:
+  qmd:
+    config_dir: global
+```
+
+Everything after `dev qmd x` is passed to QMD unchanged. Run `qmd --help` for
+the installed command reference and `qmd mcp` for the stdio server.
 
 ---
 
