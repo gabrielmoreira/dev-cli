@@ -1,0 +1,48 @@
+name: Demo
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/demo.yml"
+      - "docs/demo.tape"
+      - "docs/demo/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/demo.yml"
+      - "docs/demo.tape"
+      - "docs/demo/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    name: Render terminal demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build disposable demo environment
+        run: docker build --file docs/demo/Dockerfile --tag dev-cli-demo:local .
+
+      - name: Render tape
+        uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2
+        with:
+          path: docs/demo.tape
+          version: 0.11.0
+
+      - name: Upload rendered demo
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dev-cli-demo
+          path: docs/assets/dev-cli-demo.gif
+          if-no-files-found: error
+          retention-days: 14

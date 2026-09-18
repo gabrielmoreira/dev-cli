@@ -1,6 +1,7 @@
 [tools]
 bun = "1.4.2"
 node = "24.21.0"
+vhs = "0.11.0"
 
 
 [tasks."dev"]
@@ -32,3 +33,7 @@ raw_args = true
 
 [tasks."release"]
 run = "npx --no-install semantic-release"
+
+[tasks."demo"]
+description = "Build the disposable environment and render the VHS demo"
+run = "docs/demo/render.sh"

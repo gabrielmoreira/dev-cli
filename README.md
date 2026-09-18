@@ -7,6 +7,23 @@ should track, and updates clean checkouts safely.
 The result: one place to work, inspect, pause, and resume without rebuilding the
 setup by hand.
 
+## Demo
+
+![dev CLI terminal demo](docs/assets/dev-cli-demo.gif)
+
+The recording runs entirely in a disposable Debian container: it creates local
+Git remotes, materializes a workset, labels a source, builds and searches a
+lexical QMD collection, then calls QMD's MCP `query` tool over stdio.
+
+Regenerate it from the repository root (Docker required; Mise supplies the
+pinned VHS version):
+
+```bash
+mise run demo
+```
+
+---
+
 ## Install
 
 Install the latest release globally with Mise:
