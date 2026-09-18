@@ -47,7 +47,7 @@ export async function resolveRepositoryInputs(
   }
 
   const manual = await resolveTextInput({
-    message: "Repository URL or local path",
+    message: "Repository URI or local path",
     required: options.required,
     ambient,
   });
@@ -88,7 +88,7 @@ export async function resolveRepositoryInput(
   }
 
   return await resolveTextInput({
-    message: "Repository URL or local path",
+    message: "Repository URI or local path",
     required: options.required,
     ambient,
   });

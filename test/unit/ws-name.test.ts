@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { deriveWorkspacePath, validateWorkspaceName } from "../../src/ws.ts";
+import {
+  deriveWorkspaceNameFromRepository,
+  deriveWorkspacePath,
+  validateWorkspaceName,
+} from "../../src/ws.ts";
 
 describe("Workspace pure domain rules (Phase 1)", () => {
   it("validates valid workspace names", () => {
@@ -18,6 +22,21 @@ describe("Workspace pure domain rules (Phase 1)", () => {
     expect(validateWorkspaceName("a\\b").valid).toBe(false);
     expect(validateWorkspaceName("-bad").valid).toBe(false);
     expect(validateWorkspaceName("bad space").valid).toBe(false);
+  });
+
+  it("derives a stable provider-prefixed name from repository URLs", () => {
+    expect(deriveWorkspaceNameFromRepository("https://github.com/can1357/oh-my-pi.git")).toBe(
+      "gh-can1357-oh-my-pi",
+    );
+    expect(
+      deriveWorkspaceNameFromRepository(
+        "https://dev.azure.com/example-org/platform/_git/payments-api",
+      ),
+    ).toBe("ado-example-org-payments-api");
+  });
+
+  it("treats file URIs as local repositories", () => {
+    expect(deriveWorkspaceNameFromRepository("file:///tmp/oh-my-pi.git")).toBe("local-oh-my-pi");
   });
 
   it("derives workspace path strictly under $DEV_ROOT/ws/<name>", () => {

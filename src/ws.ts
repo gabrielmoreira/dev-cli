@@ -141,6 +141,35 @@ export function validateWorkspaceName(name: string): { valid: boolean; error?: s
   return { valid: true };
 }
 
+export function deriveWorkspaceNameFromRepository(source: string): string {
+  const trimmed = source.trim();
+  const isLocal =
+    /^file:/i.test(trimmed) ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("./") ||
+    trimmed.startsWith("../") ||
+    trimmed.startsWith("~/");
+  const identity = trust.parseSourceIdentity(trimmed);
+  const provider =
+    identity.provider === "github"
+      ? "gh"
+      : identity.provider === "azure_devops"
+        ? "ado"
+        : identity.provider;
+  const parts = isLocal
+    ? ["local", git.deriveDefaultMountPath(trimmed)]
+    : [provider, identity.owner, identity.repo];
+  return parts
+    .map((part) =>
+      part
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, ""),
+    )
+    .filter(Boolean)
+    .join("-");
+}
+
 function assertSafeMountPath(path: string): string {
   const trimmed = path.trim();
   const segments = trimmed.split(/[\\/]/);

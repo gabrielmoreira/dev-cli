@@ -28,6 +28,7 @@ export class CliInputRequiredError extends Error {
 export interface ResolveTextInputOptions {
   value?: string;
   defaultValue?: string;
+  initial?: string;
   message: string;
   required: RequiredCliInputDetails;
   ambient?: AmbientContext;
@@ -88,7 +89,7 @@ export async function resolveTextInput(
   if (defaultValue) return { value: defaultValue, source: "default" };
 
   if (canPrompt(options.ambient)) {
-    const response = await ui.text(options.message);
+    const response = await ui.text(options.message, options.initial);
     const prompted = typeof response === "string" ? response.trim() : "";
     if (prompted) return { value: prompted, source: "prompt" };
   }

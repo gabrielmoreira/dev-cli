@@ -5,13 +5,14 @@ import * as herdr from "../herdr.ts";
 import * as git from "../git.ts";
 import * as fs from "../fs.ts";
 import * as manifest from "../manifest.ts";
+import { isExplicitSource } from "../inventory.ts";
 import * as cache from "../cache.ts";
 import { resolveJumpTarget } from "../nav.ts";
 import { resolveExtraHeader } from "../credentials.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveConfirmation, resolveTextInput } from "./input.ts";
-import { resolveRepositoryInputs } from "./repository-input.ts";
+import { resolveRepositoryInput, resolveRepositoryInputs } from "./repository-input.ts";
 import {
   resolveWorkspaceInput,
   resolveWorkspaceMountInput,
@@ -25,27 +26,66 @@ export const wsInitCommand = defineCommand({
     description: "Initialize a new workspace with ws.md and .local/",
   },
   args: {
-    name: { type: "positional", description: "Workspace name", required: false },
+    name: { type: "positional", description: "Workspace name or repository URI", required: false },
     desc: { type: "string", description: "Workspace description" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
+    const ambient = getAmbient();
+    let repositorySource: string | undefined;
+    let repositoryFromArgument = false;
+    let rawName = args.name;
+
+    if (rawName && isExplicitSource(rawName)) {
+      repositorySource = rawName;
+      repositoryFromArgument = true;
+      rawName = undefined;
+    } else if (!rawName && canPrompt(ambient)) {
+      const mode = await ui.select("How do you want to start?", [
+        { label: "Blank workspace", value: "blank" },
+        { label: "From a repository URI", value: "repository" },
+      ]);
+      if (mode === "repository") {
+        repositorySource = (
+          await resolveRepositoryInput({
+            root: config.root,
+            message: "Select repository",
+            required: {
+              command: "ws init",
+              field: "repository",
+              usage: "dev ws init <repository-uri>",
+              description: "Repository URI",
+            },
+            ambient,
+          })
+        ).value;
+      }
+    }
+
+    const suggestedName = repositorySource
+      ? ws.deriveWorkspaceNameFromRepository(repositorySource)
+      : undefined;
     const name = await resolveTextInput({
-      value: args.name,
+      value: repositoryFromArgument ? suggestedName : rawName,
       message: "Workspace name",
+      initial: suggestedName,
       required: {
         command: "ws init",
         field: "name",
-        usage: "dev ws init <name>",
+        usage: "dev ws init <name|repository-uri>",
         description: "Workspace name",
       },
+      ambient,
     });
     const description =
       args.desc ??
-      (canPrompt() ? (await ui.text("Workspace description (optional)"))?.trim() : undefined);
+      (canPrompt(ambient)
+        ? (await ui.text("Workspace description (optional)"))?.trim()
+        : undefined);
 
+    let initializedPath: string | undefined;
     try {
       const result = await ws.init({
         root: config.root,
@@ -53,19 +93,33 @@ export const wsInitCommand = defineCommand({
         name: name.value,
         description: description || undefined,
       });
+      initializedPath = result.path;
+      const mount = repositorySource
+        ? await ws.add({
+            root: config.root,
+            workspacePrefix: config.workspacePrefix,
+            workspaceName: result.name,
+            source: repositorySource,
+            extraHeader: await resolveExtraHeader(config, repositorySource),
+            trustedScopes: config.trustedScopes,
+            globalHooks: config.hooks,
+          })
+        : undefined;
 
       ui.result({
-        data: result,
+        data: mount ? { ...result, mount } : result,
         json: args.json,
         text: () => {
           let out = `Initialized workspace '${result.name}' at:\n`;
           out += `  Directory: ${result.path}\n`;
           out += `  Manifest:  ${result.manifestPath}`;
+          if (mount) out += `\n  Mounted:   ${mount.mountName}`;
           return out;
         },
       });
       return 0;
     } catch (error) {
+      if (initializedPath && repositorySource) await fs.removeDir(initializedPath);
       ui.error(
         error instanceof ws.WorkspaceError
           ? `Error [${error.code}]: ${error.message}`

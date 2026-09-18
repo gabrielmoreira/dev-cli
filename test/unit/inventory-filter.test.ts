@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { filterInventory } from "../../src/inventory";
+import { filterInventory, isExplicitSource } from "../../src/inventory";
 import type { InventoryRecord } from "../../src/cache";
 
 describe("Inventory Filtering & Search (Phase 11)", () => {
@@ -45,6 +45,21 @@ describe("Inventory Filtering & Search (Phase 11)", () => {
       project: "tools",
     },
   ];
+
+  test("recognizes repository URIs without restricting their scheme", () => {
+    for (const source of [
+      "https://github.com/org/repo",
+      "http://git.example.com/org/repo",
+      "ssh://git@example.com/org/repo",
+      "git://example.com/org/repo",
+      "file:///tmp/repo.git",
+      "custom+git://example.com/org/repo",
+      "git@example.com:org/repo.git",
+    ]) {
+      expect(isExplicitSource(source)).toBe(true);
+    }
+    expect(isExplicitSource("repository-name")).toBe(false);
+  });
 
   test("returns all records when query is empty or undefined", () => {
     expect(filterInventory(sampleRecords)).toHaveLength(4);

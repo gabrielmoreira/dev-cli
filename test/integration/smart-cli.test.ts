@@ -164,6 +164,7 @@ describe("smart CLI input", () => {
   });
 
   test("collects a missing workspace name before creating it in an interactive terminal", async () => {
+    const select = spyOn(ui, "select").mockResolvedValueOnce("blank");
     const prompt = spyOn(ui, "text")
       .mockResolvedValueOnce("guided-workspace")
       .mockResolvedValueOnce("Workspace for guided CLI reviews");
@@ -180,6 +181,40 @@ describe("smart CLI input", () => {
     expect(await Bun.file(join(root, "ws", "guided-workspace", "ws.md")).text()).toContain(
       "Workspace for guided CLI reviews",
     );
+    select.mockRestore();
+    prompt.mockRestore();
+  });
+
+  test("creates and mounts a repository through the guided workspace flow", async () => {
+    const source = join(root, "guided-source.git");
+    const seed = join(root, "guided-seed");
+    await git.runGit(["init", "--bare", "-b", "main", source]);
+    await git.runGit(["init", "-b", "main", seed]);
+    await git.runGit(["config", "user.name", "Guided Workspace Test"], { cwd: seed });
+    await git.runGit(["config", "user.email", "guided@example.com"], { cwd: seed });
+    await writeFile(join(seed, "README.md"), "# guided\n");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "feat: seed guided repository"], { cwd: seed });
+    await git.runGit(["remote", "add", "origin", source], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "main"], { cwd: seed });
+
+    const select = spyOn(ui, "select").mockResolvedValueOnce("repository");
+    const prompt = spyOn(ui, "text")
+      .mockResolvedValueOnce(source)
+      .mockResolvedValueOnce("local-guided-source")
+      .mockResolvedValueOnce("Review guided source");
+
+    const exitCode = await runCli({
+      argv: ["ws", "init", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(prompt).toHaveBeenCalledWith("Workspace name", "local-guided-source");
+    expect(existsSync(join(root, "ws", "local-guided-source", "guided-source"))).toBe(true);
+    select.mockRestore();
     prompt.mockRestore();
   });
 
@@ -213,7 +248,7 @@ describe("smart CLI input", () => {
     expect(exitCode).toBe(1);
     expect(errors.join("\n")).toContain('"code": "INTERACTION_REQUIRED"');
     expect(errors.join("\n")).toContain('"field": "name"');
-    expect(errors.join("\n")).toContain("dev ws init <name>");
+    expect(errors.join("\n")).toContain("dev ws init <name|repository-uri>");
   });
 
   test("selects a workspace when interactive context is ambiguous", async () => {
@@ -1245,6 +1280,7 @@ describe("smart CLI input", () => {
   });
 
   test("reports missing input when a text prompt returns no value", async () => {
+    const select = spyOn(ui, "select").mockResolvedValueOnce("blank");
     const prompt = spyOn(ui, "text").mockResolvedValue(undefined);
     const exitCode = await runCli({
       argv: ["ws", "create", "--root", root],
@@ -1257,5 +1293,6 @@ describe("smart CLI input", () => {
     expect(exitCode).toBe(1);
     expect(errors.join("\n")).toContain("Workspace name is required");
     prompt.mockRestore();
+    select.mockRestore();
   });
 });

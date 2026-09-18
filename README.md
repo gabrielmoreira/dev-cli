@@ -40,16 +40,17 @@ missing information.
 
 ### Example: contribute to Oh My Pi
 
-Create a focused workspace and bring the upstream repository into it:
+Paste a repository URI into `ws init`. `dev` derives a provider-prefixed workspace
+name, creates it, and mounts the repository in one command:
 
 ```bash
-dev ws init oss-oh-my-pi --desc "Contribute to Oh My Pi"
-cd ~/dev/ws/oss-oh-my-pi
-dev ws add https://github.com/can1357/oh-my-pi
+dev ws init https://github.com/can1357/oh-my-pi --desc "Contribute to Oh My Pi"
+cd ~/dev/ws/gh-can1357-oh-my-pi
 ```
 
-The repository is an isolated worktree inside the workspace, ready for code
-review, local changes, tests, and a contribution branch.
+The repository is an isolated worktree ready for code review, local changes,
+tests, and a contribution branch. The URI may use any Git-supported scheme, such
+as `https:`, `http:`, `ssh:`, `git:`, or `file:`.
 
 ---
 
@@ -138,12 +139,32 @@ dev sync   # fast-forward safe mounts
 
 ---
 
+## Mirrors and labels
+
+A mirror is `dev`'s shared canonical checkout of a repository. Workspaces reuse
+it to create isolated worktrees, so the same repository does not need a full
+clone for every task.
+
+```bash
+dev mirror add https://github.com/can1357/oh-my-pi
+dev mirror label add oh-my-pi docs
+dev mirror list --label docs
+```
+
+A label is reusable metadata attached to a declared repository source. It turns
+repository lists into named sets: `dev pr --label docs` queries their pull
+requests, while `dev qmd sync docs` indexes them as QMD collections. `dev ws add`
+can select several repositories interactively, but does not filter that picker by
+label today.
+
+---
+
 ## Commands
 
 | Command                         | What it does                                                       |
 | ------------------------------- | ------------------------------------------------------------------ |
-| `dev ws create [name]`          | Create a workspace; prompt for missing useful context              |
-| `dev ws add [name\|url]`        | Mount a repo into the current or selected workspace                |
+| `dev ws init [name\|URI]`       | Create a blank workspace or create and mount one repository        |
+| `dev ws add [name\|URI]`        | Mount a repository into the current or selected workspace          |
 | `dev ws start [name]`           | Start or focus OMP in HerdR for a workspace                        |
 | `dev status`                    | Show mount status (clean / dirty / ahead / behind)                 |
 | `dev sync`                      | Update the current workspace, or sync inventory outside it         |
@@ -154,38 +175,85 @@ dev sync   # fast-forward safe mounts
 | `dev pr -i`                     | Select one repository, then show its pull requests                 |
 | `dev pr --label <label>`        | Show pull requests for a reusable dev-cli repository workset       |
 | `dev wi`                        | Show cached work items; `--refresh` selects a provider and project |
-| `dev qmd sync [label]`          | Reconcile QMD collections from repository labels                   |
+| `dev qmd sync [label]`          | Build QMD collections from sources carrying the selected label     |
 | `dev root add\|remove <target>` | Register or unregister a root without deleting its files           |
 | `dev provider list`             | Show configured providers                                          |
 | `dev doctor`                    | Check environment, tools, and credential status                    |
 
 ---
 
-## Highlights
+## Optional integrations
+
+`dev` can connect three independent tools:
+
+- [OMP](https://omp.sh) is the coding agent opened for a dev workspace.
+- [HerdR](https://herdr.dev) keeps agent terminals organized and running.
+- [QMD](https://github.com/tobi/qmd) is a local search engine for documentation
+  and knowledge bases.
 
 ### Open the right OMP in HerdR
 
-From a HerdR pane, open OMP in the workspace created above:
+Install OMP and HerdR if you do not have them yet:
 
 ```bash
-dev ws start oss-oh-my-pi
+mise use -g github:can1357/oh-my-pi
+mise use -g herdr
+```
+
+On Windows, install HerdR from PowerShell instead:
+
+```powershell
+irm https://herdr.dev/install.ps1 | iex
+```
+
+Then open OMP in the workspace created above:
+
+```bash
+dev ws start gh-can1357-oh-my-pi
 ```
 
 `dev` uses the dev workspace directory as the pane working directory. It focuses an
 existing ready OMP for that workspace, starts OMP in an available matching pane, or
 creates the HerdR workspace and agent when neither exists.
 
-### Build QMD collections from repository labels
+### Search labeled repositories with QMD
 
-Turn every source carrying a label into a reconciled QMD collection:
+QMD syncs one repository label at a time. First declare the mirror, then attach
+any label meaningful to you; `docs` is an example, not a reserved convention:
 
 ```bash
-dev qmd sync docs
-dev qmd sync docs --noEmbed # lexical-only indexing, useful in CI
+dev mirror add https://github.com/can1357/oh-my-pi
+dev mirror label add oh-my-pi docs
 ```
 
-For QMD commands outside the managed sync flow, use
-`dev qmd x <qmd-arguments>`; `dev` supplies the scoped registry environment.
+`mirror label add` is explicit rather than interactive: it expects a declared
+source (its inventory name or URI) and a label. Optional metadata follows as a
+comma-separated `key=value` argument when the label definition requires fields.
+
+Now reconcile every source carrying `docs` into one QMD collection per repository:
+
+```bash
+dev qmd sync       # choose among known labels in an interactive terminal
+dev qmd sync docs  # select docs explicitly; deterministic for scripts
+dev qmd sync docs --noEmbed # skip vector embeddings; lexical search only
+```
+
+For this example, the collection is `docs--oh-my-pi`. Sync removes stale
+`docs--*` collections, adds missing ones, updates the index, and embeds it unless
+`--noEmbed` is set.
+
+Add QMD context or pass any other QMD arguments through `dev qmd x`. These commands
+use the same QMD registry, scoped to this dev root by default:
+
+```bash
+dev qmd x context add qmd://docs--oh-my-pi "OMP source, architecture, and contributor documentation"
+dev qmd x query "how are tools registered?" -c docs--oh-my-pi --json -n 10
+dev qmd x status
+```
+
+Everything after `dev qmd x` is passed to QMD unchanged. See the
+[QMD command reference](https://github.com/tobi/qmd#quick-start) for available
+commands and flags.
 
 ---
 

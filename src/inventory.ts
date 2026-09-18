@@ -145,25 +145,19 @@ export async function syncInventory(
   };
 }
 
-/**
- * Checks whether a user-provided input string is an explicit URL or local path.
- */
+/** Checks whether user input is an explicit repository URI or local path. */
 export function isExplicitSource(str: string): boolean {
-  const s = str.trim();
-  if (
-    s.startsWith("http://") ||
-    s.startsWith("https://") ||
-    s.startsWith("git@") ||
-    s.startsWith("ssh://") ||
-    s.endsWith(".git") ||
-    s.startsWith("./") ||
-    s.startsWith("../") ||
-    s.startsWith("/") ||
-    /^[a-zA-Z]:[\\/]/.test(s)
-  ) {
-    return true;
-  }
-  return false;
+  const source = str.trim();
+  return (
+    /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(source) ||
+    /^[^@\s]+@[^:\s]+:.+/.test(source) ||
+    source.endsWith(".git") ||
+    source.startsWith("./") ||
+    source.startsWith("../") ||
+    source.startsWith("~/") ||
+    source.startsWith("/") ||
+    /^[a-zA-Z]:[\\/]/.test(source)
+  );
 }
 
 /**
