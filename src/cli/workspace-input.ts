@@ -27,6 +27,7 @@ export interface ResolveWorkspaceInputOptions {
   command: string;
   usage: string;
   ambient?: AmbientContext;
+  fuzzyValue?: boolean;
 }
 
 export interface WorkspaceQueryContext {
@@ -58,6 +59,16 @@ export async function resolveWorkspaceQueryContext(options: {
   };
 }
 
+export function matchesWorkspaceQuery(name: string, query: string): boolean {
+  const candidate = name.toLowerCase();
+  const expected = query.toLowerCase();
+  let offset = 0;
+  for (const character of candidate) {
+    if (character === expected[offset]) offset += 1;
+    if (offset === expected.length) return true;
+  }
+  return expected.length === 0;
+}
 export async function resolveWorkspaceInput(
   options: ResolveWorkspaceInputOptions,
 ): Promise<ResolvedCliInput<string>> {
@@ -67,19 +78,42 @@ export async function resolveWorkspaceInput(
     options.root,
     options.workspacePrefix,
   );
+  const choices = async () =>
+    (await ws.list({ root: options.root, workspacePrefix: options.workspacePrefix })).map(
+      (workspace) => ({
+        label: workspace.description
+          ? `${workspace.name} — ${workspace.description}`
+          : workspace.name,
+        value: workspace.name,
+      }),
+    );
+
+  if (options.fuzzyValue && options.value) {
+    const query = options.value.trim();
+    const matches = (await choices()).filter((workspace) =>
+      matchesWorkspaceQuery(workspace.value, query),
+    );
+    const exact = matches.find(
+      (workspace) => workspace.value.toLowerCase() === query.toLowerCase(),
+    );
+    return await resolveChoiceInput({
+      value: exact?.value,
+      choices: async () => matches,
+      message: "Select workspace",
+      required: {
+        command: options.command,
+        field: "workspace",
+        usage: options.usage,
+        description: `Workspace matching '${query}'`,
+      },
+      ambient,
+    });
+  }
 
   return await resolveChoiceInput({
     value: options.value,
     inferred: detected ? { value: detected, source: "cwd" } : undefined,
-    choices: async () =>
-      (await ws.list({ root: options.root, workspacePrefix: options.workspacePrefix })).map(
-        (workspace) => ({
-          label: workspace.description
-            ? `${workspace.name} — ${workspace.description}`
-            : workspace.name,
-          value: workspace.name,
-        }),
-      ),
+    choices,
     message: "Select workspace",
     required: {
       command: options.command,

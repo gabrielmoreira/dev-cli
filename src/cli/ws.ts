@@ -15,6 +15,7 @@ import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInputs } from "./repository-input.ts";
 import {
+  matchesWorkspaceQuery,
   resolveWorkspaceInput,
   resolveWorkspaceMountInput,
   resolveWorkspaceMountScope,
@@ -1284,17 +1285,6 @@ export const wsPathCommand = defineCommand({
   },
 });
 
-function matchesWorkspaceQuery(name: string, query: string): boolean {
-  const candidate = name.toLowerCase();
-  const expected = query.toLowerCase();
-  let offset = 0;
-  for (const character of candidate) {
-    if (character === expected[offset]) offset += 1;
-    if (offset === expected.length) return true;
-  }
-  return expected.length === 0;
-}
-
 export const wsGoCommand = defineCommand({
   meta: {
     name: "go",
@@ -1519,7 +1509,11 @@ export const wsStartCommand = defineCommand({
     description: "Start or focus OMP in HerdR for a dev workspace",
   },
   args: {
-    name: { type: "positional", description: "Optional workspace name", required: false },
+    name: {
+      type: "positional",
+      description: "Optional workspace name or fuzzy query",
+      required: false,
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -1528,6 +1522,7 @@ export const wsStartCommand = defineCommand({
     const ambient = getAmbient();
     const workspace = await resolveWorkspaceInput({
       value: args.name,
+      fuzzyValue: true,
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws start",

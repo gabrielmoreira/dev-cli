@@ -89,10 +89,21 @@ describe("dev ws start CLI", () => {
   async function runStart(options: {
     insideHerdr: boolean;
     scenario: "create" | "reuse" | "shell" | "timeout" | "server-down";
+    name?: string;
   }) {
     await writeFile(callsPath, "");
     const proc = Bun.spawn(
-      ["bun", "run", cliPath, "ws", "start", "payment-fix", "--root", tempRoot, "--json"],
+      [
+        "bun",
+        "run",
+        cliPath,
+        "ws",
+        "start",
+        options.name ?? "payment-fix",
+        "--root",
+        tempRoot,
+        "--json",
+      ],
       {
         env: {
           ...process.env,
@@ -136,6 +147,15 @@ describe("dev ws start CLI", () => {
     ]);
   });
 
+  it("resolves a unique fuzzy workspace name before starting OMP", async () => {
+    const result = await runStart({ insideHerdr: true, scenario: "create", name: "payf" });
+
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      workspace: "payment-fix",
+      path: workspacePath,
+    });
+  });
   it("reuses a ready OMP for the same dev workspace", async () => {
     const result = await runStart({ insideHerdr: true, scenario: "reuse" });
 

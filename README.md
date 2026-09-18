@@ -180,7 +180,7 @@ confirmed once before `dev.yaml` is updated. The same label can drive
 | `dev ws init [name\|URI]`       | Create a workspace from blank, selected repositories, or a workset |
 | `dev ws add [name\|URI]`        | Mount a repository into the current or selected workspace          |
 | `dev workset list\|show`        | Inspect reusable repository plans from `dev.yaml`                  |
-| `dev ws start [name]`           | Start or focus OMP in HerdR for a workspace                        |
+| `dev ws start [query]`          | Fuzzy-select, start, or focus OMP in HerdR for a workspace         |
 | `dev status`                    | Show mount status (clean / dirty / ahead / behind)                 |
 | `dev sync`                      | Update the current workspace, or sync inventory outside it         |
 | `dev ls`                        | List all workspaces (`dev ws list` also works)                     |
@@ -234,6 +234,10 @@ HerdR pane or a normal terminal. If no server is running, it starts one and
 waits for readiness; an interactive external call attaches the HerdR client
 after the requested workspace is focused. `--json` performs the same server
 orchestration without taking over the calling terminal.
+
+A partial name is enough when it identifies one workspace (`dev ws start adob`).
+When several workspaces match in an interactive terminal, `dev` asks which one
+to start.
 
 ### Search labeled repositories with QMD
 

@@ -8,6 +8,7 @@ import * as git from "../../src/git.ts";
 import { runCli } from "../../src/cli";
 import * as cache from "../../src/cache.ts";
 import * as manifest from "../../src/manifest.ts";
+import { resolveWorkspaceInput } from "../../src/cli/workspace-input.ts";
 
 describe("smart CLI input", () => {
   let root: string;
@@ -281,6 +282,35 @@ describe("smart CLI input", () => {
     prompt.mockRestore();
   });
 
+  test("prompts with fuzzy workspace matches when a query is ambiguous", async () => {
+    for (const name of ["adobe-edge-poc", "adobe-mobile-review", "payments-review"]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+
+    const select = spyOn(ui, "select").mockResolvedValueOnce("adobe-edge-poc");
+    const workspace = await resolveWorkspaceInput({
+      value: "adob",
+      fuzzyValue: true,
+      root,
+      command: "ws start",
+      usage: "dev ws start [name]",
+      ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
+    });
+
+    expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
+      "adobe-edge-poc",
+      "adobe-mobile-review",
+    ]);
+    expect(workspace).toEqual({ value: "adobe-edge-poc", source: "prompt" });
+    select.mockRestore();
+  });
   test("go selects recent workspaces and resolves a fuzzy name query", async () => {
     for (const [name, createdAt] of [
       ["older-workspace", "2026-09-01T00:00:00.000Z"],
