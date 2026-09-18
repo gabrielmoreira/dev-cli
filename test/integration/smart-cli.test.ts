@@ -1,0 +1,1130 @@
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ui } from "../../src/ui.ts";
+import * as git from "../../src/git.ts";
+import { runCli } from "../../src/cli";
+import * as cache from "../../src/cache.ts";
+import * as manifest from "../../src/manifest.ts";
+
+describe("smart CLI input", () => {
+  let root: string;
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+  let errors: string[];
+  let logs: string[];
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), "dev-cli-smart-input-"));
+    originalLog = console.log;
+    originalError = console.error;
+    errors = [];
+    logs = [];
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    console.error = originalError;
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("collects a missing workspace name before creating it in an interactive terminal", async () => {
+    const prompt = spyOn(ui, "text")
+      .mockResolvedValueOnce("guided-workspace")
+      .mockResolvedValueOnce("Workspace for guided CLI reviews");
+
+    const exitCode = await runCli({
+      argv: ["ws", "init", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(root, "ws", "guided-workspace", "ws.md"))).toBe(true);
+    expect(await Bun.file(join(root, "ws", "guided-workspace", "ws.md")).text()).toContain(
+      "Workspace for guided CLI reviews",
+    );
+    prompt.mockRestore();
+  });
+
+  test("creates workspaces under the configured workspace prefix", async () => {
+    await writeFile(
+      join(root, "dev.yaml"),
+      ["version: 1", "defaults:", "  workspace_prefix: tasks/", ""].join("\n"),
+    );
+
+    const exitCode = await runCli({
+      argv: ["ws", "init", "prefixed-workspace", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(join(root, "tasks", "prefixed-workspace", "ws.md"))).toBe(true);
+    expect(existsSync(join(root, "ws", "prefixed-workspace"))).toBe(false);
+  });
+
+  test("returns structured required-input details instead of prompting in JSON mode", async () => {
+    const exitCode = await runCli({
+      argv: ["ws", "init", "--root", root, "--json"],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors.join("\n")).toContain('"code": "INTERACTION_REQUIRED"');
+    expect(errors.join("\n")).toContain('"field": "name"');
+    expect(errors.join("\n")).toContain("dev ws init <name>");
+  });
+
+  test("selects a workspace when interactive context is ambiguous", async () => {
+    for (const name of ["first-workspace", "second-workspace"]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+
+    const prompt = spyOn(ui, "select").mockResolvedValue("second-workspace");
+    const exitCode = await runCli({
+      argv: ["ws", "status", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Workspace: second-workspace");
+    prompt.mockRestore();
+  });
+
+  test("go selects recent workspaces and resolves a fuzzy name query", async () => {
+    for (const [name, createdAt] of [
+      ["older-workspace", "2026-09-01T00:00:00.000Z"],
+      ["newest-workspace", "2026-09-03T00:00:00.000Z"],
+      ["middle-workspace", "2026-09-02T00:00:00.000Z"],
+    ]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+      const manifestPath = join(root, "ws", name, "ws.md");
+      const workspace = await manifest.readWorkspace(manifestPath);
+      workspace.manifest.created_at = createdAt;
+      await manifest.writeWorkspace(manifestPath, workspace.manifest, workspace.body);
+    }
+
+    logs = [];
+    const prompt = spyOn(ui, "select").mockResolvedValue("newest-workspace");
+    expect(
+      await runCli({
+        argv: ["go", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+    expect(prompt.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
+      "newest-workspace",
+      "middle-workspace",
+      "older-workspace",
+    ]);
+    expect(logs).toEqual([join(root, "ws", "newest-workspace")]);
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["go", "oldw", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs).toEqual([join(root, "ws", "older-workspace")]);
+    prompt.mockRestore();
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["go", "--candidates", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n").split("\n")).toEqual([
+      join(root, "ws", "newest-workspace"),
+      join(root, "ws", "middle-workspace"),
+      join(root, "ws", "older-workspace"),
+    ]);
+  });
+
+  test("mounts every repository selected by the searchable multi-select", async () => {
+    const sources: string[] = [];
+    for (const name of ["repository-a", "repository-b"]) {
+      const source = join(root, `${name}.git`);
+      const seed = join(root, `${name}-seed`);
+      await git.runGit(["init", "--bare", "-b", "main", source]);
+      await git.runGit(["init", "-b", "main", seed]);
+      await git.runGit(["config", "user.name", "Test Agent"], { cwd: seed });
+      await git.runGit(["config", "user.email", "agent@example.com"], { cwd: seed });
+      await writeFile(join(seed, "README.md"), `# ${name}\n`);
+      await git.runGit(["add", "."], { cwd: seed });
+      await git.runGit(["commit", "-m", "initial"], { cwd: seed });
+      await git.runGit(["remote", "add", "origin", source], { cwd: seed });
+      await git.runGit(["push", "origin", "main"], { cwd: seed });
+      await git.runGit(["checkout", "-b", `feature/${name}`], { cwd: seed });
+      await writeFile(join(seed, "feature.txt"), name);
+      await git.runGit(["add", "."], { cwd: seed });
+      await git.runGit(["commit", "-m", "feature"], { cwd: seed });
+      await git.runGit(["push", "origin", `feature/${name}`], { cwd: seed });
+      sources.push(source);
+    }
+    await cache.writeInventory({
+      root,
+      tenant: "local",
+      records: sources.map((url, index) => ({
+        id: String(index),
+        name: `repository-${index === 0 ? "a" : "b"}`,
+        url,
+        default_branch: "main",
+        description: "",
+        last_changed: "",
+        syncedAt: "",
+      })),
+    });
+    expect(
+      await runCli({
+        argv: ["ws", "init", "multi-repository", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    const multiPrompt = spyOn(ui, "multiSelect")
+      .mockResolvedValueOnce(sources)
+      .mockResolvedValueOnce(["0"]);
+    const branchPrompt = spyOn(ui, "select")
+      .mockResolvedValueOnce("feature/repository-a")
+      .mockResolvedValueOnce("main");
+    const pathPrompt = spyOn(ui, "text")
+      .mockResolvedValueOnce("repository-a-feature")
+      .mockResolvedValueOnce("repository-a-main");
+    const confirmPrompt = spyOn(ui, "confirm")
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const exitCode = await runCli({
+      argv: ["ws", "add", "--ws", "multi-repository", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    const workspaceManifest = await manifest.readWorkspace(
+      join(root, "ws", "multi-repository", "ws.md"),
+    );
+    expect(
+      workspaceManifest.manifest.mounts.map((mount) => [
+        mount.path,
+        mount.revision.mode === "track" ? mount.revision.branch : undefined,
+      ]),
+    ).toEqual([
+      ["repository-a-feature", "feature/repository-a"],
+      ["repository-a-main", "main"],
+      ["repository-b", "main"],
+    ]);
+    expect(logs.join("\n")).toContain("Selected mounts");
+    expect(logs.join("\n")).toContain("Final mount plan");
+    confirmPrompt.mockRestore();
+    pathPrompt.mockRestore();
+    branchPrompt.mockRestore();
+    multiPrompt.mockRestore();
+  });
+
+  test("prompts for a repository source before mounting", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "init", "guided-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    const prompt = spyOn(ui, "text").mockResolvedValue(process.cwd());
+    const exitCode = await runCli({
+      argv: ["ws", "add", "--ws", "guided-workspace", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Mounted repository 'dev-cli'");
+    prompt.mockRestore();
+  });
+
+  test("returns the selected mount path from the interactive workspace picker", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "init", "picked-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(
+      await runCli({
+        argv: ["ws", "add", process.cwd(), "--ws", "picked-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["ws", "pick", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+    expect(logs).toEqual([join(root, "ws", "picked-workspace", "dev-cli")]);
+  });
+
+  test("selects a bounded repository candidate before asking for manual input", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "init", "inventory-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    await cache.writeInventory({
+      root,
+      tenant: "local/test",
+      records: [
+        {
+          id: "selected",
+          name: "dev-cli",
+          url: process.cwd(),
+          default_branch: "main",
+          description: "Selected repository",
+          last_changed: "2026-09-16T00:00:00Z",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+        {
+          id: "other",
+          name: "other-repository",
+          url: join(root, "other.git"),
+          default_branch: "main",
+          description: "Other repository",
+          last_changed: "2026-09-16T00:00:00Z",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+
+    const select = spyOn(ui, "multiSelect")
+      .mockResolvedValueOnce([process.cwd()])
+      .mockResolvedValueOnce(["defaults"]);
+    const text = spyOn(ui, "text").mockResolvedValue(undefined);
+    const confirm = spyOn(ui, "confirm").mockResolvedValue(true);
+    const exitCode = await runCli({
+      argv: ["ws", "add", "--ws", "inventory-workspace", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(text).not.toHaveBeenCalled();
+    expect(logs.join("\n")).toContain("Selected mounts");
+    expect(logs.join("\n")).toContain("Final mount plan");
+    confirm.mockRestore();
+    select.mockRestore();
+    text.mockRestore();
+  });
+
+  test("selects a source workspace and prompts for a duplicate name", async () => {
+    for (const name of ["first-workspace", "second-workspace"]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+
+    const sourcePrompt = spyOn(ui, "select").mockResolvedValue("second-workspace");
+    const namePrompt = spyOn(ui, "text").mockResolvedValue("copied-workspace");
+    const exitCode = await runCli({
+      argv: ["ws", "duplicate", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain(
+      "Duplicated workspace 'second-workspace' to 'copied-workspace'",
+    );
+    sourcePrompt.mockRestore();
+    namePrompt.mockRestore();
+  });
+
+  test("cancels workspace removal when confirmation is declined", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "init", "safe-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    const prompt = spyOn(ui, "confirm").mockResolvedValue(false);
+    const exitCode = await runCli({
+      argv: ["ws", "remove", "missing-mount", "--ws", "safe-workspace", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Cancelled.");
+
+    prompt.mockRestore();
+  });
+  test("requires an explicit mount or --all for non-interactive bulk actions", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "init", "scoped-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    const exitCode = await runCli({
+      argv: ["ws", "lock", "--ws", "scoped-workspace", "--root", root, "--json"],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors.join("\n")).toContain('"field": "mount"');
+    expect(errors.join("\n")).toContain("--all");
+  });
+
+  test("does not probe invented ADO projects during a default work-item list", async () => {
+    await writeFile(
+      join(root, "dev.yaml"),
+      [
+        "azure_devops:",
+        "  token: test-token",
+        "providers:",
+        "  - id: ado-example",
+        "    type: azure_devops",
+        "    organization: example-org",
+        "",
+      ].join("\n"),
+    );
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ workItems: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const exitCode = await runCli({
+      argv: ["wi", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(request).not.toHaveBeenCalled();
+    expect(logs.join("\n")).toContain("dev wi --refresh");
+    request.mockRestore();
+  });
+
+  test("uses dev-cli labels as pull-request worksets", async () => {
+    const repositoryUrl = "https://dev.azure.com/example-org/Payments/_git/payments-api";
+    await writeFile(
+      join(root, "dev.yaml"),
+      [
+        "azure_devops:",
+        "  token: test-token",
+        "providers:",
+        "  - id: ado-example",
+        "    type: azure_devops",
+        "    organization: example-org",
+        "sources:",
+        `  - url: ${repositoryUrl}`,
+        "    labels:",
+        "      review-workset: {}",
+        "",
+      ].join("\n"),
+    );
+    await cache.writeInventory({
+      root,
+      tenant: "dev.azure.com/example-org",
+      records: [
+        {
+          id: "repo-1",
+          name: "payments-api",
+          url: repositoryUrl,
+          default_branch: "main",
+          description: "Payments API",
+          last_changed: "2026-09-16T00:00:00Z",
+          syncedAt: "2026-09-16T00:00:00Z",
+          project: "Payments",
+        },
+      ],
+    });
+    const request = spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          count: 1,
+          value: [
+            {
+              pullRequestId: 42,
+              status: "active",
+              title: "Review payment change",
+              sourceRefName: "refs/heads/feature",
+              targetRefName: "refs/heads/main",
+              creationDate: "2026-09-16T00:00:00Z",
+              url: `${repositoryUrl}/pullRequests/42`,
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    const exitCode = await runCli({
+      argv: ["pr", "--label", "review-workset", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(String(request.mock.calls[0]?.[0])).toContain(
+      "/Payments/_apis/git/repositories/repo-1/pullrequests",
+    );
+    expect(logs.join("\n")).toContain("payments-api");
+    request.mockRestore();
+  });
+
+  test("selects a registered root when dev use has no target", async () => {
+    const first = join(root, "first-root");
+    const second = join(root, "second-root");
+    await writeFile(
+      join(root, ".dev.toml"),
+      ["[roots.first]", `path = "${first}"`, "", "[roots.second]", `path = "${second}"`, ""].join(
+        "\n",
+      ),
+    );
+    const select = spyOn(ui, "select").mockResolvedValue("second");
+
+    const exitCode = await runCli({
+      argv: ["use"],
+      cwd: root,
+      env: { HOME: root },
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.at(-1)).toContain(`export DEV_ROOT="${second}"`);
+    select.mockRestore();
+  });
+
+  test("reports a structured missing label for non-interactive qmd sync", async () => {
+    const exitCode = await runCli({
+      argv: ["qmd", "sync", "--root", root, "--json"],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors.join("\n")).toContain('"field": "label"');
+  });
+
+  test("prompts for a repository source before creating a mirror", async () => {
+    const remote = join(root, "remote.git");
+    const seed = join(root, "seed");
+    await git.runGit(["init", "--bare", remote]);
+    await git.runGit(["init", "-b", "main", seed]);
+    await git.runGit(["config", "user.name", "CLI Test"], { cwd: seed });
+    await git.runGit(["config", "user.email", "cli@example.com"], { cwd: seed });
+    await writeFile(join(seed, "file.txt"), "mirror input");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "test: seed mirror"], { cwd: seed });
+    await git.runGit(["remote", "add", "origin", remote], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "main"], { cwd: seed });
+
+    const prompt = spyOn(ui, "text").mockResolvedValue(remote);
+    await git.runGit(["checkout", "-b", "feature"], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "feature"], { cwd: seed });
+    const exitCode = await runCli({
+      argv: ["mirror", "add", "--branch", "main", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Added mirror:");
+    prompt.mockRestore();
+
+    logs = [];
+    const pickExitCode = await runCli({
+      argv: ["mirror", "pick", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+    expect(pickExitCode).toBe(0);
+    expect(logs).toHaveLength(1);
+    expect(logs[0]?.startsWith(root)).toBe(true);
+
+    const branchPrompt = spyOn(ui, "text").mockResolvedValue("feature");
+    const trackExitCode = await runCli({
+      argv: ["mirror", "track", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(trackExitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Tracked sibling canonical branch:");
+    branchPrompt.mockRestore();
+
+    const branchPromptForUntrack = spyOn(ui, "text").mockResolvedValue("feature");
+    const confirmationPrompt = spyOn(ui, "confirm").mockResolvedValue(false);
+    const untrackExitCode = await runCli({
+      argv: ["mirror", "untrack", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(untrackExitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Cancelled.");
+    branchPromptForUntrack.mockRestore();
+    confirmationPrompt.mockRestore();
+  });
+
+  test("guides provider creation and protects removal", async () => {
+    const typePrompt = spyOn(ui, "select").mockResolvedValue("ado");
+    const organizationPrompt = spyOn(ui, "text").mockResolvedValue("example-org");
+    const addExitCode = await runCli({
+      argv: ["provider", "add", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(addExitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Registered provider 'ado-example-org'");
+    typePrompt.mockRestore();
+    organizationPrompt.mockRestore();
+
+    const removePrompt = spyOn(ui, "confirm").mockResolvedValue(false);
+    const removeExitCode = await runCli({
+      argv: ["provider", "remove", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(removeExitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Cancelled.");
+    removePrompt.mockRestore();
+  });
+
+  test("opens the only cached pull request and work item without IDs", async () => {
+    const tenant = "dev.azure.com/example";
+    await cache.writePullRequests({
+      root,
+      tenant,
+      repo: "sample-repo",
+      records: [
+        {
+          id: 42,
+          title: "Improve CLI context",
+          description: "Details",
+          status: "open",
+          sourceBranch: "feature/context",
+          targetBranch: "main",
+          author: "Developer",
+          url: "https://example.test/pr/42",
+          createdAt: "2026-09-16T00:00:00Z",
+          updatedAt: "2026-09-16T00:00:00Z",
+          isDraft: false,
+          repository: "sample-repo",
+          tenant,
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+    await cache.writeWorkItems({
+      root,
+      tenant,
+      project: "sample-project",
+      records: [
+        {
+          id: 84,
+          type: "Task",
+          title: "Verify smart views",
+          state: "Active",
+          url: "https://example.test/wi/84",
+          tenant,
+          project: "sample-project",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(
+      await runCli({
+        argv: ["pr", "view", "--offline", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toContain("Pull Request #42: Improve CLI context");
+
+    expect(
+      await runCli({
+        argv: ["wi", "view", "--offline", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toContain("Work Item #84: Verify smart views");
+  });
+
+  test("creates review and continuation workspaces from a cached pull request", async () => {
+    const remote = join(root, "review-source.git");
+    const seed = join(root, "review-seed");
+    await git.runGit(["init", "--bare", "-b", "main", remote]);
+    await git.runGit(["init", "-b", "main", seed]);
+    await git.runGit(["config", "user.name", "Test Agent"], { cwd: seed });
+    await git.runGit(["config", "user.email", "agent@example.com"], { cwd: seed });
+    await writeFile(join(seed, "README.md"), "# Review source\n");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "initial"], { cwd: seed });
+    await git.runGit(["remote", "add", "origin", remote], { cwd: seed });
+    await git.runGit(["push", "origin", "main"], { cwd: seed });
+    await git.runGit(["checkout", "-b", "feature/review"], { cwd: seed });
+    await writeFile(join(seed, "feature.txt"), "review me\n");
+    await git.runGit(["add", "."], { cwd: seed });
+    await git.runGit(["commit", "-m", "feature"], { cwd: seed });
+    await git.runGit(["push", "origin", "feature/review"], { cwd: seed });
+
+    await cache.writeInventory({
+      root,
+      tenant: "dev.azure.com/example-org",
+      records: [
+        {
+          id: "review-source",
+          name: "review-source",
+          url: remote,
+          default_branch: "main",
+          description: "",
+          last_changed: "",
+          syncedAt: "",
+        },
+      ],
+    });
+    await cache.writePullRequests({
+      root,
+      tenant: "dev.azure.com/example-org",
+      repo: "review-source",
+      records: [
+        {
+          id: 42,
+          title: "Improve review flow",
+          description: "",
+          status: "open",
+          sourceBranch: "feature/review",
+          targetBranch: "main",
+          author: "Developer",
+          url: "https://example.test/pr/42",
+          createdAt: "2026-09-16T00:00:00Z",
+          updatedAt: "2026-09-16T00:00:00Z",
+          isDraft: false,
+          repository: "review-source",
+          tenant: "dev.azure.com/example-org",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+        {
+          id: 43,
+          title: "Review URL checkout",
+          description: "",
+          status: "open",
+          sourceBranch: "feature/review",
+          targetBranch: "main",
+          author: "Developer",
+          url: "https://dev.azure.com/example-org/sample-project/_git/review-source/pullrequest/43",
+          createdAt: "2026-09-16T00:00:00Z",
+          updatedAt: "2026-09-16T00:00:00Z",
+          isDraft: false,
+          repository: "review-source",
+          tenant: "dev.azure.com/example-org",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(
+      await runCli({
+        argv: ["pr", "checkout", "42", "--review", "--name", "review-pr", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    const review = await manifest.readWorkspace(join(root, "ws", "review-pr", "ws.md"));
+    expect(review.manifest.mounts[0].revision).toEqual({
+      mode: "track",
+      branch: "review/42-improve-review-flow",
+      upstream: "feature/review",
+    });
+
+    expect(
+      await runCli({
+        argv: ["pr", "checkout", "42", "--continue", "--name", "continue-pr", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    const continuation = await manifest.readWorkspace(join(root, "ws", "continue-pr", "ws.md"));
+    expect(continuation.manifest.mounts[0].revision).toEqual({
+      mode: "track",
+      branch: "feature/review",
+      upstream: undefined,
+    });
+
+    const checkoutPrompt = spyOn(ui, "select")
+      .mockResolvedValueOnce("0")
+      .mockResolvedValueOnce("review");
+    expect(
+      await runCli({
+        argv: ["pr", "checkout", "--name", "prompted-review", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      }),
+    ).toBe(0);
+    expect(existsSync(join(root, "ws", "prompted-review", "ws.md"))).toBe(true);
+    checkoutPrompt.mockRestore();
+
+    expect(
+      await runCli({
+        argv: [
+          "pr",
+          "checkout",
+          "https://dev.azure.com/example-org/sample-project/_git/review-source/pullrequest/43",
+          "--review",
+          "--name",
+          "url-review",
+          "--root",
+          root,
+        ],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    const urlReview = await manifest.readWorkspace(join(root, "ws", "url-review", "ws.md"));
+    expect(urlReview.manifest.mounts[0].revision).toEqual({
+      mode: "track",
+      branch: "review/43-review-url-checkout",
+      upstream: "feature/review",
+    });
+    const uncachedRequest = spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        pullRequestId: 44,
+        status: "active",
+        title: "Uncached URL checkout",
+        sourceRefName: "refs/heads/feature/review",
+        targetRefName: "refs/heads/main",
+        creationDate: "2026-09-16T00:00:00Z",
+        url: "https://dev.azure.com/example-org/sample-project/_git/review-source/pullrequest/44",
+        createdBy: { displayName: "Developer" },
+      }),
+    );
+    expect(
+      await runCli({
+        argv: [
+          "pr",
+          "checkout",
+          "https://dev.azure.com/example-org/sample-project/_git/review-source/pullrequest/44",
+          "--review",
+          "--name",
+          "uncached-url-review",
+          "--root",
+          root,
+        ],
+        cwd: root,
+        env: { AZURE_DEVOPS_PAT: "test-token" },
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(String(uncachedRequest.mock.calls[0]?.[0])).toContain(
+      "/sample-project/_apis/git/repositories/review-source/pullrequests/44",
+    );
+    uncachedRequest.mockRestore();
+  });
+
+  test("lists cached pull requests without network access unless refresh is requested", async () => {
+    const tenant = "dev.azure.com/example-org";
+    await writeFile(
+      join(root, "dev.yaml"),
+      [
+        "version: 1",
+        "providers:",
+        "  - id: ado-example",
+        "    type: azure_devops",
+        "    organization: example-org",
+        "    project: sample-project",
+        "",
+      ].join("\n"),
+    );
+    await cache.writePullRequestSelection({
+      root,
+      tenant,
+      name: "mine-open",
+      records: [
+        {
+          id: 42,
+          title: "Cached pull request",
+          description: "",
+          status: "open",
+          sourceBranch: "feature/cached",
+          targetBranch: "main",
+          author: "Developer",
+          url: "https://example.test/pr/42",
+          createdAt: "2026-09-16T00:00:00Z",
+          updatedAt: "2026-09-16T00:00:00Z",
+          isDraft: false,
+          repository: "sample-repo",
+          tenant,
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+    const request = spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("default PR listing must not use the network"),
+    );
+
+    const exitCode = await runCli({
+      argv: ["pr", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(logs.join("\n")).toContain("Cached pull request");
+    expect(request).not.toHaveBeenCalled();
+    request.mockRestore();
+  });
+
+  test("summarizes inventory sync without dumping repository records", async () => {
+    await cache.writeInventory({
+      root,
+      tenant: "dev.azure.com/example",
+      records: [
+        {
+          id: "one",
+          name: "repository-one",
+          url: "https://example.test/repository-one.git",
+          default_branch: "main",
+          description: "One",
+          last_changed: "2026-09-16T00:00:00Z",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+        {
+          id: "two",
+          name: "repository-two",
+          url: "https://example.test/repository-two.git",
+          default_branch: "main",
+          description: "Two",
+          last_changed: "2026-09-16T00:00:00Z",
+          syncedAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+    });
+
+    expect(
+      await runCli({
+        argv: ["sync", "inventory", "--offline", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toBe("Offline mode: 2 repositories from local cache.");
+  });
+
+  test("requires sync data provider and project disambiguation", async () => {
+    for (const organization of ["first-org", "second-org"]) {
+      expect(
+        await runCli({
+          argv: ["provider", "add", "ado", "--org", organization, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+
+    errors = [];
+    expect(
+      await runCli({
+        argv: ["sync", "data", "--json", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(1);
+    expect(errors.join("\n")).toContain('"field": "provider"');
+
+    errors = [];
+    expect(
+      await runCli({
+        argv: ["sync", "data", "--provider", "ado-first-org", "--json", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(1);
+    expect(errors.join("\n")).toContain('"field": "project"');
+  });
+
+  test("supports root ls and ws create aliases", async () => {
+    expect(
+      await runCli({
+        argv: ["ws", "create", "alias-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["ls", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toContain("alias-workspace");
+  });
+
+  test("accepts workspace selection before and after root shortcuts", async () => {
+    for (const name of ["first-workspace", "second-workspace"]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["--ws", "second-workspace", "status", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toContain("Workspace: second-workspace");
+
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["status", "--ws", "first-workspace", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(logs.join("\n")).toContain("Workspace: first-workspace");
+  });
+
+  test("reports missing input when a text prompt returns no value", async () => {
+    const prompt = spyOn(ui, "text").mockResolvedValue(undefined);
+    const exitCode = await runCli({
+      argv: ["ws", "create", "--root", root],
+      cwd: root,
+      env: {},
+      isTTY: true,
+      stdinIsTTY: true,
+    });
+
+    expect(exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("Workspace name is required");
+    prompt.mockRestore();
+  });
+});

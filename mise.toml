@@ -1,0 +1,34 @@
+[tools]
+bun = "1.4.2"
+node = "24.21.0"
+
+
+[tasks."dev"]
+run = "bun run dev"
+raw_args = true
+
+[tasks."install"]
+description = "Install exact dependencies from bun.lock"
+run = "bun install --frozen-lockfile --ignore-scripts"
+
+[tasks."ci"]
+description = "Install locked dependencies and run hermetic checks"
+run = [{ task = "install" }, { task = "verify" }]
+
+[tasks."ci:release"]
+description = "Install, verify, and publish the next release"
+run = [{ task = "ci" }, { task = "release" }]
+
+[tasks."verify"]
+run = "bun run verify"
+
+[tasks."build:release"]
+run = "bun run build:release"
+raw_args = true
+
+[tasks."verify:install"]
+run = "bun scripts/verify-published-release.ts"
+raw_args = true
+
+[tasks."release"]
+run = "npx --no-install semantic-release"

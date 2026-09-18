@@ -1,0 +1,47 @@
+{
+  "name": "dev",
+  "version": "0.0.0-development",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gabrielmoreira/dev-cli.git"
+  },
+  "bin": {
+    "dev": "./src/cli.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "test": "bun run test:unit",
+    "test:unit": "bun test test/unit",
+    "test:integration": "bun test test/integration",
+    "test:e2e": "bun test test/e2e",
+    "test:all": "bun run test:unit && bun run test:integration && bun run test:e2e",
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "typecheck": "tsc --noEmit",
+    "verify": "bun run lint && bun run format:check && bun run typecheck && bun run test:unit",
+    "verify:all": "bun run lint && bun run format:check && bun run typecheck && bun run test:all",
+    "build:release": "bun scripts/build-release.ts",
+    "release": "semantic-release"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "citty": "^0.2.2",
+    "consola": "^3.4.2",
+    "p-limit": "^7.3.2",
+    "pathe": "^2.0.3",
+    "tinyglobby": "^0.2.17",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@semantic-release/exec": "7.1.0",
+    "@types/bun": "latest",
+    "semantic-release": "25.0.9",
+    "typescript": "latest",
+    "vite-plus": "^0.3.2"
+  },
+  "packageManager": "bun@1.4.2"
+}
