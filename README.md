@@ -1,10 +1,11 @@
 # dev
 
-One change often spans several repositories. `dev` gives that work one directory,
-one manifest, and repeatable Git state instead of a pile of manual clones.
+A change often touches more than one repository. `dev` creates one workspace for
+the task, brings the repositories you need into it, remembers what each checkout
+should track, and updates clean checkouts safely.
 
-Each workspace mounts isolated worktrees from shared mirrors. You can see what
-changed, update only safe branches, and resume later with the same context.
+The result: one place to work, inspect, pause, and resume without rebuilding the
+setup by hand.
 
 ## Install
 
@@ -20,19 +21,35 @@ dev --help
 ## Quick start
 
 ```bash
-dev init # choose the root and provider; sync the repository catalog
+# Choose where dev keeps your work and connect GitHub or Azure DevOps.
+dev init
 
-dev ws init oss-oh-my-pi --desc "Contribute to Oh My Pi"
-cd ~/dev/ws/oss-oh-my-pi
-dev ws add https://github.com/can1357/oh-my-pi # mount the repository
+# Create a task workspace; dev asks for its name and objective.
+dev ws init
 
-dev status # inspect the workspace
-dev sync   # safely fast-forward clean mounts
+# Choose the repositories needed for that task.
+dev ws add
+
+# Inspect local state, then update only clean checkouts.
+dev status
+dev sync
 ```
 
-This creates a task workspace for editing Oh My Pi without turning the dev root
-itself into a project checkout. Commands still accept explicit arguments for
-scripts and repeatable automation.
+No configuration vocabulary is required up front: each command asks for the
+missing information.
+
+### Example: contribute to Oh My Pi
+
+Create a focused workspace and bring the upstream repository into it:
+
+```bash
+dev ws init oss-oh-my-pi --desc "Contribute to Oh My Pi"
+cd ~/dev/ws/oss-oh-my-pi
+dev ws add https://github.com/can1357/oh-my-pi
+```
+
+The repository is an isolated worktree inside the workspace, ready for code
+review, local changes, tests, and a contribution branch.
 
 ---
 
