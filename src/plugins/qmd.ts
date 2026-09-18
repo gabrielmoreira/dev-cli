@@ -45,10 +45,12 @@ async function qmd(
   base: PluginBase,
   config: QmdPluginConfig,
   args: string[],
+  options: { stdio?: "pipe" | "inherit" } = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const { bin, prefix } = splitCommand(config);
   return base.shell.runCommand(bin, [...prefix, ...args], {
     env: qmdEnv(base, config),
+    stdio: options.stdio,
   });
 }
 
@@ -78,7 +80,9 @@ export function createQmdPlugin(base: PluginBase): Integration {
 
       if (sub === "x") {
         const passthrough = (args.passthrough as string[]) ?? [];
-        const res = await qmd(base, config, passthrough);
+        const res = await qmd(base, config, passthrough, {
+          stdio: passthrough[0] === "mcp" ? "inherit" : "pipe",
+        });
         if (res.exitCode !== 0) base.ui.error(res.stderr || res.stdout);
         else if (res.stdout) base.ui.log(res.stdout);
         return res.exitCode;

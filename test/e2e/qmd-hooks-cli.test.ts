@@ -207,6 +207,47 @@ hooks:
     }
   });
 
+  it("keeps MCP stdio connected through qmd x", async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), "dev-cli-qmd-mcp-"));
+    const qmdScript = join(rootDir, "qmd-stub");
+    const argsFile = join(rootDir, "qmd-args.log");
+
+    try {
+      await fs.writeText(
+        qmdScript,
+        '#!/bin/sh\nprintf \'%s\\n\' "$*" > "$QMD_ARGS"\nIFS= read -r line\nprintf \'%s\\n\' "$line"\n',
+      );
+      await chmod(qmdScript, 0o755);
+      await fs.writeText(
+        join(rootDir, "dev.yaml"),
+        [
+          "plugins:",
+          "  qmd:",
+          `    command: ${JSON.stringify(qmdScript)}`,
+          "    config_dir: scoped",
+          "",
+        ].join("\n"),
+      );
+
+      const mcpProc = Bun.spawn(["bun", "run", cliPath, "qmd", "x", "--root", rootDir, "mcp"], {
+        env: { ...process.env, QMD_ARGS: argsFile },
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const request = '{"jsonrpc":"2.0","id":1,"method":"ping"}';
+      mcpProc.stdin.write(`${request}\n`);
+      await mcpProc.stdin.end();
+      const stdout = await new Response(mcpProc.stdout).text();
+
+      expect(await mcpProc.exited).toBe(0);
+      expect((await fs.readText(argsFile)).trim()).toBe("mcp");
+      expect(stdout.trim()).toBe(request);
+    } finally {
+      await rm(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
   it("handles missing optional tooling gracefully without failing mount operation", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "dev-cli-qmd-missing-"));
     const devYaml = `

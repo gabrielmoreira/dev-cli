@@ -7,6 +7,7 @@ export interface ShellExecResult {
 export interface RunCommandOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
+  stdio?: "pipe" | "inherit";
 }
 
 export async function runCommand(
@@ -15,15 +16,21 @@ export async function runCommand(
   options: RunCommandOptions = {},
 ): Promise<ShellExecResult> {
   try {
+    const inheritStdio = options.stdio === "inherit";
     const proc = Bun.spawn([command, ...args], {
       cwd: options.cwd,
       env: {
         ...process.env,
         ...options.env,
       },
-      stdout: "pipe",
-      stderr: "pipe",
+      stdin: inheritStdio ? "inherit" : undefined,
+      stdout: inheritStdio ? "inherit" : "pipe",
+      stderr: inheritStdio ? "inherit" : "pipe",
     });
+
+    if (inheritStdio) {
+      return { stdout: "", stderr: "", exitCode: await proc.exited };
+    }
 
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();

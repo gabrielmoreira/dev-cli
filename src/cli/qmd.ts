@@ -42,7 +42,17 @@ export const qmdXCommand = defineCommand({
   },
   async run({ args, rawArgs }) {
     const config = getActiveConfig(args.root);
-    const passthrough = rawArgs.slice(rawArgs.indexOf("x") + 1);
+    const passthrough: string[] = [];
+    const xIndex = rawArgs.indexOf("x");
+    for (let index = xIndex + 1; index < rawArgs.length; index++) {
+      const argument = rawArgs[index]!;
+      if (argument === "--root") {
+        index++;
+        continue;
+      }
+      if (argument.startsWith("--root=")) continue;
+      passthrough.push(argument);
+    }
     const plugin = createQmdPlugin(createPluginBase(config.root, config));
     const code = await plugin.run({ subcommand: "x", passthrough });
     if (typeof code === "number" && code !== 0) ui.error(`qmd exited with code ${code}`);
