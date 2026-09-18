@@ -18,6 +18,7 @@ export interface StartHerdrWorkspaceInput {
   workspace: string;
   path: string;
   insideHerdr: boolean;
+  openClient?: boolean;
 }
 
 export interface StartHerdrWorkspaceResult {
@@ -32,6 +33,9 @@ export interface StartHerdrWorkspaceResult {
 export interface HerdrDeps {
   run(args: string[]): Promise<shell.ShellExecResult>;
   canonicalize(path: string): Promise<string>;
+  startServer(): void;
+  openClient(): void;
+  wait(milliseconds: number): Promise<void>;
 }
 
 interface PaneSummary {
@@ -56,6 +60,25 @@ const defaultDeps: HerdrDeps = {
       return resolve(path);
     }
   },
+  startServer: () => {
+    const process = Bun.spawn(["herdr", "server"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    process.unref();
+  },
+  openClient: () => {
+    const process = Bun.spawn(["herdr"], {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    process.unref();
+  },
+  wait: async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
 };
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -75,7 +98,7 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function parseResult(stdout: string, expectedType: string): Record<string, unknown> {
+function parseResult(stdout: string, expectedType: string | string[]): Record<string, unknown> {
   let payload: unknown;
   try {
     payload = JSON.parse(stdout);
@@ -84,10 +107,11 @@ function parseResult(stdout: string, expectedType: string): Record<string, unkno
   }
 
   const result = asRecord(asRecord(payload)?.result);
-  if (!result || result.type !== expectedType) {
+  const expected = Array.isArray(expectedType) ? expectedType : [expectedType];
+  if (!result || !expected.includes(String(result.type))) {
     throw new HerdrError(
       "HERDR_INVALID_RESPONSE",
-      `HerdR returned an unexpected response; expected ${expectedType}.`,
+      `HerdR returned an unexpected response; expected ${expected.join(" or ")}.`,
     );
   }
   return result;
@@ -136,7 +160,7 @@ function parseAgents(stdout: string): AgentSummary[] {
 
 async function runRequired(
   args: string[],
-  expectedType: string,
+  expectedType: string | string[],
   deps: HerdrDeps,
 ): Promise<Record<string, unknown>> {
   const result = await deps.run(args);
@@ -164,6 +188,27 @@ async function listAgents(deps: HerdrDeps): Promise<AgentSummary[]> {
   const result = await deps.run(["agent", "list"]);
   if (result.exitCode !== 0) throw commandError(["agent", "list"], result);
   return parseAgents(result.stdout);
+}
+
+async function isServerRunning(deps: HerdrDeps): Promise<boolean> {
+  const result = await deps.run(["status", "server"]);
+  if (result.exitCode !== 0) throw commandError(["status", "server"], result);
+  if (/^status:\s+running$/m.test(result.stdout)) return true;
+  if (/^status:\s+not running$/m.test(result.stdout)) return false;
+  throw new HerdrError("HERDR_INVALID_RESPONSE", "HerdR server status is missing its state.");
+}
+
+async function ensureServer(input: StartHerdrWorkspaceInput, deps: HerdrDeps): Promise<void> {
+  if (input.insideHerdr || (await isServerRunning(deps))) return;
+  deps.startServer();
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await deps.wait(100);
+    if (await isServerRunning(deps)) return;
+  }
+  throw new HerdrError(
+    "HERDR_SERVER_START_TIMEOUT",
+    "HerdR server did not become ready within 5 seconds.",
+  );
 }
 
 function normalizePath(path: string): string {
@@ -208,12 +253,7 @@ export async function startWorkspace(
   input: StartHerdrWorkspaceInput,
   deps: HerdrDeps = defaultDeps,
 ): Promise<StartHerdrWorkspaceResult> {
-  if (!input.insideHerdr) {
-    throw new HerdrError(
-      "HERDR_ENV_REQUIRED",
-      "dev ws start requires an active HerdR pane (HERDR_ENV=1). Open HerdR, then run it from a HerdR pane.",
-    );
-  }
+  await ensureServer(input, deps);
 
   const targetPath = normalizePath(await deps.canonicalize(input.path));
   const panes = await listPanes(deps);
@@ -221,7 +261,11 @@ export async function startWorkspace(
 
   for (const agent of agents) {
     if (isReadyOmp(agent) && (await isSamePath(agent.cwd, targetPath, deps))) {
-      await runRequired(["workspace", "focus", agent.workspaceId], "workspace_focused", deps);
+      await runRequired(
+        ["workspace", "focus", agent.workspaceId],
+        ["workspace_info", "workspace_focused"],
+        deps,
+      );
       return {
         workspace: input.workspace,
         path: input.path,
@@ -275,7 +319,12 @@ export async function startWorkspace(
     }
   }
 
-  await runRequired(["workspace", "focus", pane.workspaceId], "workspace_focused", deps);
+  await runRequired(
+    ["workspace", "focus", pane.workspaceId],
+    ["workspace_info", "workspace_focused"],
+    deps,
+  );
+  if (input.openClient && !input.insideHerdr) deps.openClient();
   return {
     workspace: input.workspace,
     path: input.path,

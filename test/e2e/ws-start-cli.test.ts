@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import * as ws from "../../src/ws.ts";
+import * as herdr from "../../src/herdr.ts";
 
 const fakeHerdr = `#!/usr/bin/env bun
 import { appendFile, readFile } from "node:fs/promises";
@@ -13,7 +14,13 @@ const scenario = process.env.HERDR_SCENARIO;
 const workspacePath = process.env.HERDR_WORKSPACE_PATH;
 const response = (result) => console.log(JSON.stringify({ id: "test", result }));
 
-if (args[0] === "pane" && args[1] === "list") {
+if (args[0] === "status" && args[1] === "server") {
+  const calls = await readFile(process.env.HERDR_CALLS, "utf8");
+  const running = scenario !== "server-down" || calls.includes('["server"]');
+  console.log("status: " + (running ? "running" : "not running"));
+} else if (args.length === 1 && args[0] === "server") {
+  process.exit(0);
+} else if (args[0] === "pane" && args[1] === "list") {
   const existing = scenario === "reuse" || scenario === "shell";
   response({
     type: "pane_list",
@@ -46,7 +53,7 @@ if (args[0] === "pane" && args[1] === "list") {
     argv: ["omp"],
   });
 } else if (args[0] === "workspace" && args[1] === "focus") {
-  response({ type: "workspace_focused", workspace_id: args[2] });
+  response({ type: "workspace_info", workspace: { workspace_id: args[2] } });
 } else {
   console.error("Unexpected fake herdr command: " + args.join(" "));
   process.exit(2);
@@ -81,7 +88,7 @@ describe("dev ws start CLI", () => {
 
   async function runStart(options: {
     insideHerdr: boolean;
-    scenario: "create" | "reuse" | "shell" | "timeout";
+    scenario: "create" | "reuse" | "shell" | "timeout" | "server-down";
   }) {
     await writeFile(callsPath, "");
     const proc = Bun.spawn(
@@ -196,11 +203,90 @@ describe("dev ws start CLI", () => {
     ]);
   });
 
-  it("refuses to manage a HerdR workspace outside an active HerdR pane", async () => {
+  it("uses a running HerdR server when called outside a HerdR pane", async () => {
     const result = await runStart({ insideHerdr: false, scenario: "create" });
 
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("HERDR_ENV=1");
-    expect(await readFile(callsPath, "utf8")).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      workspace: "payment-fix",
+      herdrWorkspaceId: "w7",
+      agentName: "payment-fix-omp",
+      reused: false,
+    });
+    const calls = (await readFile(callsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(calls).toEqual([
+      ["status", "server"],
+      ["pane", "list"],
+      ["agent", "list"],
+      ["workspace", "create", "--cwd", workspacePath, "--label", "payment-fix", "--no-focus"],
+      ["agent", "start", "payment-fix-omp", "--kind", "omp", "--pane", "w7:p1"],
+      ["workspace", "focus", "w7"],
+    ]);
+  });
+
+  it("starts and waits for HerdR when no server is running", async () => {
+    const result = await runStart({ insideHerdr: false, scenario: "server-down" });
+
+    expect(result.exitCode).toBe(0);
+    const calls = (await readFile(callsPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(calls.slice(0, 4)).toEqual([
+      ["status", "server"],
+      ["server"],
+      ["status", "server"],
+      ["pane", "list"],
+    ]);
+  });
+
+  it("opens the HerdR client after the requested workspace is ready and focused", async () => {
+    const events: string[] = [];
+    const reply = (result: Record<string, unknown>) => ({
+      stdout: JSON.stringify({ id: "test", result }),
+      stderr: "",
+      exitCode: 0,
+    });
+
+    await herdr.startWorkspace(
+      {
+        workspace: "payment-fix",
+        path: workspacePath,
+        insideHerdr: false,
+        openClient: true,
+      },
+      {
+        canonicalize: async (path) => path,
+        startServer: () => events.push("server:start"),
+        openClient: () => events.push("client:open"),
+        wait: async () => {},
+        run: async (args) => {
+          events.push(args.join(" "));
+          if (args[0] === "status") return { stdout: "status: running", stderr: "", exitCode: 0 };
+          if (args[0] === "pane") return reply({ type: "pane_list", panes: [] });
+          if (args[0] === "agent" && args[1] === "list") {
+            return reply({ type: "agent_list", agents: [] });
+          }
+          if (args[0] === "workspace" && args[1] === "create") {
+            return reply({
+              type: "workspace_created",
+              workspace: { workspace_id: "w7" },
+              tab: { tab_id: "w7:t1" },
+              root_pane: { pane_id: "w7:p1", workspace_id: "w7", cwd: workspacePath },
+            });
+          }
+          if (args[0] === "agent" && args[1] === "start") {
+            return reply({ type: "agent_started", agent: { pane_id: "w7:p1" } });
+          }
+          return reply({ type: "workspace_focused", workspace_id: "w7" });
+        },
+      },
+    );
+
+    expect(events.at(-2)).toBe("workspace focus w7");
+    expect(events.at(-1)).toBe("client:open");
   });
 });

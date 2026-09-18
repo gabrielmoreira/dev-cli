@@ -1545,6 +1545,8 @@ export const wsStartCommand = defineCommand({
         workspace: workspace.value,
         path: workspacePath,
         insideHerdr: ambient.env.HERDR_ENV === "1",
+        openClient:
+          ambient.env.HERDR_ENV !== "1" && ambient.isTTY && ambient.stdinIsTTY && !args.json,
       });
       ui.result({
         data: result,

@@ -227,9 +227,13 @@ Then open OMP in the workspace created above:
 dev ws start gh-can1357-oh-my-pi
 ```
 
-`dev` uses the dev workspace directory as the pane working directory. It focuses an
-existing ready OMP for that workspace, starts OMP in an available matching pane, or
-creates the HerdR workspace and agent when neither exists.
+`dev` uses the dev workspace directory as the pane working directory. It reuses
+an existing ready OMP, starts OMP in an available matching pane, or creates a
+named HerdR workspace and agent when neither exists. The command works from a
+HerdR pane or a normal terminal. If no server is running, it starts one and
+waits for readiness; an interactive external call attaches the HerdR client
+after the requested workspace is focused. `--json` performs the same server
+orchestration without taking over the calling terminal.
 
 ### Search labeled repositories with QMD
 
