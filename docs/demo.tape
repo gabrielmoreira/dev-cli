@@ -233,6 +233,5 @@ Type "Search QMD first. Begin with the uppercase decision label followed by a co
 Sleep 500ms
 Enter
 Wait+Screen@240s /DECISION:/
-Wait+Screen@90s /OPENROUTER_API_KEY/
 Wait+Screen@60s /INDEXED ANSWER COMPLETE/
 Sleep 6s
