@@ -46,32 +46,42 @@ Type "cd ~/dev"
 Enter
 Sleep 1s
 
-
-# Simplest path: one repository URL creates a ready workspace.
+# Simplest path: one repository URL becomes a ready workspace.
 Type "dev ws init https://github.com/gabrielmoreira/skills.git"
 Sleep 500ms
 Enter
 Wait+Screen@20s /Workspace name/
+Sleep 1s
 Enter
 Wait+Screen@20s /Workspace description/
+Sleep 1s
 Enter
 Wait+Screen@60s /Initialized workspace 'gh-gabrielmoreira-skills'/
 Sleep 1s
-Type "find ws/gh-gabrielmoreira-skills -maxdepth 1 | sort"
+Type "ls -A ws/gh-gabrielmoreira-skills"
 Sleep 500ms
 Enter
-Wait+Screen@20s /ws\/gh-gabrielmoreira-skills\/ws\.md/
+Wait+Screen@20s /ws\.md/
 Sleep 3s
 
-# Start empty by name, then add a repository through the selector.
+# Start empty, then add a repository through the picker.
 Type "clear"
 Enter
-Type "dev ws init scratch"
+Type "dev ws init"
 Sleep 500ms
 Enter
+Wait+Screen@20s /How do you want to start/
+Sleep 1s
+Enter
+Wait+Screen@20s /Workspace name/
+Sleep 500ms
+Type "scratch"
+Enter
 Wait+Screen@20s /Workspace description/
+Sleep 1s
 Enter
 Wait+Screen@20s /Initialized workspace 'scratch'/
+Sleep 1s
 Type "cd ws/scratch"
 Enter
 Type "dev ws add"
@@ -96,13 +106,13 @@ Wait+Screen@30s /Mounted repository 'checkout-api'/
 Sleep 3s
 Type "clear"
 Enter
-Type "dev ws status"
+Type "dev status"
 Sleep 500ms
 Enter
 Wait+Screen@20s /checkout-api/
 Sleep 3s
 
-# Reusable path: build a workset through the interactive manager.
+# Reusable path: describe a recurring setup once through the interactive manager.
 Type "clear"
 Enter
 Type "cd ~/dev"
@@ -132,11 +142,7 @@ Enter
 Sleep 700ms
 Type "Affected service"
 Enter
-Sleep 700ms
-Type "Review changes"
-Sleep 500ms
-Enter
-Sleep 3s
+Sleep 1s
 Type "Save and exit"
 Sleep 500ms
 Enter
@@ -147,30 +153,62 @@ Wait+Screen@20s /Saved workset 'incident'/
 Sleep 2s
 Ctrl+L
 Sleep 1s
-Type "dev workset repo add incident omp-docs --ref main --path omp-docs --reason 'Pinned OMP model and provider docs' --yes"
+
+# Add one more member with the focused command; it asks for what it needs.
+Type "dev workset repo add incident"
 Sleep 500ms
+Enter
+Wait+Screen@20s /Select repository to add/
+Sleep 1s
+Type "skills"
+Sleep 500ms
+Enter
+Sleep 700ms
+Type "main"
+Enter
+Sleep 700ms
+Enter
+Sleep 700ms
+Type "Debugging skills"
+Enter
+Sleep 700ms
 Enter
 Wait+Screen@20s /Added repository to workset 'incident'/
-Sleep 1s
-Type "dev workset repo add incident gabrielmoreira-skills --ref main --path skills --reason 'Evidence-driven debugging skills' --yes"
-Sleep 500ms
-Enter
 Sleep 2s
 Type "clear"
 Enter
 Type "dev workset show incident"
 Sleep 500ms
 Enter
-Wait+Screen@20s /Evidence-driven debugging skills/
+Wait+Screen@20s /Debugging skills/
 Sleep 3s
+
+# A fresh workspace from the workset, with nothing but prompts.
 Type "clear"
 Enter
-Type "dev ws init incident --workset incident --desc 'Investigate checkout timeouts' --yes"
+Type "dev ws init"
 Sleep 500ms
+Enter
+Wait+Screen@20s /How do you want to start/
+Sleep 1s
+Type "Workset"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Select workset/
+Sleep 1s
+Enter
+Wait+Screen@20s /Workspace name/
+Sleep 1s
+Enter
+Wait+Screen@20s /Workspace description/
+Sleep 1s
 Enter
 Wait+Screen@20s /Select repositories to customize/
 Sleep 1s
 Tab
+Sleep 1s
+Enter
+Wait+Screen@20s /Create this workspace/
 Sleep 1s
 Enter
 Wait+Screen@90s /Initialized workspace 'incident'/
@@ -189,10 +227,10 @@ Sleep 1s
 Enter
 Wait+Screen@20s /dev\/ws\/incident/
 Sleep 1s
-Type "find . -maxdepth 1 | sort"
+Type "ls -A"
 Sleep 500ms
 Enter
-Wait+Screen@20s /\.\/ws\.md/
+Wait+Screen@20s /ws\.md/
 Sleep 3s
 
 # Start OMP early so indexing never delays the product handoff.
@@ -213,7 +251,7 @@ Type "q"
 Wait+Screen@20s /demo@devbox dev\/ws\/incident/
 Sleep 1s
 
-# Advanced knowledge setup: declare OMP docs and the skill catalog as mirrors.
+# Knowledge setup: keep the OMP docs and the skill catalog as reference checkouts.
 Type "dev mirror add"
 Sleep 500ms
 Enter
@@ -239,7 +277,7 @@ Sleep 3s
 Type "clear"
 Enter
 
-# One label turns both knowledge repositories into a full QMD index.
+# One label turns both reference checkouts into a searchable QMD index.
 Type "dev mirror label add"
 Sleep 500ms
 Enter
@@ -256,17 +294,17 @@ Wait+Screen@20s /Apply this label plan/
 Enter
 Wait+Screen@20s /Applied label 'index:incident'/
 
-Type "dev qmd sync index:incident"
+Type "dev qmd sync"
 Sleep 500ms
 Enter
 Hide
 Wait+Screen@300s /2 collection\(s\) reconciled/
 Show
 Sleep 1s
-Type "dev qmd x search debugging-by-evidence --format cli"
+Type "dev qmd x search debugging-by-evidence"
 Sleep 500ms
 Enter
-Wait+Screen@30s /debugging-by-evidence/
+Wait+Screen@30s /Title:/
 Sleep 3s
 
 # Return to the already-running OMP agent with the new QMD index.
@@ -279,7 +317,7 @@ Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 1s
 
 Set TypingSpeed 20ms
-Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, include the literal OPENROUTER_API_KEY in the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
+Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Search QMD and cite the files. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
 Sleep 500ms
 Enter
 Wait+Screen@240s /INDEXED ANSWER COMPLETE/
