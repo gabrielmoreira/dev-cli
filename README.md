@@ -9,7 +9,7 @@ setup by hand.
 
 ## Demo
 
-![dev CLI terminal demo](docs/assets/dev-cli-demo.gif)
+![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=20260919-2)
 
 [Watch the MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
 
