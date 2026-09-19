@@ -1,337 +1,207 @@
 # dev
 
-A change often touches more than one repository. `dev` creates one workspace for
-the task, brings the repositories you need into it, remembers what each checkout
-should track, and updates clean checkouts safely.
+[![Release](https://img.shields.io/github/v/release/gabrielmoreira/dev-cli)](https://github.com/gabrielmoreira/dev-cli/releases)
+[![Release workflow](https://github.com/gabrielmoreira/dev-cli/actions/workflows/release.yml/badge.svg)](https://github.com/gabrielmoreira/dev-cli/actions/workflows/release.yml)
 
-The result: one place to work, inspect, pause, and resume without rebuilding the
-setup by hand.
+**One folder per task. Every repository the task needs, on the branch it needs, and a note of where you left off.**
 
-## Demo
+`dev` organizes local development around tasks instead of clones. A feature, a PR review and an incident can be open at the same time, each in its own workspace, and none of them touches the others. It also puts your pull requests and work items in the terminal, searches documentation across every repository you keep, and gives a coding agent a folder that already knows what the task is. Works with GitHub and Azure DevOps.
 
-![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=20260919-2)
+## See it in action
 
-[Watch the MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
+![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=20260919-3)
 
-The recording starts from a blank dev root in a disposable Debian container
-configured with Mise, zsh, Spaceship, and CaskaydiaCove Nerd Font. It begins
-with the shortest paths: create a workspace from one repository URL, or create
-an empty workspace and add a repository through a selector. It then moves to a
-three-repository incident workspace containing a service, pinned OMP docs, and
-the public `gabrielmoreira/skills` catalog. QMD indexes the shared context; OMP
-chooses the evidence-first skill and explains its own free-only OpenRouter
-setup. The demo runs through `openrouter/free`; no paid-model fallback is
-configured.
+Under three minutes from `dev init`: a workspace from one URL, an incident workspace built from a workset, a jump with `dev go`, and a coding agent answering from the indexed docs. [MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
 
-To regenerate it, add `OPENROUTER_API_KEY=...` to the ignored `.env` file, then
-run from the repository root (Docker required; Mise supplies the pinned VHS):
+## Why
 
-```bash
-mise run demo
-```
+Most days touch more than one repository and more than one task. The feature you are building spans an app and its API. Someone asks for a review on that same API. Then the checkout service pages you, and you need it next to the infrastructure repo and the runbooks.
 
----
+Each of those wants the same repositories on different branches. One clone per repository means stash, switch, and lose your place. One clone per task means a disk full of folders whose purpose you forget by Thursday.
+
+`dev` gives each task a workspace: a folder with a Git worktree for every repository the task needs and a `ws.md` that records what the task is, what is mounted, and where you stopped. Repositories are cloned once and shared, so a fifth workspace of the same repository costs a worktree, not a download.
 
 ## Install
 
-Install the latest release globally with [Mise](https://mise.jdx.dev/):
+`dev` is a single binary for macOS, Linux and Windows. With [Mise](https://mise.jdx.dev/):
 
 ```bash
 mise use -g github:gabrielmoreira/dev-cli
-dev --help
+dev init
 ```
 
----
+Or take a binary from [Releases](https://github.com/gabrielmoreira/dev-cli/releases).
 
-## Quick start
+`dev init` asks where to keep your work (`~/dev` by default) and whether to connect a GitHub owner or an Azure DevOps organization. A provider is optional. With one, `dev` knows your repositories, so the pickers, `dev pr` and `dev wi` have something to show. Without one, you give it URLs. It reuses your `gh` and `az` sessions when you have them ([details](docs/setup.md#access-and-credentials)).
+
+Let `dev go` change your shell's directory:
 
 ```bash
-# Choose where dev keeps your work and connect GitHub or Azure DevOps.
-dev init
+eval "$(dev shell-init zsh)"     # bash, zsh, fish and PowerShell
+```
 
-# Create a task workspace; dev asks for its name and objective.
-dev ws init
+The picker uses [fzf](https://github.com/junegunn/fzf). Without the integration, `dev go` prints the path instead of jumping to it.
 
-# Choose the repositories needed for that task.
-dev ws add
+## Your first workspace
 
-# Inspect local state, then update only clean checkouts.
+Paste a repository URL. `dev` asks for a name and a one-line objective; accept the defaults or type your own:
+
+```bash
+dev ws init https://github.com/can1357/oh-my-pi
+cd ~/dev/ws/gh-can1357-oh-my-pi
+```
+
+```text
+gh-can1357-oh-my-pi/
+├── oh-my-pi/    # Git worktree on the default branch
+├── ws.md        # what this is, what it holds, where you stopped
+└── .local/      # scratch that never gets committed
+```
+
+`ws.md` is what makes a workspace resumable. `dev` owns the frontmatter and reads it to know what to mount and update. The body is for you, and for any coding agent that opens the folder (abridged):
+
+```markdown
+---
+name: gh-can1357-oh-my-pi
+description: Contribute to Oh My Pi
+mounts:
+  - path: oh-my-pi
+    source: https://github.com/can1357/oh-my-pi
+    revision:
+      mode: track
+      branch: main
+---
+
+# Workspace: gh-can1357-oh-my-pi
+
+## Objective
+
+Contribute to Oh My Pi
+
+## Current Progress
+
+## Decisions
+
+## Next Steps
+```
+
+Come back in a week, or hand the folder to an agent, and the brief is already there.
+
+## Pull requests and work items, without leaving the terminal
+
+`dev pr` lists the open pull requests assigned to you across your connected providers. Pick one repository with `-i`, or narrow to a group of repositories with a label. Azure DevOps work items come along with `dev wi`. Both read a local cache; `--refresh` pulls the latest.
+
+```bash
+dev pr
+dev pr -i
+dev pr --label team:checkout
+dev wi
+```
+
+Most reviews end there. When you do need the code, the PR URL becomes a workspace on the PR's source branch, forks included, while your own work on that repository stays where it is:
+
+```bash
+dev ws init https://github.com/gabrielmoreira/tiny-asl-machine/pull/52
+```
+
+## One task, four repositories
+
+Start empty and add what the task needs. With a provider connected, `dev ws add` opens a picker over your repositories. Each mount tracks a branch, or is pinned to a tag or a commit:
+
+```bash
+dev ws init checkout-incident --desc "Checkout times out two or three times a day"
+cd ~/dev/ws/checkout-incident
+
+dev ws add                                   # pick from your repositories
+dev ws add checkout-api --tag v2026.09.1     # by name or URL; pin exactly what production runs
+dev ws add infra --commit 3f9c2ab
+dev ws add runbooks --readonly               # reference only, skipped by sync
+```
+
+```text
+checkout-incident/
+├── checkout-api/       tag v2026.09.1
+├── payments-gateway/   branch main
+├── infra/              commit 3f9c2ab
+├── runbooks/           branch main, read-only
+└── ws.md
+```
+
+Tomorrow, `dev status` compares what `ws.md` declares with what is on disk and reports each mount as clean, dirty, ahead, behind, diverged or missing. `dev sync` fast-forwards the clean ones and leaves the rest alone: a mount with uncommitted changes, local commits or a diverged history is skipped and named, not touched.
+
+```bash
 dev status
 dev sync
 ```
 
-No configuration vocabulary is required up front: each command asks for the
-missing information.
+Switch between tasks with `dev ls` and `dev go`, or `dev go checkout` when you know part of the name.
 
-### Example: contribute to Oh My Pi
+## The same setup, every time
 
-Paste a repository URI into `ws init`. `dev` derives a provider-prefixed workspace
-name, creates it, and mounts the repository in one command:
+If every checkout incident starts with the same four repositories, save the setup as a workset and create a fresh workspace from it each time:
 
 ```bash
-dev ws init https://github.com/can1357/oh-my-pi --desc "Contribute to Oh My Pi"
-cd ~/dev/ws/gh-can1357-oh-my-pi
+dev workset manage                                     # name, repositories, refs, paths, and why each is there
+dev ws init incident-0919 --workset checkout-incident
 ```
 
-The repository is an isolated worktree ready for code review, local changes,
-tests, and a contribution branch. The URI may use any Git-supported scheme, such
-as `https:`, `http:`, `ssh:`, `git:`, or `file:`.
+A workset is a template. A workspace is an instance of one, with its own worktrees.
 
-A GitHub or Azure DevOps pull request URL continues from the PR source branch.
-`dev` reads the PR metadata, uses the head repository for forks, and suggests a
-searchable name in the form `pr-<number>-<repo>-<branch-slug>`:
+## Search documentation across every repository
+
+Architecture in one repository, runbooks in another, the handbook in a Git-backed wiki. Keep each one as a reference checkout, label the ones that belong to the same knowledge base, and let [QMD](https://github.com/tobi/qmd) index them:
 
 ```bash
-dev ws init https://github.com/gabrielmoreira/tiny-asl-machine/pull/52
-dev ws init https://dev.azure.com/org/project/_git/repo/pullrequest/1234
+dev mirror add                             # pick a repository, or pass a URL
+dev mirror label add                       # pick the sources, then type a label: index:platform-docs
+dev qmd sync                               # every index:* label, one collection per repository
+dev qmd x query "how does production authentication work?"
 ```
 
-Suggested names target 64 characters by shortening only the branch suffix. Pass
-`--desc` to replace the generated `Continue PR #<number>: <title>` objective.
-Use `dev pr checkout --review` instead when the PR needs an isolated local review
-branch.
+The answer can live in any of them; you search the set. Your coding agent can search the same index, through `dev qmd x` or through QMD's own CLI and MCP server after one setting ([how](docs/integrations.md#search-labeled-repositories-with-qmd)).
 
----
+A label is metadata on a repository, and one label serves more than one command:
 
-## What `dev init` creates
+```bash
+dev pr --label team:checkout               # pull requests from the checkout repositories
+dev mirror list --label docs
+dev qmd sync index:platform-docs
+```
 
-With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an
-editable path, detects when you are already inside a dev root, and lets you update
-that root or create another one. It can then add providers and synchronizes their
-repository inventory before returning.
+## Bring your coding agent
 
-After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, then
-registers the root in `~/.dev.toml`.
+A workspace is already a brief: `ws.md` holds the objective, the decisions so far and the next steps, and the repositories the task needs are one folder down. Point an agent at the folder, or let `dev` start one there:
 
-`dev.yaml` is the root configuration: defaults, providers, sources, labels,
-hooks, and plugins. Generated repositories and caches do not belong there.
+```bash
+dev ws start        # opens OMP in a HerdR pane for this workspace, and finds it again next time
+```
+
+The workspace, pull request and work item commands take `--json`, and `dev --help --llms` prints the command contract in a form written for models, so an agent can drive `dev` itself. [OMP](https://omp.sh) and [HerdR](https://herdr.dev) are optional; see [Integrations](docs/integrations.md).
+
+## How it fits together
+
+| Concept       | What it is                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Root**      | Your `dev` environment, `~/dev` by default, with its own configuration, workspaces and repositories. You can have several, one per client. |
+| **Workspace** | One task: a folder under `ws/` with a `ws.md` and one mount per repository.                                                                |
+| **Mount**     | A Git worktree inside a workspace, tracking a branch or pinned to a tag or commit.                                                         |
+| **Workset**   | A template for a workspace: which repositories, on which refs, at which paths, and why.                                                    |
+| **Mirror**    | A reference checkout under `mirrors/`, for repositories you read and index rather than change.                                             |
+| **Label**     | Metadata on a repository, read by `dev pr`, `dev mirror list` and `dev qmd sync`.                                                          |
 
 ```text
 ~/dev/
-├── dev.yaml
-├── AGENTS.md # instructions only for this dev root and its descendants
-├── ws/       # task workspaces; each contains ws.md and isolated worktrees
-└── mirrors/  # canonical reference checkouts managed by dev
+├── dev.yaml     # providers, sources, labels, worksets, plugins
+├── AGENTS.md    # instructions for agents working inside this root
+├── ws/          # one folder per task
+└── mirrors/     # reference checkouts
 ```
 
-Work inside `ws/`. Do not edit `mirrors/` directly. Directories are created when
-first needed. `AGENTS.md` is not a global machine or user configuration.
+Under the hood every repository is cloned once, as a bare mirror in `.dev/`, and every mount and reference checkout is a worktree on it. If you already use `git worktree`, that is the mechanism. `dev` adds the folder per task, the manifest, the pinning, the update that skips your dirty work, and the pickers.
 
-For separate clients or contexts, create more roots and select the default:
+## More
 
-```bash
-dev init ~/work/client-a --alias client-a
-dev init ~/work/labs --alias labs
-dev roots
-dev use client-a --global
-```
-
-To let `dev go` change the parent shell's directory:
-
-```bash
-eval "$(dev shell-init zsh)"
-```
-
----
-
-## Access and credentials
-
-`provider add` records where to look. It does not grant access or save a token.
-Your account needs permission to list repositories and clone each private source;
-`dev ws add` itself needs no write permission.
-
-| Provider     | Credential order for API calls                                                   |
-| ------------ | -------------------------------------------------------------------------------- |
-| Azure DevOps | `AZURE_DEVOPS_PAT`, token in `dev.yaml`, current `az login` session              |
-| GitHub       | `GITHUB_TOKEN`, `GH_TOKEN`, token in `dev.yaml`, current `gh auth login` session |
-
-Prefer CLI sessions or environment variables. Do not commit tokens to `dev.yaml`.
-Run `dev doctor` to see which source was selected.
-
-Clone authentication is separate. Azure DevOps credentials can be sent as a
-temporary HTTP header; GitHub clones use your Git credential helper or SSH agent.
-If `git clone <repository-url>` works, `dev ws add` can use the same access.
-`--consent` permits repository hooks; it does not grant repository permissions.
-
----
-
-## Workspace model
-
-`dev ws init` starts from one of three plans: a blank workspace, repositories
-selected from inventory, or a configured workset. The repository picker accepts
-multiple repositories and a branch per repository. Before any worktree is
-created, `dev` shows the complete mount plan and lets you edit it.
-
-```bash
-dev ws init
-dev ws init auth-review --workset auth
-dev ws init https://github.com/org/repo
-```
-
-A workset is a named, reusable repository plan in `dev.yaml`. It records source,
-ref, optional path, and the reason each repository belongs in the set. Manage a
-workset interactively, or use focused commands in scripts:
-
-```bash
-dev workset manage
-dev workset repo add auth https://github.com/org/auth-api
-dev workset show auth
-dev ws init auth-review --workset auth
-```
-
-Each mounted repository is an isolated Git worktree. A repository may appear on
-different branches or paths across workspaces while sharing one canonical
-mirror. Outside a workspace, `dev` selects the sole candidate or shows a picker;
-use `--ws <name>` for deterministic scripts.
-
-The daily loop stays small:
-
-```bash
-dev status # compare manifest and disk, offline
-dev sync   # fast-forward safe mounts
-```
-
----
-
-## Mirrors and labels
-
-A mirror is `dev`'s shared canonical checkout of a repository. Labels are
-orthogonal metadata on declared sources: use them to select repositories by
-team, domain, surface, evidence type, or index membership without duplicating
-workspace definitions.
-
-```bash
-dev mirror add https://github.com/can1357/oh-my-pi
-dev mirror label add                 # select sources, ref, label, and metadata
-dev mirror label add oh-my-pi docs   # deterministic scripted form
-dev mirror list --label docs
-```
-
-When one URI has multiple declared refs, the interactive flow asks which ref to
-label; scripts pass `--ref <branch>`. A multi-source change is previewed and
-confirmed once before `dev.yaml` is updated. The same label can drive
-`dev pr --label docs` and `dev qmd sync docs`.
-
----
-
-## Commands
-
-The table below covers the common workflows. See the
-[complete CLI command reference](docs/commands.md) for every command,
-subcommand, argument, and option.
-
-| Command                           | What it does                                                       |
-| --------------------------------- | ------------------------------------------------------------------ |
-| `dev ws init [name\|URI\|PR-URL]` | Create a workspace from blank, repository, PR, or workset          |
-| `dev ws add [name\|URI]`          | Mount a repository into the current or selected workspace          |
-| `dev workset manage [name]`       | Create or edit a reusable repository plan interactively            |
-| `dev ws start [query]`            | Fuzzy-select, start, or focus OMP in HerdR for a workspace         |
-| `dev status`                      | Show mount status (clean / dirty / ahead / behind)                 |
-| `dev sync`                        | Update the current workspace, or sync inventory outside it         |
-| `dev ls`                          | List all workspaces (`dev ws list` also works)                     |
-| `dev go [query]`                  | Fuzzy-select a workspace by recent creation and change directory   |
-| `dev ws remove [mount]`           | Select and confirm a mount (`--force` with explicit input in CI)   |
-| `dev pr`                          | Show open pull requests assigned to the authenticated reviewer     |
-| `dev pr -i`                       | Select one repository, then show its pull requests                 |
-| `dev pr --label <label>`          | Show pull requests for sources carrying a label                    |
-| `dev wi`                          | Show cached work items; `--refresh` selects a provider and project |
-| `dev qmd sync [label]`            | Sync one label, or every assigned `index:*` label when omitted     |
-| `dev root add\|remove <target>`   | Register or unregister a root without deleting its files           |
-| `dev provider list`               | Show configured providers                                          |
-| `dev doctor`                      | Check environment, tools, and credential status                    |
-
----
-
-## Optional integrations
-
-`dev` can connect three independent tools:
-
-- [OMP](https://omp.sh) is the coding agent opened for a dev workspace.
-- [HerdR](https://herdr.dev) keeps agent terminals organized and running.
-- [QMD](https://github.com/tobi/qmd) is a local search engine for documentation
-  and knowledge bases.
-
-### Open the right OMP in HerdR
-
-Install OMP and HerdR if you do not have them yet:
-
-```bash
-mise use -g github:can1357/oh-my-pi
-mise use -g herdr
-```
-
-On Windows, install HerdR from PowerShell instead:
-
-```powershell
-irm https://herdr.dev/install.ps1 | iex
-```
-
-Then open OMP in the workspace created above:
-
-```bash
-dev ws start gh-can1357-oh-my-pi
-```
-
-`dev` uses the dev workspace directory as the pane working directory. It reuses
-an existing ready OMP, starts OMP in an available matching pane, or creates a
-named HerdR workspace and agent when neither exists. The command works from a
-HerdR pane or a normal terminal. If no server is running, it starts one and
-waits for readiness; an interactive external call attaches the HerdR client
-after the requested workspace is focused. `--json` performs the same server
-orchestration without taking over the calling terminal.
-
-A partial name is enough when it identifies one workspace (`dev ws start adob`).
-When several workspaces match in an interactive terminal, `dev` asks which one
-to start.
-
-### Search labeled repositories with QMD
-
-Install QMD through Mise, then attach an indexing label to each source that
-should be searchable:
-
-```bash
-mise use -g npm:@tobilu/qmd
-dev mirror add https://github.com/can1357/oh-my-pi
-dev mirror label add oh-my-pi index:docs
-```
-
-With no positional label, sync reconciles every assigned `index:*` label. An
-explicit label remains available for targeted automation. The command removes
-stale collections owned by those labels, adds missing collections, updates the
-index once, and embeds new chunks unless `--no-embed` is set.
-
-```bash
-dev qmd sync
-dev qmd sync index:docs
-dev qmd sync --no-embed
-```
-
-Collections are named `<label>--<checkout>`, so the example creates
-`index:docs--oh-my-pi`. Query the resulting index through the passthrough:
-
-```bash
-dev qmd x query "how are tools registered?" -c index:docs--oh-my-pi --json -n 10
-dev qmd x status
-```
-
-By default, the QMD registry is scoped to the dev root. To share the index with
-direct `qmd query` calls and a `qmd mcp` server, select QMD's global registry in
-`dev.yaml`:
-
-```yaml
-plugins:
-  qmd:
-    config_dir: global
-```
-
-Everything after `dev qmd x` is passed to QMD unchanged. Run `qmd --help` for
-the installed command reference and `qmd mcp` for the stdio server.
-
----
-
-## Advanced usage
-
-Run `dev --help` for the human-oriented command reference or `dev --help --llms`
-for structured command metadata. The CLI covers revision lifecycle, safe update
-strategies, mirrors, providers, offline mode, multiple roots, hooks, and shell
-integration.
+- [Setup](docs/setup.md): what `dev init` creates, credentials, several roots, shell integration for each shell.
+- [Integrations](docs/integrations.md): OMP, HerdR and QMD in detail.
+- [Command reference](docs/commands.md), generated from the CLI. `dev <command> --help` works everywhere.
+- [Contributing](CONTRIBUTING.md): building, testing, and regenerating the demo.

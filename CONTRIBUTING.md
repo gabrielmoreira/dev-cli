@@ -149,3 +149,19 @@ bun run verify:all
   - `docs(...)`: Documentation and worklog updates
   - `refactor(...)`: Code cleanup with zero behavioral changes
 - Include clear descriptions of what changed, why, and what verification commands were executed.
+
+---
+
+## 7. Regenerating the terminal demo
+
+The README demo (`docs/assets/dev-cli-demo.gif` and `.mp4`) is rendered by [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` inside a disposable Docker image built from `docs/demo/`.
+
+The recording starts from a blank dev root in a Debian container configured with Mise, zsh, Spaceship, and CaskaydiaCove Nerd Font. Every step runs the interactive form of a command, so the tape never types a long flag list. It begins with the shortest paths: create a workspace from one repository URL, then create an empty workspace and add a repository through the picker. It then defines an `incident` workset (the seeded service plus the public `gabrielmoreira/skills` catalog), creates a workspace from it, and jumps there with `dev go`. Pinned OMP docs and the skills catalog become reference checkouts, one label puts both into a QMD index, and OMP finds the evidence-first skill through that index. The demo runs through `openrouter/free`; no paid-model fallback is configured.
+
+To regenerate it, add `OPENROUTER_API_KEY=...` to the ignored `.env` file, then run from the repository root (Docker required; Mise supplies the pinned VHS):
+
+```bash
+mise run demo
+```
+
+The README references the GIF with a `?v=` query string. Bump it when the image changes, or GitHub's image cache keeps serving the old frame.
