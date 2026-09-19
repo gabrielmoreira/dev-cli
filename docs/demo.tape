@@ -106,7 +106,7 @@ Type "dev workset list"
 Enter
 Wait+Screen@20s /incident \(3\)/
 Sleep 1s
-Type "dev ws init incident --workset incident --yes"
+Type "dev ws init incident --workset incident --desc 'Investigate checkout timeouts' --yes"
 Enter
 Wait+Screen@90s /Initialized workspace 'incident'/
 Sleep 1s
