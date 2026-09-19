@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { generateInstallers } from "./generate-installers.ts";
 
 interface ReleaseTarget {
   id: string;
@@ -98,3 +99,4 @@ for (const target of selectedTargets) {
 
 await rm(staging, { recursive: true, force: true });
 await writeFile(join(dist, "SHA256SUMS"), `${checksums.join("\n")}\n`);
+await generateInstallers(version, dist);

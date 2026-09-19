@@ -1,6 +1,59 @@
 # Setup
 
-What `dev init` creates, how `dev` finds credentials, how to keep several roots, and how to wire the shell. The [README](../README.md) covers the workflows; the [command reference](commands.md) covers every flag.
+How to install `dev`, initialize roots, provide credentials, and wire the shell. The [README](../README.md) covers the main workflows; the [command reference](commands.md) covers every flag.
+
+## Install
+
+The primary installation method is [Mise](https://mise.jdx.dev/):
+
+```bash
+mise use -g github:gabrielmoreira/dev-cli
+```
+
+### Direct installers
+
+macOS and Linux:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/gabrielmoreira/dev-cli/releases/latest/download/dev-installer.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://github.com/gabrielmoreira/dev-cli/releases/latest/download/dev-installer.ps1 | iex
+```
+
+The installers select the matching binary, verify its SHA-256 checksum, and add it to `PATH`. Set `DEV_INSTALL_DIR` to choose another directory or `DEV_NO_MODIFY_PATH=1` to leave `PATH` unchanged.
+
+### Manual installation
+
+Download the archive for your platform and `SHA256SUMS` from [Releases](https://github.com/gabrielmoreira/dev-cli/releases). Verify the archive before extracting it:
+
+Linux:
+
+```bash
+ASSET=dev-linux-x64.tar.gz # use the archive you downloaded
+grep "  $ASSET$" SHA256SUMS | sha256sum --check
+```
+
+macOS:
+
+```bash
+ASSET=dev-darwin-arm64.tar.gz # use the archive you downloaded
+grep "  $ASSET$" SHA256SUMS | shasum -a 256 --check
+```
+
+Windows PowerShell:
+
+```powershell
+$Asset = "dev-windows-x64.zip" # use the archive you downloaded
+$expected = (Get-Content SHA256SUMS | Where-Object { $_ -match "  $([regex]::Escape($Asset))$" }).Split()[0]
+$actual = (Get-FileHash $Asset -Algorithm SHA256).Hash
+if ($actual -ne $expected) { throw "Checksum mismatch" }
+```
+
+Extract the archive and move `dev` or `dev.exe` to a directory on `PATH`.
 
 ## What `dev init` creates
 

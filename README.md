@@ -23,14 +23,35 @@ Each of those wants the same repositories on different branches. One clone per r
 
 ## Install
 
-`dev` is a single binary for macOS, Linux and Windows. With [Mise](https://mise.jdx.dev/):
+`dev` is a single binary for macOS, Linux and Windows. Install it with [Mise](https://mise.jdx.dev/):
 
 ```bash
 mise use -g github:gabrielmoreira/dev-cli
-dev init
 ```
 
-Or take a binary from [Releases](https://github.com/gabrielmoreira/dev-cli/releases).
+Direct installers are also available.
+
+macOS and Linux:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/gabrielmoreira/dev-cli/releases/latest/download/dev-installer.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://github.com/gabrielmoreira/dev-cli/releases/latest/download/dev-installer.ps1 | iex
+```
+
+The installers verify the downloaded binary against the published SHA-256 checksums. See the [setup guide](docs/setup.md#install) for custom and manual installation.
+
+## Quick start
+
+After installing `dev` with any method, run the interactive setup:
+
+```bash
+dev init
+```
 
 `dev init` asks where to keep your work (`~/dev` by default) and whether to connect a GitHub owner or an Azure DevOps organization. A provider is optional. With one, `dev` knows your repositories, so the pickers, `dev pr` and `dev wi` have something to show. Without one, you give it URLs. It reuses your `gh` and `az` sessions when you have them ([details](docs/setup.md#access-and-credentials)).
 

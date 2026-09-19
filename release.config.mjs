@@ -27,6 +27,8 @@ export default {
           { path: "dist/dev-windows-arm64.zip", label: "dev for Windows ARM64" },
           { path: "dist/dev-windows-x64.zip", label: "dev for Windows x64" },
           { path: "dist/SHA256SUMS", label: "SHA-256 checksums" },
+          { path: "dist/dev-installer.sh", label: "Installer for macOS and Linux" },
+          { path: "dist/dev-installer.ps1", label: "Installer for Windows" },
         ],
         successComment: false,
         failComment: false,
