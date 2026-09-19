@@ -36,7 +36,7 @@ run = "npx --no-install semantic-release"
 
 [tasks."demo"]
 description = "Build the disposable environment and render the VHS demo"
-run = "docs/demo/render.sh"
+run = "bash docs/demo/render.sh"
 
 [tasks."docs:commands"]
 description = "Generate the complete CLI command reference"
