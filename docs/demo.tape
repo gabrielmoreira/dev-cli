@@ -101,7 +101,7 @@ Sleep 1s
 Enter
 Wait+Screen@20s /Create these mounts/
 Sleep 1s
-Enter
+Type "y"
 Wait+Screen@30s /Mounted repository 'checkout-api'/
 Sleep 3s
 Type "clear"
@@ -171,8 +171,9 @@ Enter
 Sleep 700ms
 Type "Debugging skills"
 Enter
-Sleep 700ms
-Enter
+Wait+Screen@20s /Add this repository/
+Sleep 1s
+Type "y"
 Wait+Screen@20s /Added repository to workset 'incident'/
 Sleep 2s
 Type "clear"
@@ -210,7 +211,7 @@ Sleep 1s
 Enter
 Wait+Screen@20s /Create this workspace/
 Sleep 1s
-Enter
+Type "y"
 Wait+Screen@90s /Initialized workspace 'incident'/
 Sleep 3s
 
