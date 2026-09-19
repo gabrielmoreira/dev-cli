@@ -2,7 +2,7 @@ FROM public.ecr.aws/debian/debian:bookworm-slim@sha256:833d7afe7d42e2fc552740ebd
 
 ARG MISE_VERSION=2026.9.6
 ARG NODE_VERSION=24.21.0
-ARG DEV_VERSION=1.5.2
+ARG DEV_VERSION=1.7.0
 ARG QMD_VERSION=2.8.3
 ARG SKILLS_REVISION=d5cdb657ea95ab27c6233e959c08af5eb3806092
 
@@ -75,7 +75,6 @@ COPY --chown=demo:demo --chmod=755 docs/demo/omp /home/demo/.local/bin/omp
 COPY --chown=demo:demo docs/demo/spaceship.zsh /home/demo/.config/spaceship.zsh
 COPY --chown=demo:demo docs/demo/zshrc /home/demo/.zshrc
 COPY --chown=demo:demo docs/demo/herdr.toml /home/demo/.config/herdr/config.toml
-COPY --chown=demo:demo docs/demo/workset.yaml /opt/demo/workset.yaml
 
 WORKDIR /demo
 ENTRYPOINT ["/opt/demo/entrypoint.zsh"]

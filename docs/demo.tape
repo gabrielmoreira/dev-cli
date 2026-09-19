@@ -46,11 +46,6 @@ Type "cd ~/dev"
 Enter
 Sleep 1s
 
-Hide
-Type "cat /opt/demo/workset.yaml >> dev.yaml"
-Enter
-Wait+Screen@10s /demo@devbox/
-Show
 
 # Simplest path: one repository URL creates a ready workspace.
 Type "dev ws init https://github.com/gabrielmoreira/skills.git"
@@ -107,16 +102,69 @@ Enter
 Wait+Screen@20s /checkout-api/
 Sleep 3s
 
-# Reusable path: create a task workspace from a configured workset.
+# Reusable path: build a workset through the interactive manager.
 Type "clear"
 Enter
 Type "cd ~/dev"
 Enter
-Type "dev workset list"
+Type "dev workset manage"
 Sleep 500ms
 Enter
-Wait+Screen@20s /incident \(3\)/
+Wait+Screen@20s /Workset name/
+Type "incident"
+Enter
+Wait+Screen@20s /Workset description/
+Type "Investigate checkout timeouts"
+Enter
+Wait+Screen@20s /Manage workset/
+Type "Add repository"
+Sleep 500ms
+Enter
+Sleep 700ms
+Type "checkout"
+Sleep 500ms
+Enter
+Sleep 700ms
+Type "main"
+Enter
+Sleep 700ms
+Enter
+Sleep 700ms
+Type "Affected service"
+Enter
+Sleep 700ms
+Type "Review changes"
+Sleep 500ms
+Enter
+Sleep 3s
+Type "Save and exit"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Save this workset/
 Sleep 1s
+Type "y"
+Wait+Screen@20s /Saved workset 'incident'/
+Sleep 2s
+Ctrl+L
+Sleep 1s
+Type "dev workset repo add incident omp-docs --ref main --path omp-docs --reason 'Pinned OMP model and provider docs' --yes"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Added repository to workset 'incident'/
+Sleep 1s
+Type "dev workset repo add incident gabrielmoreira-skills --ref main --path skills --reason 'Evidence-driven debugging skills' --yes"
+Sleep 500ms
+Enter
+Sleep 2s
+Type "clear"
+Enter
+Type "dev workset show incident"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Evidence-driven debugging skills/
+Sleep 3s
+Type "clear"
+Enter
 Type "dev ws init incident --workset incident --desc 'Investigate checkout timeouts' --yes"
 Sleep 500ms
 Enter
@@ -183,7 +231,7 @@ Sleep 500ms
 Enter
 Wait+Screen@20s /Select repository/
 Sleep 1s
-Type "gabriel"
+Type "skills"
 Sleep 1s
 Enter
 Wait+Screen@60s /Added mirror/
@@ -201,8 +249,8 @@ Tab
 Down
 Tab
 Enter
-Wait+Screen@20s /Select label/
-Sleep 1s
+Wait+Screen@20s /Label name/
+Type "index:incident"
 Enter
 Wait+Screen@20s /Apply this label plan/
 Enter
@@ -231,8 +279,8 @@ Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 1s
 
 Set TypingSpeed 20ms
-Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, show the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
+Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, include the literal OPENROUTER_API_KEY in the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
 Sleep 500ms
 Enter
-Wait+Screen@240s /OPENROUTER_API_KEY/
+Wait+Screen@240s /INDEXED ANSWER COMPLETE/
 Sleep 15s
