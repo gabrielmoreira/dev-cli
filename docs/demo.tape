@@ -159,9 +159,9 @@ Sleep 500ms
 Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 3s
-Ctrl+D
-Sleep 1s
-Ctrl+C
+Ctrl+B
+Sleep 500ms
+Type "q"
 Wait+Screen@20s /demo@devbox dev\/ws\/incident/
 Sleep 1s
 
