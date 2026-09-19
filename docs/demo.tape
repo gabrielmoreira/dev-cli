@@ -1,4 +1,9 @@
 # Render from the repository root with: mise run demo
+#
+# Row budget: VHS 0.11 matches Wait+Screen against the first <rows> lines of the terminal buffer
+# since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x900 and
+# 18pt that is about 34 rows. Every scene starts with a clear, and a marker must land within
+# those rows; measure a scene before adding output above its marker.
 Output docs/assets/dev-cli-demo.gif
 Output docs/assets/dev-cli-demo.mp4
 
@@ -6,7 +11,7 @@ Require docker
 
 Set Shell "bash"
 Set Width 1200
-Set Height 800
+Set Height 900
 Set FontSize 18
 Set FontFamily "CaskaydiaCove NF"
 Set Theme "Catppuccin Mocha"
@@ -83,6 +88,8 @@ Enter
 Wait+Screen@20s /Initialized workspace 'scratch'/
 Sleep 1s
 Type "cd ws/scratch"
+Enter
+Type "clear"
 Enter
 Type "dev ws add"
 Sleep 500ms
@@ -294,14 +301,18 @@ Enter
 Wait+Screen@20s /Apply this label plan/
 Enter
 Wait+Screen@20s /Applied label 'index:incident'/
-
+Sleep 2s
+Type "clear"
+Enter
 Type "dev qmd sync"
 Sleep 500ms
 Enter
 Hide
 Wait+Screen@300s /2 collection\(s\) reconciled/
 Show
-Sleep 1s
+Sleep 2s
+Type "clear"
+Enter
 Type "dev qmd x search debugging-by-evidence"
 Sleep 500ms
 Enter
