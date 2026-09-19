@@ -81,6 +81,13 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          demo_outputs="$RUNNER_TEMP/dev-cli-demo-$GITHUB_RUN_ID"
+          mkdir --parents "$demo_outputs"
+          cp docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4 "$demo_outputs/"
+          git fetch origin main
+          git checkout --force --branch demo-refresh origin/main
+          cp "$demo_outputs/dev-cli-demo.gif" docs/assets/dev-cli-demo.gif
+          cp "$demo_outputs/dev-cli-demo.mp4" docs/assets/dev-cli-demo.mp4
           git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
           if git diff --cached --quiet; then
             echo 'Rendered demo is unchanged.'
