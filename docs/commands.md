@@ -36,7 +36,7 @@ Developer CLI & Workspace Engine
 | `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                       |
 | `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell               |
 | `dev qmd`        | QMD plugin: collections from labeled sources (scoped registry)                    |
-| `dev workset`    | Inspect reusable repository worksets                                              |
+| `dev workset`    | Manage reusable repository worksets                                               |
 
 ## `dev init`
 
@@ -898,14 +898,18 @@ Raw qmd passthrough with the scoped registry env
 
 ## `dev workset`
 
-Inspect reusable repository worksets
+Manage reusable repository worksets
 
 **Usage:** `dev workset <command>`
 
-| Subcommand         | Description                 |
-| ------------------ | --------------------------- |
-| `dev workset list` | List configured worksets    |
-| `dev workset show` | Show one configured workset |
+| Subcommand           | Description                          |
+| -------------------- | ------------------------------------ |
+| `dev workset list`   | List configured worksets             |
+| `dev workset create` | Create a reusable repository workset |
+| `dev workset rename` | Rename a configured workset          |
+| `dev workset manage` | Interactively manage a workset       |
+| `dev workset repo`   | Manage repositories in a workset     |
+| `dev workset show`   | Show one configured workset          |
 
 ## `dev workset list`
 
@@ -917,6 +921,109 @@ List configured worksets
 | ---------------- | ------- | -------------------------------- |
 | `--root <value>` | string  | Explicit dev root directory      |
 | `--json`         | boolean | Output in structured JSON format |
+
+## `dev workset create`
+
+Create a reusable repository workset
+
+**Usage:** `dev workset create [name] [source] [--description <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+
+| Argument                | Type       | Description                                     |
+| ----------------------- | ---------- | ----------------------------------------------- |
+| `name`                  | positional | Workset name                                    |
+| `source`                | positional | Initial repository URL, path, or inventory name |
+| `--description <value>` | string     | Workset description                             |
+| `--ref <value>`         | string     | Branch, tag, or revision                        |
+| `--path <value>`        | string     | Workspace mount path                            |
+| `--reason <value>`      | string     | Reason this repository belongs in the workset   |
+| `--yes`                 | boolean    | Create without interactive confirmation         |
+| `--root <value>`        | string     | Explicit dev root directory                     |
+| `--json`                | boolean    | Output in structured JSON format                |
+
+## `dev workset rename`
+
+Rename a configured workset
+
+**Usage:** `dev workset rename [name] [newName] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `name`           | positional | Current workset name             |
+| `newName`        | positional | New workset name                 |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
+
+## `dev workset manage`
+
+Interactively manage a workset
+
+**Usage:** `dev workset manage [name] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `name`           | positional | Workset name                     |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
+
+## `dev workset repo`
+
+Manage repositories in a workset
+
+**Usage:** `dev workset repo <command>`
+
+| Subcommand                | Description                           |
+| ------------------------- | ------------------------------------- |
+| `dev workset repo add`    | Add a repository to a workset         |
+| `dev workset repo edit`   | Edit repository metadata in a workset |
+| `dev workset repo remove` | Remove a repository from a workset    |
+
+## `dev workset repo add`
+
+Add a repository to a workset
+
+**Usage:** `dev workset repo add [workset] [source] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+
+| Argument           | Type       | Description                                   |
+| ------------------ | ---------- | --------------------------------------------- |
+| `workset`          | positional | Workset name                                  |
+| `source`           | positional | Repository URL, path, or inventory name       |
+| `--ref <value>`    | string     | Branch, tag, or revision                      |
+| `--path <value>`   | string     | Workspace mount path                          |
+| `--reason <value>` | string     | Reason this repository belongs in the workset |
+| `--yes`            | boolean    | Add without interactive confirmation          |
+| `--root <value>`   | string     | Explicit dev root directory                   |
+| `--json`           | boolean    | Output in structured JSON format              |
+
+## `dev workset repo edit`
+
+Edit repository metadata in a workset
+
+**Usage:** `dev workset repo edit [workset] [member] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+
+| Argument           | Type       | Description                                   |
+| ------------------ | ---------- | --------------------------------------------- |
+| `workset`          | positional | Workset name                                  |
+| `member`           | positional | Repository path or source                     |
+| `--ref <value>`    | string     | Branch, tag, or revision                      |
+| `--path <value>`   | string     | Workspace mount path                          |
+| `--reason <value>` | string     | Reason this repository belongs in the workset |
+| `--yes`            | boolean    | Update without interactive confirmation       |
+| `--root <value>`   | string     | Explicit dev root directory                   |
+| `--json`           | boolean    | Output in structured JSON format              |
+
+## `dev workset repo remove`
+
+Remove a repository from a workset
+
+**Usage:** `dev workset repo remove [workset] [member] [--force] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                             |
+| ---------------- | ---------- | --------------------------------------- |
+| `workset`        | positional | Workset name                            |
+| `member`         | positional | Repository path or source               |
+| `--force`        | boolean    | Remove without interactive confirmation |
+| `--root <value>` | string     | Explicit dev root directory             |
+| `--json`         | boolean    | Output in structured JSON format        |
 
 ## `dev workset show`
 

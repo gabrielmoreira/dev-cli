@@ -1,0 +1,205 @@
+import { isMap } from "yaml";
+import { WorksetDefinitionSchema, type RuntimeConfig, type WorksetDefinition } from "./config.ts";
+
+export type WorksetErrorCode =
+  | "WORKSET_CONFIG_UNWRITABLE"
+  | "WORKSET_EXISTS"
+  | "WORKSET_NOT_FOUND"
+  | "WORKSET_MEMBER_EXISTS"
+  | "WORKSET_MEMBER_NOT_FOUND"
+  | "WORKSET_LAST_MEMBER";
+
+export class WorksetError extends Error {
+  constructor(
+    public readonly code: WorksetErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WorksetError";
+  }
+}
+
+function writableDocument(config: RuntimeConfig): NonNullable<RuntimeConfig["configDoc"]> {
+  if (!config.configDoc || !config.writeConfig) {
+    throw new WorksetError(
+      "WORKSET_CONFIG_UNWRITABLE",
+      "Workset management requires a dev.yaml configuration.",
+    );
+  }
+  return config.configDoc;
+}
+
+function persistWorksets(config: RuntimeConfig, worksets: Record<string, WorksetDefinition>): void {
+  const doc = writableDocument(config);
+  const existing = doc.get("worksets");
+  const node = isMap(existing) ? existing : doc.createNode({});
+  if (!isMap(existing)) doc.set("worksets", node);
+
+  for (const name of node.items.map((item) => String(item.key))) {
+    if (!Object.hasOwn(worksets, name)) node.delete(name);
+  }
+  for (const [name, workset] of Object.entries(worksets)) {
+    node.set(name, doc.createNode(workset));
+  }
+  config.writeConfig?.();
+  config.worksets = worksets;
+}
+
+export function createWorkset(
+  config: RuntimeConfig,
+  name: string,
+  definition: WorksetDefinition,
+): WorksetDefinition {
+  const normalizedName = name.trim();
+  if (Object.hasOwn(config.worksets, normalizedName)) {
+    throw new WorksetError("WORKSET_EXISTS", `Workset '${normalizedName}' already exists.`);
+  }
+  const parsed = WorksetDefinitionSchema.parse(definition);
+  persistWorksets(config, { ...config.worksets, [normalizedName]: parsed });
+  return parsed;
+}
+
+export function renameWorkset(
+  config: RuntimeConfig,
+  currentName: string,
+  nextName: string,
+): WorksetDefinition {
+  const current = currentName.trim();
+  const next = nextName.trim();
+  const definition = config.worksets[current];
+  if (!definition) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${current}'.`);
+  }
+  if (Object.hasOwn(config.worksets, next)) {
+    throw new WorksetError("WORKSET_EXISTS", `Workset '${next}' already exists.`);
+  }
+
+  const renamed = Object.fromEntries(
+    Object.entries(config.worksets).map(([name, workset]) =>
+      name === current ? [next, workset] : [name, workset],
+    ),
+  );
+  persistWorksets(config, renamed);
+  return definition;
+}
+
+function validateUniqueMembers(members: WorksetDefinition["members"]): void {
+  const identities = new Set<string>();
+  for (const member of members) {
+    const identity = JSON.stringify([member.source, member.ref ?? null, member.path ?? null]);
+    if (identities.has(identity)) {
+      throw new WorksetError(
+        "WORKSET_MEMBER_EXISTS",
+        `Repository '${member.source}' with the same ref and path is already in the workset.`,
+      );
+    }
+    identities.add(identity);
+  }
+}
+
+export function addWorksetMember(
+  config: RuntimeConfig,
+  name: string,
+  member: WorksetDefinition["members"][number],
+): WorksetDefinition {
+  const definition = config.worksets[name];
+  if (!definition) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+  }
+  const members = [...definition.members, member];
+  validateUniqueMembers(members);
+  const updated = WorksetDefinitionSchema.parse({
+    ...definition,
+    members,
+  });
+  persistWorksets(config, { ...config.worksets, [name]: updated });
+  return updated;
+}
+
+type WorksetMember = WorksetDefinition["members"][number];
+
+function findMemberIndex(definition: WorksetDefinition, target: string): number {
+  const pathIndex = definition.members.findIndex((member) => member.path === target);
+  if (pathIndex >= 0) return pathIndex;
+  const sourceMatches = definition.members
+    .map((member, index) => ({ member, index }))
+    .filter(({ member }) => member.source === target);
+  if (sourceMatches.length === 1) return sourceMatches[0]!.index;
+  throw new WorksetError(
+    "WORKSET_MEMBER_NOT_FOUND",
+    sourceMatches.length > 1
+      ? `Repository '${target}' is ambiguous; select it by path.`
+      : `Repository '${target}' is not in the workset.`,
+  );
+}
+
+export function editWorksetMember(
+  config: RuntimeConfig,
+  name: string,
+  target: string,
+  changes: Partial<Omit<WorksetMember, "source">>,
+): WorksetDefinition {
+  const definition = config.worksets[name];
+  if (!definition) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+  }
+  const index = findMemberIndex(definition, target);
+  const members = definition.members.map((member, memberIndex) =>
+    memberIndex === index ? { ...member, ...changes } : member,
+  );
+  validateUniqueMembers(members);
+  const updated = WorksetDefinitionSchema.parse({ ...definition, members });
+  persistWorksets(config, { ...config.worksets, [name]: updated });
+  return updated;
+}
+
+export function removeWorksetMember(
+  config: RuntimeConfig,
+  name: string,
+  target: string,
+): WorksetDefinition {
+  const definition = config.worksets[name];
+  if (!definition) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+  }
+  const index = findMemberIndex(definition, target);
+  if (definition.members.length === 1) {
+    throw new WorksetError(
+      "WORKSET_LAST_MEMBER",
+      `Workset '${name}' must contain at least one repository.`,
+    );
+  }
+  const updated = WorksetDefinitionSchema.parse({
+    ...definition,
+    members: definition.members.filter((_, memberIndex) => memberIndex !== index),
+  });
+  persistWorksets(config, { ...config.worksets, [name]: updated });
+  return updated;
+}
+
+export function saveWorksetDraft(
+  config: RuntimeConfig,
+  originalName: string | undefined,
+  name: string,
+  definition: WorksetDefinition,
+): WorksetDefinition {
+  const normalizedName = name.trim();
+  const parsed = WorksetDefinitionSchema.parse(definition);
+  validateUniqueMembers(parsed.members);
+  if (originalName && !Object.hasOwn(config.worksets, originalName)) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${originalName}'.`);
+  }
+  if (normalizedName !== originalName && Object.hasOwn(config.worksets, normalizedName)) {
+    throw new WorksetError("WORKSET_EXISTS", `Workset '${normalizedName}' already exists.`);
+  }
+
+  const updated = originalName
+    ? Object.fromEntries(
+        Object.entries(config.worksets).map(([existingName, workset]) =>
+          existingName === originalName ? [normalizedName, parsed] : [existingName, workset],
+        ),
+      )
+    : { ...config.worksets, [normalizedName]: parsed };
+  persistWorksets(config, updated);
+  return parsed;
+}

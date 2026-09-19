@@ -169,12 +169,14 @@ dev ws init https://github.com/org/repo
 ```
 
 A workset is a named, reusable repository plan in `dev.yaml`. It records source,
-ref, optional path, and the reason each repository belongs in the set. Inspect
-the configured plans before using one:
+ref, optional path, and the reason each repository belongs in the set. Manage a
+workset interactively, or use focused commands in scripts:
 
 ```bash
-dev workset list
+dev workset manage
+dev workset repo add auth https://github.com/org/auth-api
 dev workset show auth
+dev ws init auth-review --workset auth
 ```
 
 Each mounted repository is an isolated Git worktree. A repository may appear on
@@ -222,7 +224,7 @@ subcommand, argument, and option.
 | --------------------------------- | ------------------------------------------------------------------ |
 | `dev ws init [name\|URI\|PR-URL]` | Create a workspace from blank, repository, PR, or workset          |
 | `dev ws add [name\|URI]`          | Mount a repository into the current or selected workspace          |
-| `dev workset list\|show`          | Inspect reusable repository plans from `dev.yaml`                  |
+| `dev workset manage [name]`       | Create or edit a reusable repository plan interactively            |
 | `dev ws start [query]`            | Fuzzy-select, start, or focus OMP in HerdR for a workspace         |
 | `dev status`                      | Show mount status (clean / dirty / ahead / behind)                 |
 | `dev sync`                        | Update the current workspace, or sync inventory outside it         |
