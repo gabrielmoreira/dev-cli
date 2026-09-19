@@ -232,5 +232,5 @@ Set TypingSpeed 20ms
 Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, show the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
 Sleep 500ms
 Enter
-Wait+Screen@240s /DECISION:/
-Sleep 12s
+Wait+Screen@240s /OPENROUTER_API_KEY/
+Sleep 15s
