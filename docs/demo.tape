@@ -283,4 +283,9 @@ Type "Search QMD first. Begin with the uppercase decision label followed by a co
 Sleep 500ms
 Enter
 Wait+Screen@240s /INDEXED ANSWER COMPLETE/
-Sleep 15s
+Sleep 10s
+Ctrl+C
+Sleep 2s
+Type "exit"
+Enter
+Sleep 2s
