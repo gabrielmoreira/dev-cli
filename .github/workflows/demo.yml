@@ -71,37 +71,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes ffmpeg ttyd
 
-      # Temporary evidence for the 1200x900 render cancellation. The sentinel runs in a
-      # separate session to distinguish a runner-wide signal from the VHS process tree.
-      - name: Start render diagnostics
-        if: env.OPENROUTER_API_KEY != ''
-        run: |
-          cat > "$RUNNER_TEMP/demo-sentinel.sh" <<'EOF'
-          #!/usr/bin/env bash
-          log="$1"
-          trap 'printf "signal=TERM time=%s\n" "$(date -u +%T)" >> "$log"; exit 143' TERM
-          trap 'printf "signal=HUP time=%s\n" "$(date -u +%T)" >> "$log"; exit 129' HUP
-          trap 'printf "signal=INT time=%s\n" "$(date -u +%T)" >> "$log"; exit 130' INT
-          while sleep 1; do :; done
-          EOF
-          cat > "$RUNNER_TEMP/demo-memory.sh" <<'EOF'
-          #!/usr/bin/env bash
-          log="$1"
-          while sleep 5; do
-            available_kb="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)"
-            cgroup_current="$(cat /sys/fs/cgroup/memory.current 2>/dev/null || printf unknown)"
-            cgroup_max="$(cat /sys/fs/cgroup/memory.max 2>/dev/null || printf unknown)"
-            printf 'time=%s available_kb=%s cgroup_current=%s cgroup_max=%s\n' \
-              "$(date -u +%T)" "$available_kb" "$cgroup_current" "$cgroup_max" >> "$log"
-          done
-          EOF
-          : > "$RUNNER_TEMP/demo-signals.log"
-          : > "$RUNNER_TEMP/demo-memory.log"
-          nohup setsid bash "$RUNNER_TEMP/demo-sentinel.sh" "$RUNNER_TEMP/demo-signals.log" >/dev/null 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/demo-sentinel.pid"
-          nohup setsid bash "$RUNNER_TEMP/demo-memory.sh" "$RUNNER_TEMP/demo-memory.log" >/dev/null 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/demo-memory.pid"
-
       # Same renderer as the release workflow: docs/demo/render.sh runs VHS in its own
       # session, so the teardown signal from the tape's shell cannot kill this step, and it
       # validates that both assets exist and are not empty.
@@ -116,20 +85,6 @@ jobs:
             export DEV_VERSION="${latest#v}"
           fi
           mise run demo
-
-      - name: Report render diagnostics
-        if: always() && env.OPENROUTER_API_KEY != ''
-        run: |
-          echo '::group::Signal sentinel'
-          cat "$RUNNER_TEMP/demo-signals.log" || true
-          echo '::endgroup::'
-          echo '::group::Memory samples'
-          cat "$RUNNER_TEMP/demo-memory.log" || true
-          echo '::endgroup::'
-          echo '::group::Largest remaining processes'
-          ps -eo pid,ppid,sid,rss,comm,args --sort=-rss | sed -n '1,20p'
-          echo '::endgroup::'
-          kill -KILL "$(cat "$RUNNER_TEMP/demo-sentinel.pid")" "$(cat "$RUNNER_TEMP/demo-memory.pid")" 2>/dev/null || true
 
       - name: Upload rendered demo
         if: env.OPENROUTER_API_KEY != ''

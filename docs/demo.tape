@@ -332,5 +332,8 @@ Set TypingSpeed 20ms
 Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Search QMD and cite the files. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
 Sleep 500ms
 Enter
+# Keep provider latency out of the artifact while preserving the submitted prompt and final answer.
+Hide
 Wait+Screen@240s /INDEXED ANSWER COMPLETE/
+Show
 Sleep 10s
