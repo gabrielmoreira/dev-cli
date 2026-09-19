@@ -1,7 +1,6 @@
 # dev
 
-[![Release](https://img.shields.io/github/v/release/gabrielmoreira/dev-cli)](https://github.com/gabrielmoreira/dev-cli/releases)
-[![Release workflow](https://github.com/gabrielmoreira/dev-cli/actions/workflows/release.yml/badge.svg)](https://github.com/gabrielmoreira/dev-cli/actions/workflows/release.yml)
+[![Release](https://github.com/gabrielmoreira/dev-cli/actions/workflows/release.yml/badge.svg)](https://github.com/gabrielmoreira/dev-cli/releases)
 
 **One folder per task. Every repository the task needs, on the branch it needs, and a note of where you left off.**
 
