@@ -7,7 +7,7 @@ ARG QMD_VERSION=2.8.3
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl git zsh \
+    && apt-get install --yes --no-install-recommends ca-certificates curl fzf git zsh \
     && rm -rf /var/lib/apt/lists/*
 ARG SPACESHIP_VERSION=4.22.5
 ARG HERDR_VERSION=0.9.1
