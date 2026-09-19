@@ -134,7 +134,7 @@ Enter
 Type "dev go"
 Sleep 500ms
 Enter
-Wait+Screen@20s /Select workspace/
+Wait+Screen@20s /gh-gabrielmoreira-skills/
 Sleep 1s
 Type "incident"
 Sleep 1s
