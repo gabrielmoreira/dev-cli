@@ -397,7 +397,6 @@ export const prCheckoutCommand = defineCommand({
   args: {
     reference: { type: "positional", description: "Pull request URL or ID", required: false },
     review: { type: "boolean", description: "Create an isolated local review branch" },
-    continue: { type: "boolean", description: "Continue on the pull request source branch" },
     name: { type: "string", description: "Workspace name" },
     repo: { type: "string", description: "Repository name for an ambiguous ID" },
     provider: { type: "string", description: "Provider id for an ambiguous ID" },
@@ -406,11 +405,6 @@ export const prCheckoutCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    if (args.review && args.continue) {
-      ui.error("Error: --review and --continue cannot be used together.");
-      return 1;
-    }
-
     const config = getActiveConfig(args.root);
     const cached = await cache.loadAllCachedPullRequests(config.root);
     const inventory = await cache.loadAllCachedInventories(config.root);
@@ -437,7 +431,7 @@ export const prCheckoutCommand = defineCommand({
         required: {
           command: "pr checkout",
           field: "reference",
-          usage: "dev pr checkout [url-or-id] [--review | --continue]",
+          usage: "dev pr checkout [url-or-id] [--review]",
           description: "Pull request URL or ID",
         },
       });
@@ -527,30 +521,16 @@ export const prCheckoutCommand = defineCommand({
       return 1;
     }
 
-    const mode = (
-      await resolveChoiceInput({
-        value: args.review ? "review" : args.continue ? "continue" : undefined,
-        choices: async () => [
-          { label: "Review this PR", value: "review" },
-          { label: "Continue working on this PR", value: "continue" },
-        ],
-        message: "What do you want to do?",
-        required: {
-          command: "pr checkout",
-          field: "mode",
-          usage: "dev pr checkout [url-or-id] [--review | --continue]",
-          description: "Checkout mode",
-        },
-      })
-    ).value;
+    const mode = args.review ? "review" : "checkout";
     const slug = checkoutSlug(selected.title) || `pr-${selected.id}`;
-    const workspaceName = args.name || `${mode}-${selected.id}-${slug}`;
+    const workspaceName =
+      args.name || `${mode === "review" ? "review" : "pr"}-${selected.id}-${slug}`;
     const branch = mode === "review" ? `review/${selected.id}-${slug}` : selected.sourceBranch;
     const created = await ws.init({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       name: workspaceName,
-      description: `${mode === "review" ? "Review" : "Continue"} PR #${selected.id}: ${selected.title}`,
+      description: `${mode === "review" ? "Review" : "Checkout"} PR #${selected.id}: ${selected.title}`,
     });
     const mounted = await ws.add({
       root: config.root,

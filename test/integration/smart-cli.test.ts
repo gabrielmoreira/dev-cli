@@ -1069,7 +1069,7 @@ describe("smart CLI input", () => {
     expect(logs.join("\n")).toContain("Work Item #84: Verify smart views");
   });
 
-  test("creates review and continuation workspaces from a cached pull request", async () => {
+  test("checks out the PR source branch by default and isolates only explicit reviews", async () => {
     const remote = join(root, "review-source.git");
     const seed = join(root, "review-seed");
     await git.runGit(["init", "--bare", "-b", "main", remote]);
@@ -1159,32 +1159,30 @@ describe("smart CLI input", () => {
 
     expect(
       await runCli({
-        argv: ["pr", "checkout", "42", "--continue", "--name", "continue-pr", "--root", root],
+        argv: ["pr", "checkout", "42", "--name", "source-pr", "--root", root],
         cwd: root,
         env: {},
         isTTY: false,
       }),
     ).toBe(0);
-    const continuation = await manifest.readWorkspace(join(root, "ws", "continue-pr", "ws.md"));
-    expect(continuation.manifest.mounts[0].revision).toEqual({
+    const sourceCheckout = await manifest.readWorkspace(join(root, "ws", "source-pr", "ws.md"));
+    expect(sourceCheckout.manifest.mounts[0].revision).toEqual({
       mode: "track",
       branch: "feature/review",
       upstream: undefined,
     });
 
-    const checkoutPrompt = spyOn(ui, "select")
-      .mockResolvedValueOnce("0")
-      .mockResolvedValueOnce("review");
+    const checkoutPrompt = spyOn(ui, "select").mockResolvedValueOnce("0");
     expect(
       await runCli({
-        argv: ["pr", "checkout", "--name", "prompted-review", "--root", root],
+        argv: ["pr", "checkout", "--name", "prompted-pr", "--root", root],
         cwd: root,
         env: {},
         isTTY: true,
         stdinIsTTY: true,
       }),
     ).toBe(0);
-    expect(existsSync(join(root, "ws", "prompted-review", "ws.md"))).toBe(true);
+    expect(existsSync(join(root, "ws", "prompted-pr", "ws.md"))).toBe(true);
     checkoutPrompt.mockRestore();
 
     expect(
