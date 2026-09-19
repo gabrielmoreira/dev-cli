@@ -209,7 +209,9 @@ Wait+Screen@20s /Applied label 'index:incident'/
 Type "dev qmd sync index:incident"
 Sleep 500ms
 Enter
-Wait+Screen@90s /2 collection\(s\) reconciled/
+Hide
+Wait+Screen@300s /2 collection\(s\) reconciled/
+Show
 Sleep 1s
 Type "dev qmd x search debugging-by-evidence --format cli"
 Sleep 500ms
