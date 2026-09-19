@@ -1,8 +1,8 @@
 # Render from the repository root with: mise run demo
 #
 # Row budget: VHS 0.11 matches Wait+Screen against the first <rows> lines of the terminal buffer
-# since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x900 and
-# 18pt that is about 34 rows. Every scene starts with a clear, and a marker must land within
+# since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x800 and
+# 18pt that is about 30 rows. Every scene starts with a clear, and a marker must land within
 # those rows; measure a scene before adding output above its marker.
 Output docs/assets/dev-cli-demo.gif
 Output docs/assets/dev-cli-demo.mp4
@@ -11,7 +11,7 @@ Require docker
 
 Set Shell "bash"
 Set Width 1200
-Set Height 900
+Set Height 800
 Set FontSize 18
 Set FontFamily "CaskaydiaCove NF"
 Set Theme "Catppuccin Mocha"
