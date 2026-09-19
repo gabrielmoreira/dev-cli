@@ -106,29 +106,7 @@ Type "dev workset list"
 Enter
 Wait+Screen@20s /incident \(3\)/
 Sleep 1s
-Type "dev ws init --yes"
-Enter
-Wait+Screen@20s /How do you want to start/
-Sleep 1s
-Down
-Down
-Sleep 1s
-Enter
-Wait+Screen@20s /Select workset/
-Sleep 1s
-Type "incident"
-Sleep 1s
-Enter
-Wait+Screen@20s /Workspace name/
-Sleep 1s
-Enter
-Wait+Screen@20s /Workspace description/
-Sleep 1s
-Enter
-Wait+Screen@90s /Select repositories to customize/
-Sleep 1s
-Tab
-Sleep 1s
+Type "dev ws init incident --workset incident --yes"
 Enter
 Wait+Screen@90s /Initialized workspace 'incident'/
 Sleep 1s
@@ -136,7 +114,12 @@ Sleep 1s
 # Shell integration turns workspace selection into a real directory jump.
 Type "clear"
 Enter
-Type "dev go incident"
+Type "dev go"
+Enter
+Wait+Screen@20s /Select workspace/
+Sleep 1s
+Type "incident"
+Sleep 1s
 Enter
 Wait+Screen@20s /dev\/ws\/incident/
 Sleep 1s

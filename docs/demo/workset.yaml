@@ -1,3 +1,6 @@
+label_defs:
+  "index:incident": {}
+
 worksets:
   incident:
     description: Investigate checkout timeouts
