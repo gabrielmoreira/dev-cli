@@ -1,0 +1,13 @@
+worksets:
+  incident:
+    description: Investigate checkout timeouts
+    members:
+      - source: checkout-api
+        ref: main
+        reason: Affected service
+      - source: omp-docs
+        ref: main
+        reason: Pinned OMP model and provider docs
+      - source: gabrielmoreira-skills
+        ref: main
+        reason: Evidence-driven debugging skills

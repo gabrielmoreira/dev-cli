@@ -57,11 +57,20 @@ RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
       https://github.com/spaceship-prompt/spaceship-prompt.git "$HOME/.local/share/spaceship"; \
     rm --recursive --force "$HOME/.local/share/spaceship/.git"
 
+RUN set -eu; \
+    mkdir -p /tmp/qmd-warmup; \
+    printf '# QMD warmup\n' > /tmp/qmd-warmup/README.md; \
+    qmd collection add /tmp/qmd-warmup --name demo-warmup; \
+    qmd embed -c demo-warmup; \
+    qmd collection remove demo-warmup; \
+    rm -rf /tmp/qmd-warmup
+
 COPY --chown=demo:demo --chmod=755 docs/demo/entrypoint.zsh /opt/demo/entrypoint.zsh
 COPY --chown=demo:demo --chmod=755 docs/demo/omp /home/demo/.local/bin/omp
 COPY --chown=demo:demo docs/demo/spaceship.zsh /home/demo/.config/spaceship.zsh
 COPY --chown=demo:demo docs/demo/zshrc /home/demo/.zshrc
 COPY --chown=demo:demo docs/demo/herdr.toml /home/demo/.config/herdr/config.toml
+COPY --chown=demo:demo docs/demo/workset.yaml /opt/demo/workset.yaml
 
 WORKDIR /demo
 ENTRYPOINT ["/opt/demo/entrypoint.zsh"]

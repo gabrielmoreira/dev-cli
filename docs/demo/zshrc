@@ -1,1 +1,2 @@
 source "$HOME/.local/share/spaceship/spaceship.zsh"
+eval "$(dev shell-init zsh)"
