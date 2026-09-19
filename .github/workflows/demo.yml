@@ -53,12 +53,33 @@ jobs:
         if: env.OPENROUTER_API_KEY == ''
         run: echo "::notice::OPENROUTER_API_KEY is not configured; Docker build passed and the authenticated tape render was skipped."
 
-      - name: Render tape
+      - name: Set up pinned toolchain
         if: env.OPENROUTER_API_KEY != ''
-        uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2
+        uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          path: docs/demo.tape
-          version: v0.11.0
+          version: 2026.9.11
+          install: true
+          cache: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install demo dependencies
+        if: env.OPENROUTER_API_KEY != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg ttyd
+
+      # Same renderer as the release workflow: docs/demo/render.sh runs VHS in its own
+      # session, so the teardown signal from the tape's shell cannot kill this step, and it
+      # validates that both assets exist and are not empty.
+      - name: Render tape against the latest release
+        if: env.OPENROUTER_API_KEY != ''
+        run: |
+          git fetch --force --tags origin
+          latest="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"
+          if [[ "$latest" == v* ]]; then
+            export DEV_VERSION="${latest#v}"
+          fi
+          mise run demo
 
       - name: Upload rendered demo
         if: env.OPENROUTER_API_KEY != ''
