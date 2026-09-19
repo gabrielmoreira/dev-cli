@@ -1,5 +1,6 @@
 # Render from the repository root with: mise run demo
 Output docs/assets/dev-cli-demo.gif
+Output docs/assets/dev-cli-demo.mp4
 
 Require docker
 
@@ -7,9 +8,9 @@ Set Shell "bash"
 Set Width 1200
 Set Height 800
 Set FontSize 18
-Set FontFamily "JetBrains Mono"
+Set FontFamily "CaskaydiaCove NF"
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 30ms
+Set TypingSpeed 28ms
 Set Framerate 15
 Set Padding 18
 Set Margin 24
@@ -18,78 +19,157 @@ Set WindowBar Colorful
 Set WindowBarSize 38
 Set BorderRadius 10
 
-# Enter the disposable Debian environment. Its tools were installed by Mise.
-Type "docker run --rm --interactive --tty dev-cli-demo:local"
+Hide
+Type "docker run --rm --interactive --tty --hostname devbox --env OPENROUTER_API_KEY dev-cli-demo:local"
 Enter
-Wait+Screen@20s /demo@dev/
+Wait+Screen@20s /demo@devbox/
+Type "clear"
+Enter
+Wait+Screen@10s /demo@devbox/
+Show
 Sleep 1s
 
-Type "mise --version && print 'DONE:'$?' mise'"
+# First-time setup: accept ~/dev and skip remote providers for this local demo.
+Type "dev init"
 Enter
-Wait+Screen@10s /2026.9.6/
-Wait+Screen@10s /DONE:0 mise/
-
-Type "dev --version && print 'DONE:'$?' dev'"
+Wait+Screen@20s /Dev root path/
 Enter
-Wait+Screen@10s /dev v1.5.2/
-Wait+Screen@10s /DONE:0 dev/
-
-Type "qmd --version && print 'DONE:'$?' qmd'"
+Wait+Screen@20s /Add a provider now/
+Right
 Enter
-Wait+Screen@10s /qmd 2.8.3/
-Wait+Screen@10s /DONE:0 qmd/
-Sleep 2s
-Ctrl+L
+Sleep 1s
+Type "cd ~/dev"
+Enter
 Sleep 1s
 
-# Inspect and materialize a reusable two-repository workset.
-Type "dev workset show platform --root /demo/dev && print 'DONE:'$?' workset'"
+# Simplest path: one repository URL creates a ready workspace.
+Type "dev ws init https://github.com/gabrielmoreira/skills.git"
 Enter
-Wait+Screen@20s /handbook.git @ main/
-Wait+Screen@10s /DONE:0 workset/
-Sleep 2s
-
-Type "dev ws init launch-review --workset platform --desc 'Release review' --yes --root /demo/dev && print 'DONE:'$?' workspace'"
+Wait+Screen@20s /Workspace name/
 Enter
-Wait+Screen@20s /Continue with defaults/
-Tab
+Wait+Screen@20s /Workspace description/
 Enter
-Wait+Screen@60s /DONE:0 workspace/
-Sleep 2s
-Ctrl+L
-Sleep 1s
-
-Type "dev ws status launch-review --offline --root /demo/dev && print 'DONE:'$?' status'"
-Enter
-Wait+Screen@20s /Status:.*clean/
-Wait+Screen@10s /DONE:0 status/
-Sleep 2s
-
-Ctrl+L
-Sleep 1s
-
-# Label one source and build a root-scoped lexical QMD index.
-Type "dev mirror label add /demo/remotes/platform.git index:demo --root /demo/dev && print 'DONE:'$?' label'"
-Enter
-Wait+Screen@20s /Applied label 'index:demo'/
-Wait+Screen@10s /DONE:0 label/
-Sleep 2s
-
-Type "dev qmd sync index:demo --no-embed --root /demo/dev && print 'DONE:'$?' index'"
-Enter
-Wait+Screen@60s /collection\(s\) reconciled/
-Wait+Screen@10s /DONE:0 index/
-Sleep 2s
-
-Type "dev qmd --root /demo/dev x search 'release checklist' --format cli && print 'DONE:'$?' search'"
-Enter
-Wait+Screen@20s /Release checklist/
-Wait+Screen@10s /DONE:0 search/
+Wait+Screen@60s /Initialized workspace 'gh-gabrielmoreira-skills'/
 Sleep 3s
 
-# Negotiate MCP over stdio and call the real QMD query tool.
-Type "node /opt/demo/mcp-query.mjs && print 'DONE:'$?' mcp'"
+# Start empty by name, then add a repository through the selector.
+Type "clear"
 Enter
-Wait+Screen@30s /MCP tool call: query/
-Wait+Screen@10s /DONE:0 mcp/
+Type "dev ws init scratch"
+Enter
+Wait+Screen@20s /Workspace description/
+Enter
+Wait+Screen@20s /Initialized workspace 'scratch'/
+Type "cd ws/scratch"
+Enter
+Type "dev ws add"
+Enter
+Wait+Screen@20s /Select repositories/
+Tab
+Enter
+Wait+Screen@20s /Select mounts to customize/
+Tab
+Enter
+Wait+Screen@20s /Create these mounts/
+Enter
 Sleep 6s
+Type "clear"
+Enter
+Type "dev ws status"
+Enter
+Wait+Screen@20s /checkout-api/
+Sleep 3s
+
+# Advanced path: build one task context from three repositories.
+Type "clear"
+Enter
+Type "cd ~/dev"
+Enter
+Type "dev ws init"
+Enter
+Wait+Screen@20s /How do you want to start/
+Down
+Enter
+Wait+Screen@20s /Select repositories/
+Tab
+Down
+Tab
+Down
+Tab
+Enter
+Wait+Screen@20s /Workspace name/
+Type "incident"
+Enter
+Wait+Screen@20s /Workspace description/
+Type "Investigate checkout timeouts"
+Enter
+Wait+Screen@90s /Select repositories to customize/
+Tab
+Enter
+Wait+Screen@20s /Create this workspace/
+Enter
+Sleep 10s
+
+Type "clear"
+Enter
+Type "cd ws/incident"
+Enter
+
+# Advanced knowledge setup: declare OMP docs and the skill catalog as mirrors.
+Type "dev mirror add"
+Enter
+Wait+Screen@20s /Select repository/
+Type "omp"
+Enter
+Wait+Screen@30s /Added mirror/
+Type "clear"
+Enter
+Type "dev mirror add"
+Enter
+Wait+Screen@20s /Select repository/
+Type "gabriel"
+Enter
+Wait+Screen@60s /Added mirror/
+Type "clear"
+Enter
+
+# One label turns both knowledge repositories into a full QMD index.
+Type "dev mirror label add"
+Enter
+Wait+Screen@20s /Select sources to label/
+Tab
+Down
+Tab
+Enter
+Wait+Screen@20s /Label name:/
+Type "index:incident"
+Enter
+Wait+Screen@20s /Apply this label plan/
+Enter
+Wait+Screen@20s /Applied label 'index:incident'/
+
+Type "dev qmd sync index:incident"
+Enter
+Wait+Screen@300s /2 collection\(s\) reconciled/
+Sleep 2s
+Type "dev qmd x search debugging-by-evidence --format cli"
+Enter
+Wait+Screen@30s /debugging-by-evidence/
+Sleep 4s
+
+# Hand the indexed workspace to OMP through HerdR.
+Type "clear"
+Enter
+Type "dev ws start --json"
+Enter
+Wait+Screen@60s /incident-omp/
+Type "herdr"
+Enter
+Wait+Screen@30s /OpenRouter Free Models Router/
+Sleep 2s
+
+Type "Search QMD first. Start with DECISION. Which skill should I use for an intermittent checkout timeout with no known cause? Then show the exact free-only OpenRouter setup for OMP. Cite the indexed files. Do not edit anything. Answer in at most 8 short lines."
+Enter
+Wait+Screen@180s /debugging-by-evidence/
+Wait+Screen@30s /OPENROUTER_API_KEY/
+Sleep 15s

@@ -26,23 +26,47 @@ jobs:
     name: Render terminal demo
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      OPENROUTER_API_KEY: ${{ github.event_name == 'pull_request' && '' || secrets.OPENROUTER_API_KEY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Install CaskaydiaCove Nerd Font
+        env:
+          NERD_FONTS_VERSION: v3.5.1
+        run: |
+          mkdir -p "$HOME/.local/share/fonts"
+          curl --fail --silent --show-error --location \
+            "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}/CascadiaCode.tar.xz" \
+            | tar --extract --xz --directory "$HOME/.local/share/fonts"
+          fc-cache --force
+          case "$(fc-match --format='%{family}' 'CaskaydiaCove NF')" in
+            *CaskaydiaCove*) ;;
+            *) echo "CaskaydiaCove Nerd Font was not installed" >&2; exit 1 ;;
+          esac
+
       - name: Build disposable demo environment
         run: docker build --file docs/demo/Dockerfile --tag dev-cli-demo:local .
 
+      - name: Report unavailable authenticated render
+        if: env.OPENROUTER_API_KEY == ''
+        run: echo "::notice::OPENROUTER_API_KEY is not configured; Docker build passed and the authenticated tape render was skipped."
+
       - name: Render tape
+        if: env.OPENROUTER_API_KEY != ''
         uses: charmbracelet/vhs-action@f6d7db07a432fcd3b06772628d36a57f96d95dcf # v2
         with:
           path: docs/demo.tape
           version: v0.11.0
 
       - name: Upload rendered demo
+        if: env.OPENROUTER_API_KEY != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: dev-cli-demo
-          path: docs/assets/dev-cli-demo.gif
+          path: |
+            docs/assets/dev-cli-demo.gif
+            docs/assets/dev-cli-demo.mp4
           if-no-files-found: error
           retention-days: 14

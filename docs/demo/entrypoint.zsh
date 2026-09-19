@@ -7,7 +7,10 @@ git config --global user.name "dev demo"
 git config --global user.email "demo@example.com"
 git config --global init.defaultBranch main
 
-mkdir -p /demo/remotes /demo/seeds /demo/dev
+mkdir -p "$HOME/.omp/agent"
+printf 'setupVersion: 2\n' > "$HOME/.omp/agent/config.yml"
+
+mkdir -p /demo/remotes /demo/seeds "$HOME/dev/.dev/cache/inventory/demo"
 
 seed_repository() {
   local name="$1"
@@ -25,42 +28,33 @@ seed_repository() {
   git -C "$seed" push --quiet --set-upstream origin main
 }
 
-seed_repository platform "Platform Operations" \
-  "Release checklist: run verification, review the diff, publish the artifact, and confirm the installed version."
-seed_repository handbook "Engineering Handbook" \
-  "Workspace guidance: keep one task context, declare every repository, and resume from ws.md."
+seed_omp_docs() {
+  local seed="/demo/seeds/omp-docs"
+  local remote="/demo/remotes/omp-docs.git"
 
-cat > /demo/dev/dev.yaml <<'YAML'
-version: 1
-label_defs:
-  "index:demo": {}
-defaults:
-  sync_strategy: ff-only
-  workspace_prefix: ws/
-  canonical_prefix: mirrors/
-sources:
-  - url: /demo/remotes/platform.git
-    branch: main
-  - url: /demo/remotes/handbook.git
-    branch: main
-worksets:
-  platform:
-    description: Review a platform release with its operating guide
-    members:
-      - source: /demo/remotes/platform.git
-        ref: main
-        path: platform
-        reason: Release implementation
-      - source: /demo/remotes/handbook.git
-        ref: main
-        path: handbook
-        reason: Operating guidance
-plugins:
-  qmd:
-    command: qmd
-    config_dir: scoped
-YAML
+  git init --quiet --bare --initial-branch=main "$remote"
+  git init --quiet --initial-branch=main "$seed"
+  mkdir -p "$seed/docs"
+  cp "$HOME/.cache/omp-docs/models.md" "$seed/docs/models.md"
+  cp "$HOME/.cache/omp-docs/providers.md" "$seed/docs/providers.md"
+  printf '# OMP Documentation\n\nPinned model and provider documentation for OMP 18.2.6.\n' > "$seed/README.md"
+  git -C "$seed" add README.md docs
+  git -C "$seed" commit --quiet --message "docs: add pinned OMP model guides"
+  git -C "$seed" remote add origin "$remote"
+  git -C "$seed" push --quiet --set-upstream origin main
+}
+
+seed_repository checkout-api "Checkout API" \
+  "The checkout endpoint times out two or three times a day, but current traces do not establish whether the fault is in application code, the payment provider, or the network. There is no reliable local reproduction. The team also wants workspace-scoped OMP through OpenRouter free models only, with no paid fallback."
+seed_omp_docs
+
+cat > "$HOME/dev/.dev/cache/inventory/demo/repos.jsonl" <<'JSONL'
+{"id":"checkout-api","name":"checkout-api","url":"/demo/remotes/checkout-api.git","default_branch":"main","description":"Checkout service adopting OMP","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
+{"id":"omp-docs","name":"omp-docs","url":"/demo/remotes/omp-docs.git","default_branch":"main","description":"Pinned OMP 18.2.6 model and provider docs","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
+{"id":"gabrielmoreira-skills","name":"gabrielmoreira-skills","url":"https://github.com/gabrielmoreira/skills.git","default_branch":"main","description":"Evidence-driven skills for coding agents","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
+JSONL
+
 if (( $# > 0 )); then
   exec "$@"
 fi
-exec zsh -df
+exec zsh -d

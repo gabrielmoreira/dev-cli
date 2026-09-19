@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+exec "$HOME/.local/share/mise/shims/omp" \
+  --model openrouter/openrouter/free \
+  --auto-approve \
+  "$@"

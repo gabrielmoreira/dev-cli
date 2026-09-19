@@ -17,9 +17,11 @@ jobs:
     name: Verify and release
     if: github.repository == 'gabrielmoreira/dev-cli'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
     steps:
       - name: Checkout full history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -35,6 +37,52 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install, verify, and release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mise run ci:release
+        run: |
+          mise run ci:release
+          git fetch --force --tags origin
+          release_tag="$(git describe --tags --exact-match "$GITHUB_SHA" 2>/dev/null || true)"
+          if [[ "$release_tag" == v* ]]; then
+            echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
+            echo "version=${release_tag#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Require demo credentials for a release
+        if: steps.release.outputs.tag != '' && env.OPENROUTER_API_KEY == ''
+        run: |
+          echo '::error::OPENROUTER_API_KEY is required to refresh the release demo.'
+          exit 1
+
+      - name: Install demo font
+        if: steps.release.outputs.tag != ''
+        env:
+          NERD_FONTS_VERSION: v3.5.1
+        run: |
+          mkdir -p "$HOME/.local/share/fonts"
+          curl --fail --silent --show-error --location \
+            "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}/CascadiaCode.tar.xz" \
+            | tar --extract --xz --directory "$HOME/.local/share/fonts"
+          fc-cache --force
+
+      - name: Render released version demo
+        if: steps.release.outputs.tag != ''
+        env:
+          DEV_VERSION: ${{ steps.release.outputs.version }}
+        run: mise run demo
+
+      - name: Commit refreshed demo
+        if: steps.release.outputs.tag != ''
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
+          if git diff --cached --quiet; then
+            echo 'Rendered demo is unchanged.'
+            exit 0
+          fi
+          git commit --message "docs: refresh terminal demo for ${RELEASE_TAG} [skip ci]"
+          git push origin HEAD:main

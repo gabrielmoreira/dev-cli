@@ -1,0 +1,23 @@
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[terminal]
+default_shell = "/bin/zsh"
+shell_mode = "non_login"
+new_cwd = "follow"
+
+[server]
+headless_cols = 120
+headless_rows = 40
+
+[ui]
+sidebar_start_collapsed = false
+status_indicators = "symbols"
+pane_borders = "always"
+pane_outer_borders = true
+pane_gaps = true
+hide_tab_bar_when_single_tab = true
+mouse_capture = false
+confirm_close = false
