@@ -44,14 +44,31 @@ seed_omp_docs() {
   git -C "$seed" push --quiet --set-upstream origin main
 }
 
+seed_skills() {
+  local seed="/demo/seeds/skills"
+  local remote="/demo/remotes/skills.git"
+
+  git init --quiet --bare --initial-branch=main "$remote"
+  git init --quiet --initial-branch=main "$seed"
+  mkdir -p "$seed/skills/debugging-by-evidence"
+  cp "$HOME/.cache/skills/skills/debugging-by-evidence/SKILL.md" \
+    "$seed/skills/debugging-by-evidence/SKILL.md"
+  printf '# Agent Skills\n\nPinned evidence-driven debugging skill for the demo.\n' > "$seed/README.md"
+  git -C "$seed" add README.md skills
+  git -C "$seed" commit --quiet --message "docs: add debugging skill"
+  git -C "$seed" remote add origin "$remote"
+  git -C "$seed" push --quiet --set-upstream origin main
+}
+
 seed_repository checkout-api "Checkout API" \
   "The checkout endpoint times out two or three times a day, but current traces do not establish whether the fault is in application code, the payment provider, or the network. There is no reliable local reproduction. The team also wants workspace-scoped OMP through OpenRouter free models only, with no paid fallback."
 seed_omp_docs
+seed_skills
 
 cat > "$HOME/dev/.dev/cache/inventory/demo/repos.jsonl" <<'JSONL'
 {"id":"checkout-api","name":"checkout-api","url":"/demo/remotes/checkout-api.git","default_branch":"main","description":"Checkout service adopting OMP","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
 {"id":"omp-docs","name":"omp-docs","url":"/demo/remotes/omp-docs.git","default_branch":"main","description":"Pinned OMP 18.2.6 model and provider docs","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
-{"id":"gabrielmoreira-skills","name":"gabrielmoreira-skills","url":"https://github.com/gabrielmoreira/skills.git","default_branch":"main","description":"Evidence-driven skills for coding agents","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
+{"id":"gabrielmoreira-skills","name":"gabrielmoreira-skills","url":"/demo/remotes/skills.git","default_branch":"main","description":"Pinned evidence-driven debugging skill","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
 JSONL
 
 if (( $# > 0 )); then

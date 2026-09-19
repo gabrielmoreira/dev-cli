@@ -4,6 +4,7 @@ ARG MISE_VERSION=2026.9.6
 ARG NODE_VERSION=24.21.0
 ARG DEV_VERSION=1.5.2
 ARG QMD_VERSION=2.8.3
+ARG SKILLS_REVISION=d5cdb657ea95ab27c6233e959c08af5eb3806092
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
@@ -53,6 +54,10 @@ RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     curl --fail --silent --show-error --location \
       "https://raw.githubusercontent.com/can1357/oh-my-pi/v${OMP_VERSION}/docs/providers.md" \
       --output "$HOME/.cache/omp-docs/providers.md"; \
+    mkdir -p "$HOME/.cache/skills/skills/debugging-by-evidence"; \
+    curl --fail --silent --show-error --location \
+      "https://raw.githubusercontent.com/gabrielmoreira/skills/${SKILLS_REVISION}/skills/debugging-by-evidence/SKILL.md" \
+      --output "$HOME/.cache/skills/skills/debugging-by-evidence/SKILL.md"; \
     git clone --quiet --depth 1 --branch "v${SPACESHIP_VERSION}" \
       https://github.com/spaceship-prompt/spaceship-prompt.git "$HOME/.local/share/spaceship"; \
     rm --recursive --force "$HOME/.local/share/spaceship/.git"
