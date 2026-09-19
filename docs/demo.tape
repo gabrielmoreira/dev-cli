@@ -10,7 +10,7 @@ Set Height 800
 Set FontSize 18
 Set FontFamily "CaskaydiaCove NF"
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 20ms
+Set TypingSpeed 57ms
 Set Framerate 15
 Set Padding 18
 Set Margin 24
@@ -31,6 +31,7 @@ Sleep 1s
 
 # First-time setup: accept ~/dev and skip remote providers for this local demo.
 Type "dev init"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Dev root path/
 Sleep 1s
@@ -53,6 +54,7 @@ Show
 
 # Simplest path: one repository URL creates a ready workspace.
 Type "dev ws init https://github.com/gabrielmoreira/skills.git"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Workspace name/
 Enter
@@ -65,6 +67,7 @@ Sleep 1s
 Type "clear"
 Enter
 Type "dev ws init scratch"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Workspace description/
 Enter
@@ -72,6 +75,7 @@ Wait+Screen@20s /Initialized workspace 'scratch'/
 Type "cd ws/scratch"
 Enter
 Type "dev ws add"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Select repositories/
 Sleep 1s
@@ -93,6 +97,7 @@ Sleep 1s
 Type "clear"
 Enter
 Type "dev ws status"
+Sleep 500ms
 Enter
 Wait+Screen@20s /checkout-api/
 Sleep 1s
@@ -103,10 +108,17 @@ Enter
 Type "cd ~/dev"
 Enter
 Type "dev workset list"
+Sleep 500ms
 Enter
 Wait+Screen@20s /incident \(3\)/
 Sleep 1s
 Type "dev ws init incident --workset incident --desc 'Investigate checkout timeouts' --yes"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Select repositories to customize/
+Sleep 1s
+Tab
+Sleep 1s
 Enter
 Wait+Screen@90s /Initialized workspace 'incident'/
 Sleep 1s
@@ -115,6 +127,7 @@ Sleep 1s
 Type "clear"
 Enter
 Type "dev go"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Select workspace/
 Sleep 1s
@@ -128,9 +141,11 @@ Sleep 1s
 Type "clear"
 Enter
 Type "dev ws start --json"
+Sleep 500ms
 Enter
 Wait+Screen@60s /incident-omp/
 Type "herdr"
+Sleep 500ms
 Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 3s
@@ -140,6 +155,7 @@ Sleep 1s
 
 # Advanced knowledge setup: declare OMP docs and the skill catalog as mirrors.
 Type "dev mirror add"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Select repository/
 Sleep 1s
@@ -150,6 +166,7 @@ Wait+Screen@30s /Added mirror/
 Type "clear"
 Enter
 Type "dev mirror add"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Select repository/
 Sleep 1s
@@ -162,6 +179,7 @@ Enter
 
 # One label turns both knowledge repositories into a full QMD index.
 Type "dev mirror label add"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Select sources to label/
 Sleep 1s
@@ -177,10 +195,12 @@ Enter
 Wait+Screen@20s /Applied label 'index:incident'/
 
 Type "dev qmd sync index:incident"
+Sleep 500ms
 Enter
 Wait+Screen@90s /2 collection\(s\) reconciled/
 Sleep 1s
 Type "dev qmd x search debugging-by-evidence --format cli"
+Sleep 500ms
 Enter
 Wait+Screen@30s /debugging-by-evidence/
 Sleep 1s
@@ -189,11 +209,14 @@ Sleep 1s
 Type "clear"
 Enter
 Type "herdr"
+Sleep 500ms
 Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 1s
 
+Set TypingSpeed 20ms
 Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, show the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
+Sleep 500ms
 Enter
 Wait+Screen@240s /DECISION:/
 Wait+Screen@90s /OPENROUTER_API_KEY/
