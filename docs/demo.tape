@@ -130,7 +130,7 @@ Sleep 1s
 Tab
 Sleep 1s
 Enter
-Wait+Screen@20s /Create this workspace/
+Wait+Screen@20s /Workspace plan:/
 Sleep 1s
 Enter
 Wait+Screen@60s /Initialized workspace 'incident'/
