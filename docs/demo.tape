@@ -199,8 +199,8 @@ Tab
 Down
 Tab
 Enter
-Wait+Screen@20s /Label name:/
-Type "index:incident"
+Wait+Screen@20s /Select label/
+Sleep 1s
 Enter
 Wait+Screen@20s /Apply this label plan/
 Enter

@@ -55,11 +55,13 @@ jobs:
           echo '::error::OPENROUTER_API_KEY is required to refresh the release demo.'
           exit 1
 
-      - name: Install demo font
+      - name: Install demo dependencies
         if: steps.release.outputs.tag != ''
         env:
           NERD_FONTS_VERSION: v3.5.1
         run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
           mkdir -p "$HOME/.local/share/fonts"
           curl --fail --silent --show-error --location \
             "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}/CascadiaCode.tar.xz" \
