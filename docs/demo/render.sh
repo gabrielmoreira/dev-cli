@@ -52,7 +52,11 @@ fi
 docker build "${build_args[@]}" .
 rm -f docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
 vhs_status=0
-vhs docs/demo.tape || vhs_status=$?
+if command -v setsid >/dev/null 2>&1; then
+  setsid --wait vhs docs/demo.tape || vhs_status=$?
+else
+  vhs docs/demo.tape || vhs_status=$?
+fi
 if (( vhs_status != 0 && vhs_status != 143 )); then
   exit "$vhs_status"
 fi
