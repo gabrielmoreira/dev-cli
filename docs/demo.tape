@@ -106,7 +106,7 @@ Type "dev workset list"
 Enter
 Wait+Screen@20s /incident \(3\)/
 Sleep 1s
-Type "dev ws init"
+Type "dev ws init --yes"
 Enter
 Wait+Screen@20s /How do you want to start/
 Sleep 1s
@@ -130,10 +130,7 @@ Sleep 1s
 Tab
 Sleep 1s
 Enter
-Wait+Screen@20s /Workspace plan:/
-Sleep 1s
-Enter
-Wait+Screen@60s /Initialized workspace 'incident'/
+Wait+Screen@90s /Initialized workspace 'incident'/
 Sleep 1s
 
 # Shell integration turns workspace selection into a real directory jump.
