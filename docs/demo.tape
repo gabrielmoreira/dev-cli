@@ -124,6 +124,20 @@ Enter
 Wait+Screen@20s /dev\/ws\/incident/
 Sleep 1s
 
+# Start OMP early so indexing never delays the product handoff.
+Type "clear"
+Enter
+Type "dev ws start --json"
+Enter
+Wait+Screen@60s /incident-omp/
+Type "herdr"
+Enter
+Wait+Screen@30s /OpenRouter Free Models Router/
+Sleep 3s
+Ctrl+C
+Wait+Screen@20s /demo@devbox dev\/ws\/incident/
+Sleep 1s
+
 # Advanced knowledge setup: declare OMP docs and the skill catalog as mirrors.
 Type "dev mirror add"
 Enter
@@ -171,12 +185,9 @@ Enter
 Wait+Screen@30s /debugging-by-evidence/
 Sleep 1s
 
-# Hand the indexed workspace to OMP through HerdR.
+# Return to the already-running OMP agent with the new QMD index.
 Type "clear"
 Enter
-Type "dev ws start --json"
-Enter
-Wait+Screen@60s /incident-omp/
 Type "herdr"
 Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
