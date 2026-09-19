@@ -11,12 +11,20 @@ setup by hand.
 
 ![dev CLI terminal demo](docs/assets/dev-cli-demo.gif)
 
-The recording runs entirely in a disposable Debian container: it creates local
-Git remotes, materializes a workset, labels a source, builds and searches a
-lexical QMD collection, then calls QMD's MCP `query` tool over stdio.
+[Watch the MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
 
-Regenerate it from the repository root (Docker required; Mise supplies the
-pinned VHS version):
+The recording starts from a blank dev root in a disposable Debian container
+configured with Mise, zsh, Spaceship, and CaskaydiaCove Nerd Font. It begins
+with the shortest paths: create a workspace from one repository URL, or create
+an empty workspace and add a repository through a selector. It then moves to a
+three-repository incident workspace containing a service, pinned OMP docs, and
+the public `gabrielmoreira/skills` catalog. QMD indexes the shared context; OMP
+chooses the evidence-first skill and explains its own free-only OpenRouter
+setup. The demo runs through `openrouter/free`; no paid-model fallback is
+configured.
+
+To regenerate it, add `OPENROUTER_API_KEY=...` to the ignored `.env` file, then
+run from the repository root (Docker required; Mise supplies the pinned VHS):
 
 ```bash
 mise run demo
@@ -26,7 +34,7 @@ mise run demo
 
 ## Install
 
-Install the latest release globally with Mise:
+Install the latest release globally with [Mise](https://mise.jdx.dev/):
 
 ```bash
 mise use -g github:gabrielmoreira/dev-cli
