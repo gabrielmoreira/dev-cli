@@ -66,7 +66,7 @@ Type "find ws/gh-gabrielmoreira-skills -maxdepth 1 | sort"
 Sleep 500ms
 Enter
 Wait+Screen@20s /ws\/gh-gabrielmoreira-skills\/ws\.md/
-Sleep 1s
+Sleep 3s
 
 # Start empty by name, then add a repository through the selector.
 Type "clear"
@@ -98,14 +98,14 @@ Wait+Screen@20s /Create these mounts/
 Sleep 1s
 Enter
 Wait+Screen@30s /Mounted repository 'checkout-api'/
-Sleep 1s
+Sleep 3s
 Type "clear"
 Enter
 Type "dev ws status"
 Sleep 500ms
 Enter
 Wait+Screen@20s /checkout-api/
-Sleep 1s
+Sleep 3s
 
 # Reusable path: create a task workspace from a configured workset.
 Type "clear"
@@ -126,7 +126,7 @@ Tab
 Sleep 1s
 Enter
 Wait+Screen@90s /Initialized workspace 'incident'/
-Sleep 1s
+Sleep 3s
 
 # Shell integration turns workspace selection into a real directory jump.
 Type "clear"
@@ -145,7 +145,7 @@ Type "find . -maxdepth 1 | sort"
 Sleep 500ms
 Enter
 Wait+Screen@20s /\.\/ws\.md/
-Sleep 1s
+Sleep 3s
 
 # Start OMP early so indexing never delays the product handoff.
 Type "clear"
@@ -175,6 +175,7 @@ Type "omp"
 Sleep 1s
 Enter
 Wait+Screen@30s /Added mirror/
+Sleep 3s
 Type "clear"
 Enter
 Type "dev mirror add"
@@ -186,6 +187,7 @@ Type "gabriel"
 Sleep 1s
 Enter
 Wait+Screen@60s /Added mirror/
+Sleep 3s
 Type "clear"
 Enter
 
@@ -217,7 +219,7 @@ Type "dev qmd x search debugging-by-evidence --format cli"
 Sleep 500ms
 Enter
 Wait+Screen@30s /debugging-by-evidence/
-Sleep 1s
+Sleep 3s
 
 # Return to the already-running OMP agent with the new QMD index.
 Type "clear"
