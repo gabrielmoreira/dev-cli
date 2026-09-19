@@ -214,6 +214,10 @@ confirmed once before `dev.yaml` is updated. The same label can drive
 
 ## Commands
 
+The table below covers the common workflows. See the
+[complete CLI command reference](docs/commands.md) for every command,
+subcommand, argument, and option.
+
 | Command                           | What it does                                                       |
 | --------------------------------- | ------------------------------------------------------------------ |
 | `dev ws init [name\|URI\|PR-URL]` | Create a workspace from blank, repository, PR, or workset          |

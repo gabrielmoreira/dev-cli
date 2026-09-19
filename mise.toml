@@ -37,3 +37,7 @@ run = "npx --no-install semantic-release"
 [tasks."demo"]
 description = "Build the disposable environment and render the VHS demo"
 run = "docs/demo/render.sh"
+
+[tasks."docs:commands"]
+description = "Generate the complete CLI command reference"
+run = "bun scripts/generate-cli-reference.ts && bun run format -- docs/commands.md"
