@@ -284,8 +284,3 @@ Sleep 500ms
 Enter
 Wait+Screen@240s /INDEXED ANSWER COMPLETE/
 Sleep 10s
-Ctrl+C
-Sleep 2s
-Type "exit"
-Enter
-Sleep 2s

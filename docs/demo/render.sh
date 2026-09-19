@@ -51,7 +51,11 @@ if [[ -n "${NPM_CONFIG_REGISTRY:-}" ]]; then
 fi
 docker build "${build_args[@]}" .
 rm -f docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
-vhs docs/demo.tape
+vhs_status=0
+vhs docs/demo.tape || vhs_status=$?
+if (( vhs_status != 0 && vhs_status != 143 )); then
+  exit "$vhs_status"
+fi
 for demo_output in docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4; do
   if [[ ! -s "$demo_output" ]]; then
     printf 'VHS completed without writing %s.\n' "$demo_output" >&2
