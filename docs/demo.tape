@@ -168,8 +168,9 @@ Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 2s
 
-Type "Search QMD first. Start with DECISION. Which skill should I use for an intermittent checkout timeout with no known cause? Then show the exact free-only OpenRouter setup for OMP. Cite the indexed files. Do not edit anything. Answer in at most 8 short lines."
+Type "Search QMD first. Begin with the uppercase decision label followed by a colon. In at most 8 short lines, name the skill for an intermittent checkout timeout with no known cause, show the exact free-only OpenRouter setup for OMP, and cite the indexed files. Do not edit anything. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
 Enter
-Wait+Screen@180s /debugging-by-evidence/
-Wait+Screen@30s /OPENROUTER_API_KEY/
+Wait+Screen@300s /DECISION:/
+Wait+Screen@180s /OPENROUTER_API_KEY/
+Wait+Screen@60s /INDEXED ANSWER COMPLETE/
 Sleep 15s
