@@ -62,6 +62,11 @@ Wait+Screen@20s /Workspace description/
 Enter
 Wait+Screen@60s /Initialized workspace 'gh-gabrielmoreira-skills'/
 Sleep 1s
+Type "find ws/gh-gabrielmoreira-skills -maxdepth 2 -not -path '*/.git*' | sort"
+Sleep 500ms
+Enter
+Wait+Screen@20s /ws\/gh-gabrielmoreira-skills\/skills/
+Sleep 1s
 
 # Start empty by name, then add a repository through the selector.
 Type "clear"
@@ -135,6 +140,11 @@ Type "incident"
 Sleep 1s
 Enter
 Wait+Screen@20s /dev\/ws\/incident/
+Sleep 1s
+Type "find . -maxdepth 2 -not -path './.git*' | sort"
+Sleep 500ms
+Enter
+Wait+Screen@20s /\.\/skills/
 Sleep 1s
 
 # Start OMP early so indexing never delays the product handoff.
