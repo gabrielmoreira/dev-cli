@@ -72,6 +72,7 @@ jobs:
         if: steps.release.outputs.tag != ''
         env:
           DEV_VERSION: ${{ steps.release.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mise run demo
 
       - name: Commit refreshed demo

@@ -47,7 +47,10 @@ jobs:
           esac
 
       - name: Build disposable demo environment
-        run: docker build --file docs/demo/Dockerfile --tag dev-cli-demo:local .
+        if: env.OPENROUTER_API_KEY == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: docker build --secret id=github_token,env=GITHUB_TOKEN --file docs/demo/Dockerfile --tag dev-cli-demo:local .
 
       - name: Report unavailable authenticated render
         if: env.OPENROUTER_API_KEY == ''
@@ -104,6 +107,8 @@ jobs:
       # validates that both assets exist and are not empty.
       - name: Render tape against the latest release
         if: env.OPENROUTER_API_KEY != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git fetch --force --tags origin
           latest="$(git tag --list 'v*' --sort=-v:refname | head -n 1)"

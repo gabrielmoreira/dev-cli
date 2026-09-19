@@ -49,6 +49,9 @@ fi
 if [[ -n "${NPM_CONFIG_REGISTRY:-}" ]]; then
   build_args+=(--secret id=npm_registry,env=NPM_CONFIG_REGISTRY)
 fi
+if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+  build_args+=(--secret id=github_token,env=GITHUB_TOKEN)
+fi
 docker build "${build_args[@]}" .
 rm -f docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
 vhs_status=0

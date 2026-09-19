@@ -35,12 +35,16 @@ ENV GIT_SSL_CAINFO=/home/demo/.cache/certs/ca-bundle.pem
 
 RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     --mount=type=secret,id=npm_registry,required=false,uid=1000,gid=1000,mode=0444 \
+    --mount=type=secret,id=github_token,required=false,uid=1000,gid=1000,mode=0444 \
     set -eu; \
     mkdir -p "$HOME/.cache/certs"; \
     cat /etc/ssl/certs/ca-certificates.crt > "$SSL_CERT_FILE"; \
     if [ -f /run/secrets/extra_ca ]; then cat /run/secrets/extra_ca >> "$SSL_CERT_FILE"; fi; \
     if [ -f /run/secrets/npm_registry ]; then \
       NPM_CONFIG_REGISTRY="$(cat /run/secrets/npm_registry)"; export NPM_CONFIG_REGISTRY; \
+    fi; \
+    if [ -f /run/secrets/github_token ]; then \
+      GITHUB_TOKEN="$(cat /run/secrets/github_token)"; export GITHUB_TOKEN; \
     fi; \
     mise use --global "node@${NODE_VERSION}"; \
     mise use --global "npm:@tobilu/qmd@${QMD_VERSION}"; \
