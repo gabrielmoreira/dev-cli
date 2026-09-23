@@ -38,7 +38,10 @@ export interface PlanCanonicalCheckoutInput {
   canonicalPrefix?: string;
   source: string;
   branch?: string;
-  isSibling?: boolean;
+  /** Default branch of the source. A checkout at any other revision is a
+   * sibling (`<repo>@<branch>`); the default branch always owns `<repo>`.
+   * Omitted means the caller is planning the default checkout. */
+  defaultBranch?: string;
   alias?: string;
 }
 
@@ -58,15 +61,14 @@ export function planCanonicalCheckout(input: PlanCanonicalCheckoutInput): Canoni
   const parts = deriveCanonicalParts(input.source, input.canonicalPrefix);
   const sourceKey = git.normalizeSourceKey(input.source);
   const canonicalUrl = git.stripCredentialsFromUrl(input.source);
-  const branch = input.branch || "main";
-  const isSibling = Boolean(input.isSibling);
+  const branch = input.branch || input.defaultBranch || "main";
+  const isSibling = Boolean(input.defaultBranch) && branch !== input.defaultBranch;
 
   let folderName: string;
   if (input.alias) {
     folderName = input.alias.trim();
-  } else if (isSibling && input.branch) {
-    const sanitizedBranch = input.branch.replace(/[/\\:]/g, "-");
-    folderName = `${parts.repo}@${sanitizedBranch}`;
+  } else if (isSibling) {
+    folderName = `${parts.repo}@${branch.replace(/[/\\:]/g, "-")}`;
   } else {
     folderName = parts.repo;
   }
@@ -176,15 +178,16 @@ export async function ensure(
   });
 
   const pinned = input.pin && input.pin.trim().length > 0 ? input.pin.trim() : undefined;
-  const branch = pinned || input.branch || (await deps.git.resolveDefaultBranch(adminRepoPath));
+  const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
+  const branch = pinned || input.branch || defaultBranch;
 
   const plan = planCanonicalCheckout({
     root: input.root,
     canonicalPrefix: input.canonicalPrefix,
     source: input.source,
     branch,
+    defaultBranch,
     alias: input.alias,
-    isSibling: Boolean(pinned),
   });
 
   if (deps.fs.exists(plan.absolutePath)) {
@@ -263,13 +266,21 @@ export async function track(
     mirrorPath,
   });
 
+  const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
+  if (!input.alias && input.branch === defaultBranch) {
+    throw new CanonicalMirrorError(
+      "DEFAULT_BRANCH",
+      `'${input.branch}' is the default branch: it is already the canonical checkout. Track a different branch, or pass --name to keep a second checkout of it.`,
+    );
+  }
+
   const plan = planCanonicalCheckout({
     root: input.root,
     canonicalPrefix: input.canonicalPrefix,
     source: input.source,
     branch: input.branch,
+    defaultBranch,
     alias: input.alias,
-    isSibling: true,
   });
 
   if (deps.fs.exists(plan.absolutePath)) {
@@ -310,13 +321,24 @@ export async function untrack(
   input: MirrorUntrackInput,
   deps: MirrorDeps = defaultDeps,
 ): Promise<MirrorUntrackResult> {
+  const sourceKey = deps.git.normalizeSourceKey(input.source);
+  const defaultBranch = await deps.git.resolveDefaultBranch(
+    canonicalAdminRepoPath({ root: input.root, sourceKey }),
+  );
+  if (!input.alias && input.branch === defaultBranch) {
+    throw new CanonicalMirrorError(
+      "DEFAULT_BRANCH",
+      `'${input.branch}' is the default branch: its checkout is the mirror itself, not a tracked sibling.`,
+    );
+  }
+
   const plan = planCanonicalCheckout({
     root: input.root,
     canonicalPrefix: input.canonicalPrefix,
     source: input.source,
     branch: input.branch,
+    defaultBranch,
     alias: input.alias,
-    isSibling: true,
   });
 
   if (!deps.fs.exists(plan.absolutePath)) {

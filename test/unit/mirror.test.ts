@@ -68,12 +68,24 @@ describe("Canonical repository pure rules (Phase 8)", () => {
       );
     });
 
-    it("plans sibling tracking branch under mirrors/<host>/<owner>/<repo>@<branch>", () => {
+    it("keeps the default branch on <repo>, even when it is named explicitly", () => {
+      const plan = planCanonicalCheckout({
+        root: "/dev-root",
+        source: "https://github.com/company/auth-service.git",
+        branch: "develop",
+        defaultBranch: "develop",
+      });
+
+      expect(plan.isSibling).toBe(false);
+      expect(plan.relativePath.replace(/\\/g, "/")).toBe("mirrors/github.com/company/auth-service");
+    });
+
+    it("plans a non-default branch under mirrors/<host>/<owner>/<repo>@<branch>", () => {
       const plan = planCanonicalCheckout({
         root: "/dev-root",
         source: "https://github.com/company/auth-service.git",
         branch: "feature/auth-v2",
-        isSibling: true,
+        defaultBranch: "main",
       });
 
       expect(plan.branch).toBe("feature/auth-v2");
@@ -88,8 +100,8 @@ describe("Canonical repository pure rules (Phase 8)", () => {
         root: "/dev-root",
         source: "https://github.com/company/auth-service.git",
         branch: "feature/auth-v2",
+        defaultBranch: "main",
         alias: "auth-next",
-        isSibling: true,
       });
 
       expect(plan.relativePath.replace(/\\/g, "/")).toBe("mirrors/github.com/company/auth-next");
