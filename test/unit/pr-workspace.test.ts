@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  derivePullRequestWorkspaceName,
   parseGitHubPullRequestUrl,
   resolvePullRequestWorkspacePlan,
 } from "../../src/pr-workspace.ts";
@@ -120,5 +121,17 @@ describe("pull request workspace planning", () => {
 
     expect(plan?.workspaceName.length).toBeLessThanOrEqual(64);
     expect(plan?.workspaceName).toStartWith("pr-7-short-repo-");
+  });
+
+  /** `dev pr checkout` used to name the workspace after the PR title while
+   * `dev ws add <pr-url>` named it after the branch, so the same pull request
+   * produced two folders. Both callers derive the name here now. */
+  test("derives one workspace name per pull request, per kind", () => {
+    expect(derivePullRequestWorkspaceName(18637, "retail-app-bff", "feature/payments")).toBe(
+      "pr-18637-retail-app-bff-feature-payments",
+    );
+    expect(
+      derivePullRequestWorkspaceName(18637, "retail-app-bff", "feature/payments", "review"),
+    ).toBe("review-18637-retail-app-bff-feature-payments");
   });
 });

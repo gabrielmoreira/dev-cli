@@ -78,8 +78,9 @@ export function derivePullRequestWorkspaceName(
   pullRequestId: number,
   repository: string,
   branch: string,
+  kind: "pr" | "review" = "pr",
 ): string {
-  const prefix = `pr-${pullRequestId}-${slug(repository)}`;
+  const prefix = `${kind}-${pullRequestId}-${slug(repository)}`;
   const branchSlug = slug(branch);
   if (!branchSlug) return prefix;
   const available = 64 - prefix.length - 1;

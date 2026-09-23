@@ -11,6 +11,8 @@ import * as labels from "../labels.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { ui } from "../ui.ts";
 import * as ws from "../ws.ts";
+import * as fs from "../fs.ts";
+import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
 import { findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput } from "./input.ts";
@@ -524,31 +526,62 @@ export const prCheckoutCommand = defineCommand({
     const mode = args.review ? "review" : "checkout";
     const slug = checkoutSlug(selected.title) || `pr-${selected.id}`;
     const workspaceName =
-      args.name || `${mode === "review" ? "review" : "pr"}-${selected.id}-${slug}`;
+      args.name ||
+      derivePullRequestWorkspaceName(
+        selected.id,
+        selected.repository,
+        selected.sourceBranch,
+        mode === "review" ? "review" : "pr",
+      );
     const branch = mode === "review" ? `review/${selected.id}-${slug}` : selected.sourceBranch;
-    const created = await ws.init({
-      root: config.root,
-      workspacePrefix: config.workspacePrefix,
-      name: workspaceName,
-      description: `${mode === "review" ? "Review" : "Checkout"} PR #${selected.id}: ${selected.title}`,
-    });
-    const mounted = await ws.add({
-      root: config.root,
-      workspacePrefix: config.workspacePrefix,
-      workspaceName,
-      source,
-      branch,
-      upstreamBranch: mode === "review" ? selected.sourceBranch : undefined,
-      extraHeader: await resolveExtraHeader(config, source),
-      trustedScopes: config.trustedScopes,
-      globalHooks: config.hooks,
-    });
 
+    // A workspace whose mount never landed would otherwise block every retry with
+    // WORKSPACE_ALREADY_EXISTS, so an existing one is reused and a workspace this
+    // run created is removed when the mount fails.
+    let created: ws.WorkspaceInitResult | undefined;
+    try {
+      created = await ws.init({
+        root: config.root,
+        workspacePrefix: config.workspacePrefix,
+        name: workspaceName,
+        description: `${mode === "review" ? "Review" : "Checkout"} PR #${selected.id}: ${selected.title}`,
+      });
+    } catch (error) {
+      if (!(error instanceof ws.WorkspaceError) || error.code !== "WORKSPACE_ALREADY_EXISTS") {
+        throw error;
+      }
+    }
+
+    let mounted: ws.WorkspaceAddResult;
+    try {
+      mounted = await ws.add({
+        root: config.root,
+        workspacePrefix: config.workspacePrefix,
+        workspaceName,
+        source,
+        branch,
+        upstreamBranch: mode === "review" ? selected.sourceBranch : undefined,
+        extraHeader: await resolveExtraHeader(config, source),
+        trustedScopes: config.trustedScopes,
+        globalHooks: config.hooks,
+      });
+    } catch (error) {
+      if (created) await fs.removeDir(created.path);
+      throw error;
+    }
+
+    const workspacePath =
+      created?.path ?? ws.deriveWorkspacePath(config.root, workspaceName, config.workspacePrefix);
     ui.result({
-      data: { mode, workspace: created, mount: mounted, pullRequest: selected },
+      data: {
+        mode,
+        workspace: created ?? { name: workspaceName, path: workspacePath },
+        mount: mounted,
+        pullRequest: selected,
+      },
       json: args.json,
       text: () =>
-        `Created workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${created.path}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
+        `${created ? "Created" : "Reused"} workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${workspacePath}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
     });
     return 0;
   },
