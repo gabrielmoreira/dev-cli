@@ -459,11 +459,28 @@ export const wsAddCommand = defineCommand({
             }
           : undefined;
       const resolvedHeaders = new Map<string, string | undefined>();
-      let plannedMounts: PlannedMount[] = sources.map((source) => ({
-        source,
-        branch: args.branch,
-        path: mountPath ?? git.deriveDefaultMountPath(source),
-      }));
+      // A pull request URL is not a repository: cloning it would mint a second
+      // source identity (.../pull/<id>) beside the real one. Resolve it into the
+      // head repository, its branch, and the repository's own mount path.
+      let plannedMounts: PlannedMount[] = [];
+      for (const source of sources) {
+        const resolvedPullRequest = await resolvePullRequestPlan(config, source);
+        if (resolvedPullRequest) {
+          const { plan } = resolvedPullRequest;
+          resolvedHeaders.set(plan.source, resolvedPullRequest.extraHeader);
+          plannedMounts.push({
+            source: plan.source,
+            branch: args.branch ?? plan.branch,
+            path: mountPath ?? plan.repository,
+          });
+          continue;
+        }
+        plannedMounts.push({
+          source,
+          branch: args.branch,
+          path: mountPath ?? git.deriveDefaultMountPath(source),
+        });
+      }
 
       if (interactivePlanning) {
         plannedMounts = plannedMounts.map((mount) => ({
