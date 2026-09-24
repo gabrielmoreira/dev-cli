@@ -129,7 +129,7 @@ export async function syncCollections(
       resolved = await resolveLabeledSources(base.config, label);
     } catch (error) {
       if (error instanceof LabelError) {
-        base.ui.error(`Error [${error.code}]: ${error.message}`);
+        base.ui.error(`✗ ${error.message}`);
         return 1;
       }
       throw error;

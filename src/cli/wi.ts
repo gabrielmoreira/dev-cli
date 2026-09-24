@@ -126,10 +126,10 @@ export const wiListCommand = defineCommand({
         }
       }
       if (refreshTargets.length === 0) {
-        ui.error(
-          `Error: Workspace '${workspaceContext.name}' has no matching Azure DevOps projects.`,
+        return reportError(
+          `Workspace '${workspaceContext.name}' has no matching Azure DevOps projects.`,
+          args.json,
         );
-        return 1;
       }
     } else {
       const providerId = await resolveChoiceInput({
@@ -149,8 +149,7 @@ export const wiListCommand = defineCommand({
       });
       const provider = configuredProviders.find((candidate) => candidate.id === providerId.value);
       if (!provider) {
-        ui.error(`Error: Unknown provider '${providerId.value}'.`);
-        return 1;
+        return reportError(`Unknown provider '${providerId.value}'.`, args.json);
       }
       const tenant = adoTenant(provider.organization);
       const client = createAzureDevOps({
@@ -290,8 +289,7 @@ export const wiViewCommand = defineCommand({
     if (!idStr) throw new Error("Selected work item is unavailable.");
     const id = parseInt(idStr, 10);
     if (isNaN(id)) {
-      ui.error(`Error: Invalid work item ID '${idStr}'.`);
-      return 1;
+      return reportError(`Invalid work item ID '${idStr}'.`, args.json);
     }
 
     const adoProvider = config.providers.find(
@@ -322,8 +320,7 @@ export const wiViewCommand = defineCommand({
     });
 
     if (!item) {
-      ui.error(`Error: Work item #${id} not found.`);
-      return 1;
+      return reportError(`Work item #${id} not found.`, args.json);
     }
 
     ui.result({

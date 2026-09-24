@@ -10,6 +10,7 @@ import { resolveAzureDevOpsCredential, resolveExtraHeader } from "../credentials
 import * as labels from "../labels.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 import * as ws from "../ws.ts";
 import * as fs from "../fs.ts";
 import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
@@ -87,16 +88,16 @@ export const prListCommand = defineCommand({
       !args.all &&
       statusFilter === "open";
     if (args.mine && args.all) {
-      ui.error("Error: --mine and --all cannot be used together.");
-      return 1;
+      return reportError("--mine and --all cannot be used together.", args.json);
     }
     if (requestedLabel && (requestedRepository || args.interactive)) {
-      ui.error("Error: --label cannot be combined with a repository or --interactive.");
-      return 1;
+      return reportError(
+        "--label cannot be combined with a repository or --interactive.",
+        args.json,
+      );
     }
     if (workspaceContext && (requestedLabel || args.interactive)) {
-      ui.error("Error: --ws cannot be combined with --label or --interactive.");
-      return 1;
+      return reportError("--ws cannot be combined with --label or --interactive.", args.json);
     }
 
     let targetUrls: string[] = workspaceContext?.sources ?? [];
@@ -108,10 +109,10 @@ export const prListCommand = defineCommand({
           requestedRepository.toLowerCase(),
       );
       if (targetUrls.length === 0) {
-        ui.error(
-          `Error: Repository '${requestedRepository}' is not mounted in workspace '${workspaceContext.name}'.`,
+        return reportError(
+          `Repository '${requestedRepository}' is not mounted in workspace '${workspaceContext.name}'.`,
+          args.json,
         );
-        return 1;
       }
     } else if (!workspaceContext && requestedLabel) {
       const { sources } = labels.parseDeclaredSources(config.sources);
@@ -123,8 +124,7 @@ export const prListCommand = defineCommand({
         ),
       ];
       if (targetUrls.length === 0) {
-        ui.error(`Error: Label '${requestedLabel}' has no repository sources.`);
-        return 1;
+        return reportError(`Label '${requestedLabel}' has no repository sources.`, args.json);
       }
     } else if (!workspaceContext && requestedRepository && !args.interactive) {
       const exactMatches = inventory.filter(
@@ -204,10 +204,10 @@ export const prListCommand = defineCommand({
       });
     }
     if (targetUrls.length > 0 && targets.length === 0) {
-      ui.error(
-        "Error: The selected workset contains no repositories from configured ADO providers.",
+      return reportError(
+        "The selected workset contains no repositories from configured ADO providers.",
+        args.json,
       );
-      return 1;
     }
     const cachedDefaultSelections =
       isDefaultMineQuery && !args.refresh && !args.offline
@@ -462,8 +462,7 @@ export const prCheckoutCommand = defineCommand({
         selected = matches[Number(choice.value)];
       }
     } else if (!urlReference) {
-      ui.error(`Error: Invalid pull request reference '${args.reference}'.`);
-      return 1;
+      return reportError(`Invalid pull request reference '${args.reference}'.`, args.json);
     }
 
     const reference =
@@ -498,8 +497,10 @@ export const prCheckoutCommand = defineCommand({
       selected = pr.normalizeAdoPullRequest(raw, adoTenant(organization), repository);
     }
     if (!selected || !Number.isSafeInteger(pullRequestId)) {
-      ui.error(`Error: Pull request '${args.reference ?? ""}' could not be resolved.`);
-      return 1;
+      return reportError(
+        `Pull request '${args.reference ?? ""}' could not be resolved.`,
+        args.json,
+      );
     }
 
     const sourceRecord = inventory.find((record) => {
@@ -517,10 +518,10 @@ export const prCheckoutCommand = defineCommand({
         ? `https://dev.azure.com/${reference.organization}/${reference.project}/_git/${reference.repository}`
         : undefined);
     if (!source) {
-      ui.error(
-        `Error: Repository '${selected.repository}' is not in the local inventory. Run 'dev sync inventory' first.`,
+      return reportError(
+        `Repository '${selected.repository}' is not in the local inventory. Run 'dev sync inventory' first.`,
+        args.json,
       );
-      return 1;
     }
 
     const mode = args.review ? "review" : "checkout";
@@ -632,8 +633,7 @@ export const prViewCommand = defineCommand({
     if (!idStr) throw new Error("Selected pull request is unavailable.");
     const id = parseInt(idStr, 10);
     if (isNaN(id)) {
-      ui.error(`Error: Invalid pull request ID '${idStr}'.`);
-      return 1;
+      return reportError(`Invalid pull request ID '${idStr}'.`, args.json);
     }
 
     // Find the first ADO provider (or the specified one)
@@ -669,8 +669,7 @@ export const prViewCommand = defineCommand({
     });
 
     if (!item) {
-      ui.error(`Error: Pull request #${id} not found.`);
-      return 1;
+      return reportError(`Pull request #${id} not found.`, args.json);
     }
 
     ui.result({

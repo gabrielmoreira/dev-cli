@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { addProvider, listProviders, removeProvider, type ProviderConfig } from "../provider.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 import { getActiveConfig } from "./context.ts";
 import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
@@ -88,16 +89,16 @@ export const providerAddCommand = defineCommand({
         owner: owner.value,
       };
     } else {
-      ui.error(
+      return reportError(
         [
-          `Error: Unsupported provider type '${args.type}'.`,
+          `Unsupported provider type '${args.type}'.`,
           "  Supported types:",
           "    ado  (or azure-devops, azure_devops)  — Azure DevOps",
           "    github  (or gh)                        — GitHub",
           "  Example: dev provider add ado --org my-org",
         ].join("\n"),
+        args.json,
       );
-      return 1;
     }
 
     await addProvider(config.root, entry);
@@ -211,8 +212,7 @@ export const providerRemoveCommand = defineCommand({
     const success = await removeProvider(config.root, provider.value);
 
     if (!success) {
-      ui.error(`Error: Provider '${provider.value}' not found in dev.yaml.`);
-      return 1;
+      return reportError(`Provider '${provider.value}' not found in dev.yaml.`, args.json);
     }
 
     ui.result({

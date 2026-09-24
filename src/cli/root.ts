@@ -9,6 +9,7 @@ import {
   unregisterGlobalRoot,
 } from "../global.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 import { providerAddCommand } from "./provider.ts";
 import { syncInventoryCommand } from "./sync.ts";
 import { canPrompt, getActiveConfig, getAmbient, type AmbientContext } from "./context.ts";
@@ -379,8 +380,7 @@ export const rootAddCommand = defineCommand({
     });
     const rootPath = resolve(ambient.cwd, pathInput.value);
     if (!fs.exists(resolve(rootPath, "dev.yaml"))) {
-      ui.error(`Error: '${rootPath}' is not a dev root because dev.yaml is missing.`);
-      return 1;
+      return reportError(`'${rootPath}' is not a dev root because dev.yaml is missing.`, args.json);
     }
 
     const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);

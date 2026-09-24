@@ -178,8 +178,7 @@ export const worksetManageCommand = defineCommand({
   async run({ args }) {
     const ambient = getAmbient();
     if (!canPrompt(ambient)) {
-      ui.error("Error: 'dev workset manage' requires an interactive terminal.");
-      return 1;
+      return reportError("'dev workset manage' requires an interactive terminal.", args.json);
     }
     const config = getActiveConfig(args.root);
     let name = args.name?.trim();
@@ -650,8 +649,7 @@ export const worksetShowCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const workset = config.worksets[args.name];
     if (!workset) {
-      ui.error(`Error: Unknown workset '${args.name}'.`);
-      return 1;
+      return reportError(`Unknown workset '${args.name}'.`, args.json);
     }
     const data = { name: args.name, ...workset };
     ui.result({

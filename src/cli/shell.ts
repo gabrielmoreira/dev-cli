@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { generateShellInit } from "../nav.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 
 export const shellInitCommand = defineCommand({
   meta: {
@@ -22,8 +23,7 @@ export const shellInitCommand = defineCommand({
     const shellType = args.shell || (process.platform === "win32" ? "powershell" : "bash");
     const runner = args.runner ?? "direct";
     if (runner !== "direct" && runner !== "mise") {
-      ui.error("Error: --runner must be 'direct' or 'mise'.");
-      return 1;
+      return reportError("--runner must be 'direct' or 'mise'.");
     }
     ui.log(generateShellInit(shellType, runner));
     return 0;

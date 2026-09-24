@@ -5,6 +5,7 @@ import { resolveInputSource } from "../inventory.ts";
 import * as labels from "../labels.ts";
 import { createPluginBase, emit } from "../plugins/index.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 import { canPrompt, getActiveConfig } from "./context.ts";
 import { resolveTextInput } from "./input.ts";
 
@@ -159,8 +160,7 @@ export const mirrorLabelAddCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     if (!config.configPath || !config.configDoc) {
-      ui.error("Error: No dev.yaml found for this dev root.");
-      return 1;
+      return reportError("No dev.yaml found for this dev root.");
     }
 
     const resolved = await resolveDeclaredSources({
@@ -170,18 +170,15 @@ export const mirrorLabelAddCommand = defineCommand({
       multiple: !args.source,
     });
     if (resolved.error) {
-      ui.error(`Error: ${resolved.error}`);
-      return 1;
+      return reportError(resolved.error);
     }
     const label = await resolveLabelName(config, args.label);
     if (!label) {
-      ui.error("Error: Label name is required outside an interactive terminal.");
-      return 1;
+      return reportError("Label name is required outside an interactive terminal.");
     }
     const parsedFields = parseFields(args.fields);
     if (parsedFields.error) {
-      ui.error(`Error: ${parsedFields.error}`);
-      return 1;
+      return reportError(parsedFields.error);
     }
 
     const { defs } = labels.parseLabelDefs(config.labelDefs);
@@ -190,8 +187,7 @@ export const mirrorLabelAddCommand = defineCommand({
       ? labels.resolveLabelMeta(def, label, parsedFields.fields)
       : { meta: parsedFields.fields, warnings: [], errors: [] };
     if (validation.errors.length > 0) {
-      ui.error(`Error [LABEL_VALIDATION]: ${validation.errors.join("; ")}`);
-      return 1;
+      return reportError(validation.errors.join("; "));
     }
     for (const warning of validation.warnings) ui.warn(`Warning: ${warning}`);
 
@@ -210,8 +206,7 @@ export const mirrorLabelAddCommand = defineCommand({
         validation.meta,
       );
       if (!result.found) {
-        ui.error(`Error: Declared source '${sourceLabel(source)}' could not be updated.`);
-        return 1;
+        return reportError(`Declared source '${sourceLabel(source)}' could not be updated.`);
       }
       results.push({ source: source.url, ref: sourceRef(source), label, meta: validation.meta });
     }
@@ -244,8 +239,7 @@ export const mirrorLabelRmCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     if (!config.configPath || !config.configDoc) {
-      ui.error("Error: No dev.yaml found for this dev root.");
-      return 1;
+      return reportError("No dev.yaml found for this dev root.");
     }
     const resolved = await resolveDeclaredSources({
       config,
@@ -254,8 +248,7 @@ export const mirrorLabelRmCommand = defineCommand({
       multiple: false,
     });
     if (resolved.error) {
-      ui.error(`Error: ${resolved.error}`);
-      return 1;
+      return reportError(resolved.error);
     }
     const source = resolved.sources[0]!;
     const result = labels.setSourceLabel(
@@ -265,8 +258,7 @@ export const mirrorLabelRmCommand = defineCommand({
       undefined,
     );
     if (!result.found || !result.changed) {
-      ui.error(`Error: Source '${sourceLabel(source)}' does not carry label '${args.label}'.`);
-      return 1;
+      return reportError(`Source '${sourceLabel(source)}' does not carry label '${args.label}'.`);
     }
     config.writeConfig?.();
     await emit(createPluginBase(config.root, config), "mirror:label:rm:after", {

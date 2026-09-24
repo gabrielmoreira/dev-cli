@@ -114,8 +114,7 @@ export const wsInitCommand = defineCommand({
     } else if (args.workset) {
       const resolved = await resolveWorksetMounts(config, args.workset);
       if ("error" in resolved) {
-        ui.error(`Error: ${resolved.error}`);
-        return 1;
+        return reportError(resolved.error, args.json);
       }
       mounts = resolved.mounts;
       suggestedName = args.workset;
@@ -161,8 +160,7 @@ export const wsInitCommand = defineCommand({
         );
         const resolved = await resolveWorksetMounts(config, worksetName);
         if ("error" in resolved) {
-          ui.error(`Error: ${resolved.error}`);
-          return 1;
+          return reportError(resolved.error, args.json);
         }
         mounts = resolved.mounts;
         suggestedName = worksetName;
@@ -246,12 +244,7 @@ export const wsInitCommand = defineCommand({
       return 0;
     } catch (error) {
       if (initializedPath && mounts.length > 0) await fs.removeDir(initializedPath);
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -444,10 +437,10 @@ export const wsAddCommand = defineCommand({
       !interactivePlanning &&
       (mountPath || args.branch || args.tag || args.commit || preHook || postHook)
     ) {
-      ui.error(
-        "Error: --path, --branch, --tag, --commit, and mount hooks require a single repository.",
+      return reportError(
+        "--path, --branch, --tag, --commit, and mount hooks require a single repository.",
+        args.json,
       );
-      return 1;
     }
 
     try {
@@ -1339,8 +1332,10 @@ export const wsGoCommand = defineCommand({
       });
 
     if (workspaces.length === 0) {
-      ui.error(query ? `Error: No workspace matches '${query}'.` : "Error: No workspaces found.");
-      return 1;
+      return reportError(
+        query ? `No workspace matches '${query}'.` : "No workspaces found.",
+        args.json,
+      );
     }
 
     if (args.candidates) {
@@ -1354,8 +1349,10 @@ export const wsGoCommand = defineCommand({
     let selected = exact ?? (workspaces.length === 1 ? workspaces[0] : undefined);
     if (!selected) {
       if (!canPrompt(getAmbient())) {
-        ui.error("Error: Multiple workspaces match. Run 'dev go' from an interactive shell.");
-        return 1;
+        return reportError(
+          "Multiple workspaces match. Run 'dev go' from an interactive shell.",
+          args.json,
+        );
       }
       const name = await ui.select(
         "Select workspace",
@@ -1370,8 +1367,7 @@ export const wsGoCommand = defineCommand({
     }
 
     if (!selected) {
-      ui.error("Error: Selected workspace is unavailable.");
-      return 1;
+      return reportError("Selected workspace is unavailable.", args.json);
     }
 
     ui.result({

@@ -7,6 +7,7 @@ import { createAzureDevOps } from "../ado.ts";
 import { syncInventory } from "../inventory.ts";
 import { resolveAzureDevOpsCredential, resolveGitHubCredential } from "../credentials.ts";
 import { ui } from "../ui.ts";
+import { reportError } from "./errors.ts";
 import { getActiveConfig, getAmbient } from "./context.ts";
 import { wsUpdateCommand } from "./ws.ts";
 import type { ProviderConfig } from "../config.ts";
@@ -315,10 +316,7 @@ export const syncDataCommand = defineCommand({
     try {
       cred = await resolveAzureDevOpsCredential(config);
     } catch (err) {
-      ui.error(
-        `Error [CREDENTIAL_NOT_AVAILABLE]: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return 1;
+      return reportError(err, args.json);
     }
 
     const client = createAzureDevOps({ organization: provider.organization, token: cred.token });
