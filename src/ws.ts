@@ -973,14 +973,19 @@ export async function status(
   };
 }
 
-export type UpdateAction = "fast_forward" | "rebase" | "up_to_date" | "skipped";
+export type UpdateAction =
+  | "create"
+  | "checkout"
+  | "fast_forward"
+  | "rebase"
+  | "up_to_date"
+  | "skipped";
 
 export type UpdateSkipReason =
   | "dirty_worktree"
   | "ahead_commits"
   | "diverged_history"
-  | "missing_worktree"
-  | "wrong_revision"
+  | "not_a_worktree"
   | "readonly"
   | "not_tracking_branch"
   | "rebase_conflict";
@@ -992,6 +997,8 @@ export interface PlannedMountUpdate {
   action: UpdateAction;
   targetRef?: string;
   reason?: UpdateSkipReason;
+  /** The declared revision a create or checkout converges to. */
+  revision?: manifest.MountRevision;
   /** Set on fast_forward plans created from a dirty worktree. */
   autostash?: boolean;
 }
@@ -1006,6 +1013,20 @@ export function planWorkspaceUpdate(
   return mounts.map((mount) => {
     const status = statusByPath.get(mount.path);
 
+    // Declared but absent: create it, readonly or not. A directory that is there
+    // but is not a worktree is someone's data, so it is never touched.
+    if (!status || status.state === "missing") {
+      const occupied = status?.observed.exists === true;
+      return {
+        path: mount.path,
+        source: mount.source,
+        branch: mount.revision.mode === "track" ? mount.revision.branch : undefined,
+        ...(occupied
+          ? { action: "skipped" as const, reason: "not_a_worktree" as const }
+          : { action: "create" as const, revision: mount.revision }),
+      };
+    }
+
     if (mount.readonly) {
       return {
         path: mount.path,
@@ -1013,16 +1034,6 @@ export function planWorkspaceUpdate(
         branch: mount.revision?.mode === "track" ? mount.revision.branch : undefined,
         action: "skipped",
         reason: "readonly",
-      };
-    }
-
-    if (!status || status.state === "missing") {
-      return {
-        path: mount.path,
-        source: mount.source,
-        branch: mount.revision?.mode === "track" ? mount.revision.branch : undefined,
-        action: "skipped",
-        reason: "missing_worktree",
       };
     }
 
@@ -1089,13 +1100,15 @@ export function planWorkspaceUpdate(
       };
     }
 
+    // Status reports wrong_revision only for a clean worktree, so the checkout
+    // cannot overwrite uncommitted work.
     if (status.state === "wrong_revision") {
       return {
         path: mount.path,
         source: mount.source,
-        branch: mount.revision?.mode === "track" ? mount.revision.branch : undefined,
-        action: "skipped",
-        reason: "wrong_revision",
+        branch: mount.revision.mode === "track" ? mount.revision.branch : undefined,
+        action: "checkout",
+        revision: mount.revision,
       };
     }
 

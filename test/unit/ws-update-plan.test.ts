@@ -156,56 +156,61 @@ describe("Workspace update planning pure rules (Phase 5)", () => {
     expect(plan[0].reason).toBe("diverged_history");
   });
 
-  it("skips missing worktrees and wrong revisions", () => {
-    const missingStatus: MountStatusVerdict = {
+  function verdict(
+    state: MountStatusVerdict["state"],
+    observed: Partial<MountStatusVerdict["observed"]>,
+  ): MountStatusVerdict {
+    return {
       path: "service-a",
       source: "https://example.com/org/repo.git",
-      desired: {
-        revision: { mode: "track", branch: "main" },
-        readonly: false,
-      },
+      desired: { revision: { mode: "track", branch: "main" }, readonly: false },
       observed: {
         path: "/mock/ws/service-a",
-        exists: false,
-        isGitWorktree: false,
+        exists: true,
+        isGitWorktree: true,
         currentRevision: {},
         isDirty: false,
         modifiedFiles: 0,
         untrackedFiles: 0,
         aheadCount: 0,
         behindCount: 0,
+        ...observed,
       },
-      state: "missing",
+      state,
       messages: [],
     };
-    const planMissing = planWorkspaceUpdate([baseMount], [missingStatus]);
-    expect(planMissing[0].action).toBe("skipped");
-    expect(planMissing[0].reason).toBe("missing_worktree");
+  }
 
-    const wrongRevStatus: MountStatusVerdict = {
-      path: "service-a",
-      source: "https://example.com/org/repo.git",
-      desired: {
-        revision: { mode: "track", branch: "main" },
-        readonly: false,
-      },
-      observed: {
-        path: "/mock/ws/service-a",
-        exists: true,
-        isGitWorktree: true,
-        currentRevision: { branch: "other-branch", commitSha: "xxx" },
-        isDirty: false,
-        modifiedFiles: 0,
-        untrackedFiles: 0,
-        aheadCount: 0,
-        behindCount: 0,
-      },
-      state: "wrong_revision",
-      messages: [],
-    };
-    const planWrong = planWorkspaceUpdate([baseMount], [wrongRevStatus]);
-    expect(planWrong[0].action).toBe("skipped");
-    expect(planWrong[0].reason).toBe("wrong_revision");
+  it("creates a declared mount that is missing from disk, readonly or not", () => {
+    const missing = verdict("missing", { exists: false, isGitWorktree: false });
+
+    for (const mount of [baseMount, { ...baseMount, readonly: true }]) {
+      const [planned] = planWorkspaceUpdate([mount], [missing]);
+      expect(planned.action).toBe("create");
+      expect(planned.revision).toEqual({ mode: "track", branch: "main" });
+    }
+  });
+
+  it("leaves a directory that is not a worktree alone", () => {
+    const occupied = verdict("missing", { exists: true, isGitWorktree: false });
+
+    const [planned] = planWorkspaceUpdate([baseMount], [occupied]);
+
+    expect(planned.action).toBe("skipped");
+    expect(planned.reason).toBe("not_a_worktree");
+  });
+
+  it("checks out the declared revision of a clean mount on the wrong one", () => {
+    const wrong = verdict("wrong_revision", {
+      currentRevision: { branch: "other-branch", commitSha: "xxx" },
+    });
+
+    const [planned] = planWorkspaceUpdate([baseMount], [wrong]);
+    const [readonly] = planWorkspaceUpdate([{ ...baseMount, readonly: true }], [wrong]);
+
+    expect(planned.action).toBe("checkout");
+    expect(planned.revision).toEqual({ mode: "track", branch: "main" });
+    expect(readonly.reason).toBe("readonly");
   });
 
   it("skips readonly mounts", () => {
