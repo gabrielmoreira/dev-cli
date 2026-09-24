@@ -636,7 +636,14 @@ export async function add(
   };
 
   currentManifest.mounts.push(newMount);
-  await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+  try {
+    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+  } catch (error) {
+    // The worktree exists but the manifest does not mention it. Remove it, so the
+    // next `dev ws add` starts from a clean state instead of MOUNT_PATH_EXISTS_ON_DISK.
+    await deps.git.removeWorktree(admin.adminRepoPath, mountPath, { force: true }).catch(() => {});
+    throw error;
+  }
 
   // 6. Execute post_add hook if configured
   const postAdd = validateMountHookTrust({
