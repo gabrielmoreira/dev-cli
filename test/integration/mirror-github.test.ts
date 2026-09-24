@@ -20,7 +20,7 @@ describe("Canonical repository GitHub smoke test (Phase 8)", () => {
   });
 
   it("adds a public GitHub repository under github.com/octocat", async () => {
-    const addRes = await mirror.add({
+    const addRes = await mirror.ensure({
       root: tempRoot,
       source: publicGithubRepo,
     });

@@ -268,7 +268,7 @@ Sleep 1s
 Type "omp"
 Sleep 1s
 Enter
-Wait+Screen@30s /Added mirror/
+Wait+Screen@30s /Mirrored /
 Sleep 3s
 Type "clear"
 Enter
@@ -280,7 +280,7 @@ Sleep 1s
 Type "skills"
 Sleep 1s
 Enter
-Wait+Screen@60s /Added mirror/
+Wait+Screen@60s /Mirrored /
 Sleep 3s
 Type "clear"
 Enter

@@ -26,7 +26,7 @@ describe("Canonical repository Azure DevOps integration (Phase 8)", () => {
   });
 
   it("adds real Azure DevOps alpha-service as a canonical repository", async () => {
-    const addRes = await mirror.add({
+    const addRes = await mirror.ensure({
       root: tempRoot,
       source: fixture.gitUrl,
       branch: "main",

@@ -67,7 +67,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
   });
 
   it("keeps tracked modes writable and rejects commits with workspace guidance", async () => {
-    const addRes = await mirror.add({
+    const addRes = await mirror.ensure({
       root: tempRoot,
       source: bareRemotePath,
       branch: "main",
@@ -96,7 +96,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
 
   it("quarantines repeated dirty states in distinct named stashes", async () => {
     const quarantineRoot = join(tempRoot, "quarantine");
-    const added = await mirror.add({
+    const added = await mirror.ensure({
       root: quarantineRoot,
       source: bareRemotePath,
       branch: "main",
@@ -160,8 +160,16 @@ describe("Canonical repository local integration (Phase 8)", () => {
       sources.push(source);
     }
 
-    const first = await mirror.add({ root: collisionRoot, source: sources[0], alias: "shared-a" });
-    const second = await mirror.add({ root: collisionRoot, source: sources[1], alias: "shared-b" });
+    const first = await mirror.ensure({
+      root: collisionRoot,
+      source: sources[0],
+      alias: "shared-a",
+    });
+    const second = await mirror.ensure({
+      root: collisionRoot,
+      source: sources[1],
+      alias: "shared-b",
+    });
     await fs.writeText(join(first.path, "file.txt"), "dirty first");
     await fs.writeText(join(second.path, "file.txt"), "dirty second");
 
@@ -174,7 +182,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
 
   it("repairs legacy permission damage without stashing false changes", async () => {
     const legacyRoot = join(tempRoot, "legacy-permissions");
-    const added = await mirror.add({
+    const added = await mirror.ensure({
       root: legacyRoot,
       source: bareRemotePath,
       branch: "main",

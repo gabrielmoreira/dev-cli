@@ -929,7 +929,7 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Added mirror:");
+    expect(logs.join("\n")).toContain("✓ Mirrored ");
     prompt.mockRestore();
 
     logs = [];
@@ -954,7 +954,7 @@ describe("smart CLI input", () => {
     });
 
     expect(trackExitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Tracked sibling canonical branch:");
+    expect(logs.join("\n")).toContain("✓ Tracking feature");
     branchPrompt.mockRestore();
 
     const branchPromptForUntrack = spyOn(ui, "text").mockResolvedValue("feature");
@@ -968,7 +968,7 @@ describe("smart CLI input", () => {
     });
 
     expect(untrackExitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Cancelled.");
+    expect(errors.join("\n")).toContain("Cancelled.");
     branchPromptForUntrack.mockRestore();
     confirmationPrompt.mockRestore();
   });

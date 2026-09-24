@@ -133,7 +133,7 @@ describe("CLI E2E - Repository Selection from Inventory (Phase 11)", () => {
 
       expect(addExit).toBe(0);
       const out = logs.join("\n");
-      expect(out).toContain("Added mirror:");
+      expect(out).toContain("✓ Mirrored ");
 
       // Verify canonical path exists
       const canonicalPath = join(

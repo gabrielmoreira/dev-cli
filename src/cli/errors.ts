@@ -8,7 +8,6 @@ import { ui } from "../ui.ts";
  */
 const NEXT_STEPS: Record<string, string> = {
   BRANCH_ALREADY_MOUNTED: "dev ws status",
-  BRANCH_ALREADY_TRACKED: "dev mirror list",
   CREDENTIAL_NOT_AVAILABLE: "gh auth login    # or: az login",
   DIVERGED: "dev ws update --rebase",
   MANIFEST_NOT_FOUND: "dev ls",
@@ -16,7 +15,6 @@ const NEXT_STEPS: Record<string, string> = {
   MOUNT_NOT_FOUND: "dev ws status",
   MOUNT_PATH_EXISTS_ON_DISK: "dev ws add <source> --path <another-name>",
   PULL_REQUEST_UNAVAILABLE: "dev pr list",
-  REPO_ALREADY_EXISTS: "dev mirror list",
   UNSAFE_REMOVE: "git -C <path> status",
   UNTRUSTED_HOOK_BLOCKED: "rerun with --consent to allow hooks from <source>",
   WORKSET_EXISTS: "dev workset list",

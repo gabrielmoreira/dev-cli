@@ -219,20 +219,6 @@ export async function ensure(
   };
 }
 
-export async function add(
-  input: MirrorAddInput,
-  deps: MirrorDeps = defaultDeps,
-): Promise<MirrorAddResult> {
-  const result = await ensure(input, deps);
-  if (!result.created) {
-    throw new CanonicalMirrorError(
-      "REPO_ALREADY_EXISTS",
-      `Mirror checkout already exists at ${result.path}`,
-    );
-  }
-  return result;
-}
-
 export interface MirrorTrackInput {
   root: string;
   canonicalPrefix?: string;
@@ -246,6 +232,8 @@ export interface MirrorTrackResult {
   sourceKey: string;
   branch: string;
   path: string;
+  /** False when the branch was already tracked at this path: the request already held. */
+  created: boolean;
 }
 
 export async function track(
@@ -284,10 +272,7 @@ export async function track(
   });
 
   if (deps.fs.exists(plan.absolutePath)) {
-    throw new CanonicalMirrorError(
-      "BRANCH_ALREADY_TRACKED",
-      `Canonical sibling checkout already exists at ${plan.absolutePath}`,
-    );
+    return { sourceKey, branch: input.branch, path: plan.absolutePath, created: false };
   }
 
   await deps.git.addCanonicalWorktree({
@@ -300,6 +285,7 @@ export async function track(
     sourceKey,
     branch: input.branch,
     path: plan.absolutePath,
+    created: true,
   };
 }
 

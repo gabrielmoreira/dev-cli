@@ -47,7 +47,7 @@ export const mirrorAddCommand = defineCommand({
 
     try {
       const extraHeader = await resolveExtraHeader(config, url);
-      const result = await mirror.add({
+      const result = await mirror.ensure({
         root: config.root,
         canonicalPrefix: config.canonicalPrefix,
         source: url,
@@ -66,11 +66,10 @@ export const mirrorAddCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => {
-          let out = `Added mirror:\n`;
-          out += `  Path:      ${result.path}\n`;
-          return out;
-        },
+        text: () =>
+          result.created
+            ? `✓ Mirrored ${result.canonicalUrl} @ ${result.branch} at ${result.path}`
+            : `○ ${result.canonicalUrl} @ ${result.branch} is already mirrored at ${result.path}`,
       });
       return 0;
     } catch (error) {
@@ -260,11 +259,10 @@ export const mirrorTrackCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => {
-          let out = `Tracked sibling canonical branch:\n`;
-          out += `  Path:      ${result.path}\n`;
-          return out;
-        },
+        text: () =>
+          result.created
+            ? `✓ Tracking ${result.branch} at ${result.path}`
+            : `○ ${result.branch} is already tracked at ${result.path}`,
       });
       return 0;
     } catch (error) {

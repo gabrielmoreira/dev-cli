@@ -48,7 +48,7 @@ describe("Canonical checkout naming against the default branch", () => {
 
   it("names an explicit default branch as the plain checkout, not a sibling", async () => {
     const root = join(tempRoot, "explicit-default");
-    const result = await mirror.add({ root, source: bareRemotePath, branch: "main" });
+    const result = await mirror.ensure({ root, source: bareRemotePath, branch: "main" });
 
     expect(result.path.replace(/\\/g, "/")).toMatch(/\/remote$/);
     expect(result.branch).toBe("main");
@@ -56,7 +56,7 @@ describe("Canonical checkout naming against the default branch", () => {
 
   it("gives a non-default branch its own sibling folder", async () => {
     const root = join(tempRoot, "feature-branch");
-    const added = await mirror.add({ root, source: bareRemotePath, branch: "feature/payments" });
+    const added = await mirror.ensure({ root, source: bareRemotePath, branch: "feature/payments" });
 
     expect(added.path.replace(/\\/g, "/")).toMatch(/\/remote@feature-payments$/);
     expect(added.branch).toBe("feature/payments");
@@ -64,23 +64,32 @@ describe("Canonical checkout naming against the default branch", () => {
 
   it("puts add --branch and track on the same path instead of duplicating the branch", async () => {
     const root = join(tempRoot, "add-then-track");
-    await mirror.add({ root, source: bareRemotePath });
-    const added = await mirror.add({ root, source: bareRemotePath, branch: "feature/payments" });
+    await mirror.ensure({ root, source: bareRemotePath });
+    const added = await mirror.ensure({ root, source: bareRemotePath, branch: "feature/payments" });
 
-    let trackError: mirror.CanonicalMirrorError | undefined;
-    try {
-      await mirror.track({ root, source: bareRemotePath, branch: "feature/payments" });
-    } catch (error) {
-      trackError = error as mirror.CanonicalMirrorError;
-    }
+    const tracked = await mirror.track({
+      root,
+      source: bareRemotePath,
+      branch: "feature/payments",
+    });
 
-    expect(trackError?.code).toBe("BRANCH_ALREADY_TRACKED");
-    expect(trackError?.message).toContain(added.path);
+    expect(tracked.created).toBe(false);
+    expect(tracked.path).toBe(added.path);
+  });
+
+  it("reports an already-mirrored source as satisfied instead of failing", async () => {
+    const root = join(tempRoot, "add-twice");
+    const first = await mirror.ensure({ root, source: bareRemotePath });
+    const second = await mirror.ensure({ root, source: bareRemotePath });
+
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.path).toBe(first.path);
   });
 
   it("refuses to track the default branch as a sibling of itself", async () => {
     const root = join(tempRoot, "track-default");
-    await mirror.add({ root, source: bareRemotePath });
+    await mirror.ensure({ root, source: bareRemotePath });
 
     let code: string | undefined;
     try {
