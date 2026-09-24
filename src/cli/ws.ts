@@ -795,15 +795,15 @@ export const wsUpdateCommand = defineCommand({
           for (const mount of result.mounts) {
             if (mount.action === "create") {
               const reused = mount.mirrorReused ? ", reused the local mirror" : "";
-              out += `  ✔ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)}${reused})\n`;
+              out += `  ✓ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)}${reused})\n`;
             } else if (mount.action === "checkout") {
-              out += `  ✔ ${mount.path}: back on ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
+              out += `  ✓ ${mount.path}: back on ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
             } else if (mount.action === "fast_forward") {
-              out += `  ✔ ${mount.path}: fast-forwarded (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
+              out += `  ✓ ${mount.path}: fast-forwarded (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
             } else if (mount.action === "rebase") {
-              out += `  ✔ ${mount.path}: rebased onto remote (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
+              out += `  ✓ ${mount.path}: rebased onto remote (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
             } else if (mount.action === "up_to_date") {
-              out += `  ✔ ${mount.path}: up to date (${mount.newCommit?.slice(0, 8)})\n`;
+              out += `  ○ ${mount.path}: up to date (${mount.newCommit?.slice(0, 8)})\n`;
             } else {
               out += `  ⚠ ${mount.path}: skipped [${mount.reason}]\n`;
             }

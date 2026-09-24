@@ -177,7 +177,7 @@ export const mirrorSyncCommand = defineCommand({
           }
 
           for (const u of result.updated) {
-            out += `  ✔ updated: ${u.path} (${u.branch}) [fast-forwarded ${u.behindCount || 0} commits]\n`;
+            out += `  ✓ updated: ${u.path} (${u.branch}) [fast-forwarded ${u.behindCount || 0} commits]\n`;
           }
           for (const s of result.skipped) {
             out += `  ↷ skipped: ${s.path} (${s.branch}) - ${s.reason}\n`;
