@@ -59,4 +59,12 @@ describe("CLI prompt eligibility", () => {
       }),
     ).toBe(false);
   });
+
+  test("disables prompts under a coding agent, even in a terminal", () => {
+    for (const env of [{ AGENT: "1" }, { AI_AGENT: "cursor-cli" }, { CLAUDECODE: "1" }]) {
+      expect(
+        canPrompt({ argv: ["ws", "add"], cwd: "/workspace", env, isTTY: true, stdinIsTTY: true }),
+      ).toBe(false);
+    }
+  });
 });

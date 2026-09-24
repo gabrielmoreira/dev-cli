@@ -2,6 +2,15 @@ import { createInterface } from "node:readline/promises";
 import { consola } from "consola";
 import { autocomplete, autocompleteMultiselect, isCancel } from "@clack/prompts";
 
+/** The user pressed Ctrl+C or Esc at a prompt: not a failure, so it prints nothing. */
+export class CancelledError extends Error {
+  readonly code = "CANCELLED";
+  constructor() {
+    super("Cancelled.");
+    this.name = "CancelledError";
+  }
+}
+
 let isQuietMode = false;
 let errorReported = false;
 
@@ -90,9 +99,14 @@ export const ui = {
       output: process.stderr,
       terminal: true,
     });
+    const aborted = new AbortController();
+    readline.on("SIGINT", () => aborted.abort());
     try {
-      const value = await readline.question(prompt);
+      const value = await readline.question(prompt, { signal: aborted.signal });
       return value || initial;
+    } catch (error) {
+      if (aborted.signal.aborted) throw new CancelledError();
+      throw error;
     } finally {
       readline.close();
     }
@@ -108,7 +122,7 @@ export const ui = {
       maxItems: 10,
       options: options.map((option) => ({ ...option, value: String(option.value) })),
     });
-    if (isCancel(selection)) throw new Error("Selection cancelled.");
+    if (isCancel(selection)) throw new CancelledError();
     return selection as T;
   },
 
@@ -123,7 +137,7 @@ export const ui = {
       options: options.map((option) => ({ ...option, value: String(option.value) })),
       required: true,
     });
-    if (isCancel(selection)) throw new Error("Selection cancelled.");
+    if (isCancel(selection)) throw new CancelledError();
     return selection as T[];
   },
 
@@ -133,6 +147,7 @@ export const ui = {
       initial,
       cancel: "undefined",
     });
+    if (value === undefined) throw new CancelledError();
     return value === true;
   },
 };

@@ -189,6 +189,11 @@ export const mainCommand = defineCommand({
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
     quiet: { type: "boolean", alias: "q", description: "Silence non-essential output" },
+    "non-interactive": {
+      type: "boolean",
+      description:
+        "Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent",
+    },
     ws: { type: "string", description: "Target workspace name" },
   },
   subCommands: {

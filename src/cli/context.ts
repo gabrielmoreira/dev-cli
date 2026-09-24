@@ -31,13 +31,28 @@ export function setAmbient(ambient: AmbientContext): void {
   ui.setQuiet(isQuiet);
 }
 
+/**
+ * Variables coding agents set in the shells they run: the AI_AGENT and AGENT
+ * conventions plus the tool-specific ones @vercel/detect-agent checks.
+ */
+const AGENT_ENV = [
+  "AI_AGENT",
+  "AGENT",
+  "CLAUDECODE",
+  "CLAUDE_CODE",
+  "CURSOR_AGENT",
+  "GEMINI_CLI",
+  "CODEX_SANDBOX",
+];
+
 export function canPrompt(ambient: AmbientContext = currentAmbient): boolean {
   return (
     (ambient.stdinIsTTY ?? ambient.isTTY) &&
     ambient.isTTY &&
     !ambient.argv.includes("--json") &&
     !ambient.argv.includes("--non-interactive") &&
-    !ambient.env.CI
+    !ambient.env.CI &&
+    !AGENT_ENV.some((name) => ambient.env[name])
   );
 }
 

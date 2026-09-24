@@ -1,4 +1,4 @@
-import { ui } from "../ui.ts";
+import { CancelledError, ui } from "../ui.ts";
 
 /**
  * The command that gets the user out of each failure. One line per code, defined once.
@@ -66,6 +66,8 @@ export function describeError(error: unknown): StructuredError {
  * Returns the exit code so a handler can `return reportError(error, args.json)`.
  */
 export function reportError(error: unknown, json?: boolean): number {
+  // The prompt already shows it was cancelled; 130 is the shell's code for Ctrl+C.
+  if (error instanceof CancelledError) return 130;
   const described = describeError(error);
 
   if (json) {

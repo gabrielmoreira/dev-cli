@@ -721,7 +721,7 @@ export const wsUpdateCommand = defineCommand({
       type: "boolean",
       description: "Rebase diverged mounts onto the remote branch (aborts on conflict)",
     },
-    dryRun: { type: "boolean", description: "Print the plan and change nothing" },
+    "dry-run": { type: "boolean", description: "Print the plan and change nothing" },
     consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
     force: { type: "boolean", description: "Alias for --consent" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -751,7 +751,7 @@ export const wsUpdateCommand = defineCommand({
         offline: args.offline,
         autostash: args.autostash,
         rebase: args.rebase,
-        dryRun: args.dryRun,
+        dryRun: args["dry-run"],
         resolveExtraHeader: (source) => resolveExtraHeader(config, source),
         trustedScopes: config.trustedScopes,
         explicitConsent: args.consent || args.force,
@@ -1510,7 +1510,7 @@ export const wsStartCommand = defineCommand({
     );
 
     try {
-      const interactive = ambient.isTTY && ambient.stdinIsTTY && !args.json;
+      const interactive = canPrompt(ambient);
       const result = await herdr.startWorkspace(
         {
           workspace: workspace.value,
