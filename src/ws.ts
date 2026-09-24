@@ -1189,6 +1189,8 @@ export interface MountUpdateResult {
   previousCommit?: string;
   newCommit?: string;
   reason?: UpdateSkipReason;
+  /** The declared revision a create or checkout converged to. */
+  revision?: manifest.MountRevision;
   /** Non-fatal condition reported to the user (e.g. stash pop conflict). */
   warning?: string;
 }
@@ -1204,6 +1206,87 @@ export interface WorkspaceUpdateResult {
     skipped: number;
   };
   hookWarning?: string;
+}
+
+function revisionTarget(revision: manifest.MountRevision): string {
+  return revision.mode === "track"
+    ? revision.branch
+    : revision.mode === "lock"
+      ? revision.commit
+      : revision.tag;
+}
+
+/** Checks out a mount declared in ws.md that is missing from disk, with its hooks. */
+async function createDeclaredMount(params: {
+  input: WorkspaceUpdateInput;
+  workspacePath: string;
+  mount: manifest.MountDefinition;
+  deps: WorkspaceDeps;
+}): Promise<{ commitSha: string; hookWarning?: string }> {
+  const { input, workspacePath, mount, deps } = params;
+  const mountPath = join(workspacePath, mount.path);
+  const hookEnv = {
+    DEV_ROOT: input.root,
+    DEV_WORKSPACE: input.workspaceName,
+    DEV_MOUNT_PATH: mountPath,
+    DEV_SOURCE: mount.source,
+    DEV_REVISION: revisionTarget(mount.revision),
+  };
+  const preCheckout = validateMountHookTrust({
+    sourceUrl: mount.source,
+    hookName: "pre_checkout",
+    mountHook: mount.hooks?.pre_checkout,
+    trustedScopes: input.trustedScopes,
+    explicitConsent: input.explicitConsent,
+    deps,
+  });
+  const postCheckout = validateMountHookTrust({
+    sourceUrl: mount.source,
+    hookName: "post_checkout",
+    mountHook: mount.hooks?.post_checkout,
+    trustedScopes: input.trustedScopes,
+    explicitConsent: input.explicitConsent,
+    deps,
+  });
+
+  await executeHook({
+    command: preCheckout.command,
+    allowed: preCheckout.allowed,
+    cwd: workspacePath,
+    env: hookEnv,
+    hookName: "pre_checkout",
+    throwOnFailure: true,
+    deps,
+  });
+
+  const { mirrorPath, sourceKey } = await deps.git.ensureMirror({
+    root: input.root,
+    source: mount.source,
+    extraHeader: await input.resolveExtraHeader?.(mount.source),
+  });
+  const { adminRepoPath } = await deps.git.ensureWorkspaceRepo({
+    root: input.root,
+    workspaceName: input.workspaceName,
+    sourceKey,
+    canonicalUrl: mount.source,
+    mirrorPath,
+  });
+  const { commitSha } = await deps.git.addWorktree({
+    adminRepoPath,
+    mountPath,
+    revision: mount.revision,
+  });
+
+  const postCheckoutRes = await executeHook({
+    command: postCheckout.command,
+    allowed: postCheckout.allowed,
+    cwd: mountPath,
+    env: hookEnv,
+    hookName: "post_checkout",
+    throwOnFailure: false,
+    deps,
+  });
+  return { commitSha, hookWarning: postCheckoutRes.warning };
 }
 
 export async function update(
@@ -1244,7 +1327,42 @@ export async function update(
     const statusForMount = statusRes.mounts.find((m) => m.path === item.path);
     const prevCommit = statusForMount?.observed.currentRevision?.commitSha;
 
-    if (item.action === "fast_forward") {
+    if (item.action === "create") {
+      const mount = currentManifest.mounts.find((m) => m.path === item.path)!;
+      const created = await createDeclaredMount({
+        input,
+        workspacePath: statusRes.workspacePath,
+        mount,
+        deps,
+      });
+      mountResults.push({
+        path: item.path,
+        source: item.source,
+        action: "create",
+        revision: mount.revision,
+        newCommit: created.commitSha,
+        warning: created.hookWarning,
+      });
+      updatedCount++;
+    } else if (item.action === "checkout") {
+      const worktreePath = join(statusRes.workspacePath, item.path);
+      const revision = item.revision!;
+      if (revision.mode === "track") {
+        await deps.git.switchBranch(worktreePath, revision.branch);
+      } else {
+        await deps.git.checkoutRevision(worktreePath, revisionTarget(revision));
+      }
+      const reinspected = await deps.git.inspectWorktree(worktreePath);
+      mountResults.push({
+        path: item.path,
+        source: item.source,
+        action: "checkout",
+        revision,
+        previousCommit: prevCommit,
+        newCommit: reinspected.currentRevision?.commitSha,
+      });
+      updatedCount++;
+    } else if (item.action === "fast_forward") {
       const worktreePath = join(statusRes.workspacePath, item.path);
       let warning: string | undefined;
       if (item.autostash) {
@@ -1626,147 +1744,6 @@ export async function tag(
 
   await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
   return { path: input.mountPath, tag: input.tag };
-}
-
-export interface WorkspaceUpInput {
-  root: string;
-  workspacePrefix?: string;
-  workspaceName?: string;
-  manifestPath?: string;
-  resolveExtraHeader?: (source: string) => Promise<string | undefined>;
-  trustedScopes?: TrustedScope[];
-  explicitConsent?: boolean;
-  globalHooks?: GlobalHooksConfig;
-}
-
-export async function up(
-  input: WorkspaceUpInput,
-  deps: WorkspaceDeps = defaultDeps,
-): Promise<{ workspaceName: string; reconciled: { path: string; action: string }[] }> {
-  let manifestPath = input.manifestPath;
-  let workspaceName = input.workspaceName;
-  let workspacePath = "";
-
-  if (manifestPath) {
-    const { manifest: m } = await deps.manifest.readWorkspace(manifestPath);
-    workspaceName = m.name;
-    workspacePath = deriveWorkspacePath(input.root, workspaceName, input.workspacePrefix);
-  } else if (workspaceName) {
-    workspacePath = deriveWorkspacePath(input.root, workspaceName, input.workspacePrefix);
-    manifestPath = join(workspacePath, "ws.md");
-  } else {
-    throw new WorkspaceError(
-      "INVALID_ARGUMENTS",
-      "Workspace name or manifest path must be specified",
-    );
-  }
-
-  if (!deps.fs.exists(manifestPath)) {
-    throw new WorkspaceError(
-      "MANIFEST_NOT_FOUND",
-      `Workspace manifest not found at ${manifestPath}`,
-    );
-  }
-
-  const { manifest: currentManifest } = await deps.manifest.readWorkspace(manifestPath);
-  assertSafeManifestMountPaths(currentManifest);
-  const reconciled: { path: string; action: string }[] = [];
-
-  for (const mount of currentManifest.mounts) {
-    const mountPath = join(workspacePath, mount.path);
-    const observed = await deps.git.inspectWorktree(mountPath);
-
-    if (!observed.exists || !observed.isGitWorktree) {
-      const preCheckout = validateMountHookTrust({
-        sourceUrl: mount.source,
-        hookName: "pre_checkout",
-        mountHook: mount.hooks?.pre_checkout,
-        trustedScopes: input.trustedScopes,
-        explicitConsent: input.explicitConsent,
-        deps,
-      });
-
-      const postCheckout = validateMountHookTrust({
-        sourceUrl: mount.source,
-        hookName: "post_checkout",
-        mountHook: mount.hooks?.post_checkout,
-        trustedScopes: input.trustedScopes,
-        explicitConsent: input.explicitConsent,
-        deps,
-      });
-
-      await executeHook({
-        command: preCheckout.command,
-        allowed: preCheckout.allowed,
-        cwd: workspacePath,
-        env: {
-          DEV_ROOT: input.root,
-          DEV_WORKSPACE: workspaceName!,
-          DEV_MOUNT_PATH: mountPath,
-          DEV_SOURCE: mount.source,
-          DEV_REVISION:
-            mount.revision.mode === "track"
-              ? mount.revision.branch
-              : mount.revision.mode === "lock"
-                ? mount.revision.commit
-                : mount.revision.tag,
-        },
-        hookName: "pre_checkout",
-        throwOnFailure: true,
-        deps,
-      });
-
-      const { mirrorPath, sourceKey } = await deps.git.ensureMirror({
-        root: input.root,
-        source: mount.source,
-        extraHeader: await input.resolveExtraHeader?.(mount.source),
-      });
-
-      const { adminRepoPath } = await deps.git.ensureWorkspaceRepo({
-        root: input.root,
-        workspaceName: workspaceName!,
-        sourceKey,
-        canonicalUrl: mount.source,
-        mirrorPath,
-      });
-
-      await deps.git.addWorktree({
-        adminRepoPath,
-        mountPath,
-        revision: mount.revision,
-      });
-
-      await executeHook({
-        command: postCheckout.command,
-        allowed: postCheckout.allowed,
-        cwd: mountPath,
-        env: {
-          DEV_ROOT: input.root,
-          DEV_WORKSPACE: workspaceName!,
-          DEV_MOUNT_PATH: mountPath,
-          DEV_SOURCE: mount.source,
-          DEV_REVISION:
-            mount.revision.mode === "track"
-              ? mount.revision.branch
-              : mount.revision.mode === "lock"
-                ? mount.revision.commit
-                : mount.revision.tag,
-        },
-        hookName: "post_checkout",
-        throwOnFailure: false,
-        deps,
-      });
-
-      reconciled.push({ path: mount.path, action: "created" });
-    } else {
-      reconciled.push({ path: mount.path, action: "already_exists" });
-    }
-  }
-
-  return {
-    workspaceName: workspaceName!,
-    reconciled,
-  };
 }
 
 export interface WorkspaceRemoveInput {

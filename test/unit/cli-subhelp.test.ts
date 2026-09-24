@@ -5,7 +5,7 @@ describe("subcommand help (UX)", () => {
   it("renders positional and option rows from the args schema", async () => {
     const out = await formatSubHelp("ws", "update");
     expect(out).toContain("dev ws update");
-    expect(out).toContain("Safely fast-forward clean workspace mounts");
+    expect(out).toContain("Converge mounts to ws.md");
     expect(out).toContain("USAGE dev ws update [OPTIONS] [TARGET]");
     expect(out).toContain("--autostash");
     expect(out).toContain("--rebase");

@@ -705,10 +705,11 @@ export const wsStatusCommand = defineCommand({
 export const wsUpdateCommand = defineCommand({
   meta: {
     name: "update",
-    description: "Safely fast-forward clean workspace mounts",
+    description:
+      "Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones",
   },
   args: {
-    target: { type: "positional", description: "Workspace name or target mount", required: false },
+    target: { type: "positional", description: "Workspace name or path to ws.md", required: false },
     ws: { type: "string", description: "Target workspace name" },
     refresh: { type: "boolean", description: "Fetch latest remote refs before fast-forwarding" },
     offline: { type: "boolean", description: "Read strictly from local mirror without network" },
@@ -727,19 +728,24 @@ export const wsUpdateCommand = defineCommand({
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
-    const workspace = await resolveWorkspaceInput({
-      value: args.ws || args.target,
-      root: config.root,
-      workspacePrefix: config.workspacePrefix,
-      command: "ws update",
-      usage: "dev ws update [workspace] [--ws <name>]",
-    });
 
     try {
+      // A ws.md path names its workspace: the manifest's own name decides.
+      const workspaceName = args.target?.endsWith(".md")
+        ? (await manifest.readWorkspace(args.target)).manifest.name
+        : (
+            await resolveWorkspaceInput({
+              value: args.ws || args.target,
+              root: config.root,
+              workspacePrefix: config.workspacePrefix,
+              command: "ws sync",
+              usage: "dev ws sync [workspace | path/to/ws.md] [--ws <name>]",
+            })
+          ).value;
       const result = await ws.update({
         root: config.root,
         workspacePrefix: config.workspacePrefix,
-        workspaceName: workspace.value,
+        workspaceName,
         refresh: args.refresh,
         offline: args.offline,
         autostash: args.autostash,
@@ -762,7 +768,11 @@ export const wsUpdateCommand = defineCommand({
           }
           out += "\n";
           for (const mount of result.mounts) {
-            if (mount.action === "fast_forward") {
+            if (mount.action === "create") {
+              out += `  ✔ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
+            } else if (mount.action === "checkout") {
+              out += `  ✔ ${mount.path}: back on ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
+            } else if (mount.action === "fast_forward") {
               out += `  ✔ ${mount.path}: fast-forwarded (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
             } else if (mount.action === "rebase") {
               out += `  ✔ ${mount.path}: rebased onto remote (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
@@ -1030,70 +1040,6 @@ export const wsTagCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => `Mount '${result.path}' pinned to tag '${result.tag}'.`,
-      });
-      return 0;
-    } catch (error) {
-      return reportError(error, args.json);
-    }
-  },
-});
-
-export const wsUpCommand = defineCommand({
-  meta: {
-    name: "up",
-    description: "Materialize and reconcile mounts declared in ws.md",
-  },
-  args: {
-    target: { type: "positional", description: "Workspace name or path to ws.md", required: false },
-    ws: { type: "string", description: "Target workspace name" },
-    consent: { type: "boolean", description: "Grant explicit consent to run repository hooks" },
-    force: { type: "boolean", description: "Alias for --consent" },
-    root: { type: "string", description: "Explicit dev root directory" },
-    json: { type: "boolean", description: "Output in structured JSON format" },
-  },
-  async run({ args }) {
-    const config = getActiveConfig(args.root);
-    const target = args.target;
-
-    let manifestPath: string | undefined;
-    let workspaceName: string | undefined;
-
-    if (target?.endsWith(".md")) {
-      manifestPath = target;
-    } else {
-      workspaceName = (
-        await resolveWorkspaceInput({
-          value: args.ws || target,
-          root: config.root,
-          workspacePrefix: config.workspacePrefix,
-          command: "ws up",
-          usage: "dev ws up [name | path/to/ws.md]",
-        })
-      ).value;
-    }
-
-    try {
-      const result = await ws.up({
-        root: config.root,
-        workspacePrefix: config.workspacePrefix,
-        workspaceName,
-        manifestPath,
-        resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-        trustedScopes: config.trustedScopes,
-        explicitConsent: args.consent || args.force,
-        globalHooks: config.hooks,
-      });
-
-      ui.result({
-        data: result,
-        json: args.json,
-        text: () => {
-          let out = `Reconciled workspace '${result.workspaceName}':\n`;
-          for (const m of result.reconciled) {
-            out += `  ${m.action === "created" ? "✔ created" : "✔ exists"}: ${m.path}\n`;
-          }
-          return out.trimEnd();
-        },
       });
       return 0;
     } catch (error) {
@@ -1594,7 +1540,7 @@ export const wsCommand = defineCommand({
     lock: wsLockCommand,
     unlock: wsUnlockCommand,
     tag: wsTagCommand,
-    up: wsUpCommand,
+    up: wsUpdateCommand,
     remove: wsRemoveCommand,
     rm: wsRemoveCommand,
     list: wsListCommand,

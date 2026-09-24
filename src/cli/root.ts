@@ -36,7 +36,7 @@ This directory is managed by dev CLI. It contains task workspaces under \`ws/\` 
 - \`dev ws add <url-or-name>\`: add a repository to the current workspace.
 - \`dev ws status\`: compare declared and checked-out workspace state.
 - \`dev ws start [name]\`: start or focus OMP in HerdR for a workspace.
-- \`dev ws up\`: materialize and reconcile mounts declared in \`ws.md\`.
+- \`dev ws sync\`: create missing mounts, fix revisions, and fast-forward clean ones to match \`ws.md\`.
 
 ## Working Files
 

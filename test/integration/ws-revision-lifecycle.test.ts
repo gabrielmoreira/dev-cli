@@ -118,16 +118,15 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
     manifestData = await Bun.file(manifestPath).text();
     expect(manifestData).toContain("branch: main");
 
-    // 6. Delete worktree from disk and prove ws.up recreates it!
+    // 6. Delete worktree from disk and prove ws sync recreates it
     await rm(worktreePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     expect(fs.exists(worktreePath)).toBe(false);
 
-    const upRes = await ws.up({
+    const synced = await ws.update({
       root: tempRoot,
       workspaceName: "rev-ws",
     });
-    expect(upRes.reconciled).toHaveLength(1);
-    expect(upRes.reconciled[0].action).toBe("created");
+    expect(synced.mounts.map((m) => m.action)).toEqual(["create"]);
     expect(fs.exists(worktreePath)).toBe(true);
 
     // 7. Test unsafe remove rejection: make dirty and try to remove

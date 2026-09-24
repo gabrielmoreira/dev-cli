@@ -144,4 +144,37 @@ describe("Local workspace safe update integration (Phase 5)", () => {
     const aheadRev = await git.inspectWorktree(aheadMountPath);
     expect(aheadRev.aheadCount).toBe(1);
   });
+
+  it("creates a missing mount and restores a wrong branch, then has nothing left to do", async () => {
+    await ws.init({ root: tempRoot, name: "converge" });
+    const onMain = await ws.add({
+      root: tempRoot,
+      workspaceName: "converge",
+      source: bareRemotePath,
+      path: "on-main",
+      branch: "main",
+    });
+    const removed = await ws.add({
+      root: tempRoot,
+      workspaceName: "converge",
+      source: bareRemotePath,
+      path: "removed",
+      branch: "feature/dirty",
+    });
+    await git.runGit(["checkout", "-q", "-b", "stray"], { cwd: onMain.mountPath });
+    await rm(removed.mountPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+
+    const first = await ws.update({ root: tempRoot, workspaceName: "converge" });
+    const second = await ws.update({ root: tempRoot, workspaceName: "converge" });
+
+    expect(first.mounts.map((m) => [m.path, m.action])).toEqual([
+      ["on-main", "checkout"],
+      ["removed", "create"],
+    ]);
+    expect((await git.inspectWorktree(onMain.mountPath)).currentRevision.branch).toBe("main");
+    expect((await git.inspectWorktree(removed.mountPath)).currentRevision.branch).toBe(
+      "feature/dirty",
+    );
+    expect(second.mounts.map((m) => m.action)).toEqual(["up_to_date", "up_to_date"]);
+  });
 });

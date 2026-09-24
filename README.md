@@ -148,7 +148,7 @@ checkout-incident/
 └── ws.md
 ```
 
-Tomorrow, `dev status` compares what `ws.md` declares with what is on disk and reports each mount as clean, dirty, ahead, behind, diverged or missing. `dev sync` fast-forwards the clean ones and leaves the rest alone: a mount with uncommitted changes, local commits or a diverged history is skipped and named, not touched.
+Tomorrow, `dev status` compares what `ws.md` declares with what is on disk and reports each mount as clean, dirty, ahead, behind, diverged or missing. `dev sync` brings the workspace back in line: it checks out a mount that is missing, puts a clean mount that drifted to another branch back on the declared one, and fast-forwards the clean ones. A mount with uncommitted changes, local commits or a diverged history is skipped and named, not touched.
 
 ```bash
 dev status

@@ -61,7 +61,7 @@ describe("workspace mount path containment", () => {
       ],
     });
 
-    await expect(ws.up({ root, workspaceName: "contained" })).rejects.toMatchObject({
+    await expect(ws.update({ root, workspaceName: "contained" })).rejects.toMatchObject({
       code: "INVALID_MOUNT_PATH",
     });
     expect(fs.exists(join(root, "ws", "outside"))).toBe(false);

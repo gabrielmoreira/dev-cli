@@ -23,7 +23,7 @@ const NEXT_STEPS: Record<string, string> = {
   WORKSET_NOT_FOUND: "dev workset list",
   WORKSPACE_ALREADY_EXISTS: "dev go <name>",
   WORKSPACE_NOT_FOUND: "dev ls",
-  WORKTREE_NOT_FOUND: "dev ws up",
+  WORKTREE_NOT_FOUND: "dev ws sync",
 };
 
 export interface StructuredError {

@@ -172,8 +172,7 @@ describe("dev ws revision lifecycle & reconciliation CLI E2E (Phase 6)", () => {
     const upStdout = await new Response(upProc.stdout).text();
     expect(await upProc.exited).toBe(0);
     const upJson = JSON.parse(upStdout);
-    expect(upJson.reconciled).toHaveLength(1);
-    expect(upJson.reconciled[0].action).toBe("created");
+    expect(upJson.mounts.map((m: { action: string }) => m.action)).toEqual(["create"]);
     expect(fs.exists(worktreePath)).toBe(true);
 
     // 8. Remove mount safely
