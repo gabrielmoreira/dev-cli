@@ -721,6 +721,7 @@ export const wsUpdateCommand = defineCommand({
       type: "boolean",
       description: "Rebase diverged mounts onto the remote branch (aborts on conflict)",
     },
+    dryRun: { type: "boolean", description: "Print the plan and change nothing" },
     consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
     force: { type: "boolean", description: "Alias for --consent" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -750,6 +751,7 @@ export const wsUpdateCommand = defineCommand({
         offline: args.offline,
         autostash: args.autostash,
         rebase: args.rebase,
+        dryRun: args.dryRun,
         resolveExtraHeader: (source) => resolveExtraHeader(config, source),
         trustedScopes: config.trustedScopes,
         explicitConsent: args.consent || args.force,
@@ -760,6 +762,26 @@ export const wsUpdateCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
+          if (result.dryRun) {
+            let plan = `Plan for ${result.workspaceName} (dry run, nothing changed):\n`;
+            for (const mount of result.mounts) {
+              const at = mount.revision ? ws.describeRevision(mount.revision) : "";
+              const line =
+                mount.action === "create"
+                  ? `would create at ${at}`
+                  : mount.action === "checkout"
+                    ? `would check out ${at}`
+                    : mount.action === "fast_forward"
+                      ? "would fast-forward"
+                      : mount.action === "rebase"
+                        ? "would rebase onto remote"
+                        : mount.action === "up_to_date"
+                          ? "up to date"
+                          : `would skip [${mount.reason}]`;
+              plan += `  → ${mount.path}: ${line}\n`;
+            }
+            return plan.trimEnd();
+          }
           let out = `Workspace: ${result.workspaceName}\n`;
           out += `Path:      ${result.workspacePath}\n`;
           out += `Summary:   ${result.summary.updated} updated, ${result.summary.upToDate} up to date, ${result.summary.skipped} skipped (${result.summary.total} total)\n`;

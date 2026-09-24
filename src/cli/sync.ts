@@ -386,6 +386,13 @@ export const syncCommand = defineCommand({
       if (!args.json) ui.info(`Sync action: workspace update (${wsName}).`);
       return await runNestedCommand(wsUpdateCommand, [...rawArgs, "--ws", wsName]);
     }
+    // The inventory sync has no dry run: never let the flag start a real one.
+    if (rawArgs.includes("--dry-run")) {
+      return reportError(
+        "--dry-run previews a workspace sync. Run it inside a workspace, or pass --ws <name>.",
+        args.json,
+      );
+    }
     if (!args.json) ui.info("Sync action: provider inventory.");
     return await runNestedCommand(syncInventoryCommand, rawArgs);
   },

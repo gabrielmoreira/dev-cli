@@ -164,6 +164,14 @@ describe("Local workspace safe update integration (Phase 5)", () => {
     await git.runGit(["checkout", "-q", "-b", "stray"], { cwd: onMain.mountPath });
     await rm(removed.mountPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
+    const preview = await ws.update({ root: tempRoot, workspaceName: "converge", dryRun: true });
+    expect(preview.mounts.map((m) => [m.path, m.action])).toEqual([
+      ["on-main", "checkout"],
+      ["removed", "create"],
+    ]);
+    expect((await git.inspectWorktree(onMain.mountPath)).currentRevision.branch).toBe("stray");
+    expect(fs.exists(removed.mountPath)).toBe(false);
+
     const first = await ws.update({ root: tempRoot, workspaceName: "converge" });
     const second = await ws.update({ root: tempRoot, workspaceName: "converge" });
 

@@ -1176,6 +1176,8 @@ export interface WorkspaceUpdateInput {
   autostash?: boolean;
   /** Rebase diverged mounts onto the remote branch with atomic rollback. */
   rebase?: boolean;
+  /** Observe and plan only: return what would happen and change nothing. */
+  dryRun?: boolean;
   resolveExtraHeader?: (source: string) => Promise<string | undefined>;
   trustedScopes?: TrustedScope[];
   explicitConsent?: boolean;
@@ -1198,6 +1200,8 @@ export interface MountUpdateResult {
 export interface WorkspaceUpdateResult {
   workspaceName: string;
   workspacePath: string;
+  /** True when the mounts are a plan that was not executed. */
+  dryRun: boolean;
   mounts: MountUpdateResult[];
   summary: {
     total: number;
@@ -1316,6 +1320,29 @@ export async function update(
 
   // Step 3: Validate
   validateUpdatePlan(plan);
+
+  if (input.dryRun) {
+    const current = new Map(statusRes.mounts.map((m) => [m.path, m.observed.currentRevision]));
+    return {
+      workspaceName: input.workspaceName,
+      workspacePath: statusRes.workspacePath,
+      dryRun: true,
+      mounts: plan.map((item) => ({
+        path: item.path,
+        source: item.source,
+        action: item.action,
+        reason: item.reason,
+        revision: item.revision,
+        previousCommit: current.get(item.path)?.commitSha,
+      })),
+      summary: {
+        total: plan.length,
+        updated: plan.filter((i) => i.action !== "up_to_date" && i.action !== "skipped").length,
+        upToDate: plan.filter((i) => i.action === "up_to_date").length,
+        skipped: plan.filter((i) => i.action === "skipped").length,
+      },
+    };
+  }
 
   // Step 4: Mutate (execute fast-forwards)
   const mountResults: MountUpdateResult[] = [];
@@ -1466,6 +1493,7 @@ export async function update(
   return {
     workspaceName: input.workspaceName,
     workspacePath: statusRes.workspacePath,
+    dryRun: false,
     mounts: mountResults,
     summary: {
       total: currentManifest.mounts.length,
