@@ -9,6 +9,7 @@ import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
+import { reportError } from "./errors.ts";
 
 function adoTenant(org: string): string {
   return org.includes("/") ? org : `dev.azure.com/${org}`;
@@ -101,8 +102,7 @@ export const wiListCommand = defineCommand({
     try {
       credential = await resolveAzureDevOpsCredential(config);
     } catch (error) {
-      ui.error(error instanceof Error ? error.message : String(error));
-      return 1;
+      return reportError(error, args.json);
     }
 
     const refreshTargets: Array<{

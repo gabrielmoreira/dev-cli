@@ -7,6 +7,7 @@ import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
+import { reportError } from "./errors.ts";
 
 export const worksetCreateCommand = defineCommand({
   meta: { name: "create", description: "Create a reusable repository workset" },
@@ -95,12 +96,7 @@ export const worksetCreateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof workset.WorksetError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -149,12 +145,7 @@ export const worksetRenameCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof workset.WorksetError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -339,12 +330,7 @@ export const worksetManageCommand = defineCommand({
         });
         return 0;
       } catch (error) {
-        ui.error(
-          error instanceof workset.WorksetError
-            ? `Error [${error.code}]: ${error.message}`
-            : `Error: ${error}`,
-        );
-        return 1;
+        return reportError(error, args.json);
       }
     }
   },
@@ -430,12 +416,7 @@ export const worksetRepoAddCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof workset.WorksetError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -534,12 +515,7 @@ export const worksetRepoEditCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof workset.WorksetError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -617,12 +593,7 @@ export const worksetRepoRemoveCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof workset.WorksetError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });

@@ -11,6 +11,7 @@ import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./inp
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { resolveMirrorSourceInput } from "./mirror-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
+import { reportError } from "./errors.ts";
 
 export const mirrorAddCommand = defineCommand({
   meta: {
@@ -73,12 +74,7 @@ export const mirrorAddCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof mirror.CanonicalMirrorError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -131,8 +127,7 @@ export const mirrorListCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -209,8 +204,7 @@ export const mirrorSyncCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -274,12 +268,7 @@ export const mirrorTrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof mirror.CanonicalMirrorError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -353,12 +342,7 @@ export const mirrorUntrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof mirror.CanonicalMirrorError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -419,8 +403,7 @@ export const mirrorPickCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });

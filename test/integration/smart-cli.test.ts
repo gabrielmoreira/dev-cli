@@ -740,7 +740,7 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Cancelled.");
+    expect(errors.join("\n")).toContain("Cancelled.");
 
     prompt.mockRestore();
   });
@@ -999,7 +999,7 @@ describe("smart CLI input", () => {
     });
 
     expect(removeExitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Cancelled.");
+    expect(errors.join("\n")).toContain("Cancelled.");
     removePrompt.mockRestore();
   });
 

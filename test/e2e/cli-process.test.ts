@@ -40,5 +40,6 @@ describe("CLI Process E2E (Phase 0)", () => {
 
     expect(exitCode).toBe(1);
     expect(stderr).toContain("Unknown command: 'nonexistent-cmd'");
+    expect(stderr).toContain("↳ dev --help");
   });
 });

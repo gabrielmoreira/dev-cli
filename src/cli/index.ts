@@ -12,6 +12,7 @@ import { type AmbientContext, setAmbient } from "./context.ts";
 import { detectWorkspaceFromCwd } from "../ws.ts";
 import { ui } from "../ui.ts";
 import { CliInputRequiredError } from "./input.ts";
+import { reportError } from "./errors.ts";
 import { qmdCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
@@ -337,20 +338,10 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   } catch (error: unknown) {
     if (error instanceof CliInputRequiredError) {
       if (currentAmbient.argv.includes("--json")) {
-        ui.error(
-          JSON.stringify(
-            {
-              code: error.code,
-              message: error.message,
-              ...error.details,
-            },
-            null,
-            2,
-          ),
-        );
-      } else {
-        ui.error(`Error: ${error.message}\nUsage: ${error.details.usage}`);
+        return reportError(error, true);
       }
+      ui.error(`✗ ${error.message}`);
+      ui.error(`↳ ${error.details.usage}`);
       return 1;
     }
 
@@ -360,11 +351,12 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       const cleanMsg = msg.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
       const match = cleanMsg.match(/Unknown command\s+([^\s]+)/i);
       const cmdName = match ? match[1] : argv[0];
-      ui.error(`Unknown command: '${cmdName}'. Run 'dev --help' for usage.`);
-    } else {
-      ui.error(`Error: ${msg}`);
+      ui.error(`✗ Unknown command: '${cmdName}'`);
+      ui.error("↳ dev --help");
+      return 1;
     }
-    return 1;
+
+    return reportError(error, currentAmbient.argv.includes("--json"));
   }
 }
 

@@ -30,6 +30,7 @@ import {
   resolveWorkspaceMountScope,
 } from "./workspace-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
+import { reportError } from "./errors.ts";
 
 async function resolvePullRequestPlan(
   config: RuntimeConfig,
@@ -196,8 +197,7 @@ export const wsInitCommand = defineCommand({
     try {
       validateMountPlan(mounts);
     } catch (error) {
-      ui.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      return 1;
+      return reportError(error, args.json);
     }
 
     let initializedPath: string | undefined;
@@ -633,12 +633,7 @@ export const wsAddCommand = defineCommand({
       }
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -709,12 +704,7 @@ export const wsStatusCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -797,12 +787,7 @@ export const wsUpdateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -872,12 +857,7 @@ export const wsTrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -936,12 +916,7 @@ export const wsLockCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1003,12 +978,7 @@ export const wsUnlockCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1070,12 +1040,7 @@ export const wsTagCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1139,12 +1104,7 @@ export const wsUpCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1210,12 +1170,7 @@ export const wsRemoveCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1252,12 +1207,7 @@ export const wsListCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1313,12 +1263,7 @@ export const wsDuplicateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1354,12 +1299,7 @@ export const wsPathCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1477,12 +1417,7 @@ export const wsJumpCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1572,12 +1507,7 @@ export const wsPickCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof ws.WorkspaceError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });
@@ -1646,12 +1576,7 @@ export const wsStartCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      ui.error(
-        error instanceof herdr.HerdrError
-          ? `Error [${error.code}]: ${error.message}`
-          : `Error: ${error}`,
-      );
-      return 1;
+      return reportError(error, args.json);
     }
   },
 });

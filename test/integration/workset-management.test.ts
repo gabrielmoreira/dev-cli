@@ -285,14 +285,24 @@ worksets:
     await fs.writeText(join(root, "dev.yaml"), initial);
 
     const code = await runCli({
-      argv: ["workset", "repo", "remove", "incident", "checkout-api", "--force", "--root", root],
+      argv: [
+        "workset",
+        "repo",
+        "remove",
+        "incident",
+        "checkout-api",
+        "--force",
+        "--json",
+        "--root",
+        root,
+      ],
       cwd: root,
       env: {},
       isTTY: false,
     });
 
     expect(code).toBe(1);
-    expect(logs.join("\n")).toContain("Error [WORKSET_LAST_MEMBER]");
+    expect(logs.join("\n")).toContain('"code": "WORKSET_LAST_MEMBER"');
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(initial);
   });
 
@@ -455,6 +465,7 @@ worksets:
         "main",
         "--path",
         "checkout-api",
+        "--json",
         "--root",
         root,
       ],
@@ -464,7 +475,7 @@ worksets:
     });
 
     expect(code).toBe(1);
-    expect(logs.join("\n")).toContain("Error [WORKSET_MEMBER_EXISTS]");
+    expect(logs.join("\n")).toContain('"code": "WORKSET_MEMBER_EXISTS"');
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(initial);
   });
 
