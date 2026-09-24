@@ -12,7 +12,7 @@ import { type AmbientContext, setAmbient } from "./context.ts";
 import { detectWorkspaceFromCwd } from "../ws.ts";
 import { ui } from "../ui.ts";
 import { CliInputRequiredError } from "./input.ts";
-import { reportError } from "./errors.ts";
+import { EXIT_CODE_MEANINGS, EXIT_USAGE, reportError, takeReportedExitCode } from "./errors.ts";
 import { qmdCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
@@ -118,6 +118,7 @@ export async function formatHelp(isLlms = false): Promise<string> {
       description: command.description,
       options: command.arguments,
       commands: command.subcommands ?? [],
+      exitCodes: EXIT_CODE_MEANINGS,
     },
     null,
     2,
@@ -300,6 +301,7 @@ export function normalizeCliArgs(argv: string[]): string[] {
 export async function runCli(ambient?: AmbientContext): Promise<number> {
   const currentAmbient = ambient ?? createDefaultAmbient();
   ui.reset();
+  takeReportedExitCode();
   setAmbient(currentAmbient);
   process.exitCode = 0;
 
@@ -346,21 +348,19 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
 
   try {
     const result = await runCommand(mainCommand, { rawArgs: normalizedArgs });
-    if (ui.hasError()) {
-      return 1;
-    }
-    if (typeof result === "number") {
-      return result;
-    }
-    if (
-      result &&
-      typeof result === "object" &&
-      "result" in result &&
-      typeof result.result === "number"
-    ) {
-      return result.result;
-    }
-    return 0;
+    const code =
+      typeof result === "number"
+        ? result
+        : result &&
+            typeof result === "object" &&
+            "result" in result &&
+            typeof result.result === "number"
+          ? result.result
+          : 0;
+    if (code !== 0) return code;
+    // A nested command's return value never reaches here; a handler that
+    // printed an error without reporting a code still failed.
+    return takeReportedExitCode() ?? (ui.hasError() ? 1 : 0);
   } catch (error: unknown) {
     if (error instanceof CliInputRequiredError) {
       if (currentAmbient.argv.includes("--json")) {
@@ -368,7 +368,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       }
       ui.error(`✗ ${error.message}`);
       ui.error(`↳ ${error.details.usage}`);
-      return 1;
+      return EXIT_USAGE;
     }
 
     const msg = error instanceof Error ? error.message : String(error);
@@ -379,7 +379,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       const cmdName = match ? match[1] : argv[0];
       ui.error(`✗ Unknown command: '${cmdName}'`);
       ui.error(`↳ ${(await suggestCommand(normalizedArgs)) ?? "dev --help"}`);
-      return 1;
+      return EXIT_USAGE;
     }
 
     return reportError(error, currentAmbient.argv.includes("--json"));
