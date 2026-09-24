@@ -237,7 +237,9 @@ export const wsInitCommand = defineCommand({
           let out = `Initialized workspace '${result.name}' at:\n`;
           out += `  Directory: ${result.path}\n`;
           out += `  Manifest:  ${result.manifestPath}`;
-          for (const mount of mounted) out += `\n  Mounted:   ${mount.mountName}`;
+          for (const mount of mounted) {
+            out += `\n  Mounted:   ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
+          }
           return out;
         },
       });
@@ -617,7 +619,8 @@ export const wsAddCommand = defineCommand({
                 return `○ ${at} is already mounted in '${result.workspaceName}'`;
               }
               const verb = result.outcome === "adopted" ? "Adopted existing checkout" : "Mounted";
-              return `✓ ${verb} ${at} from ${result.source} in '${result.workspaceName}'`;
+              const reused = result.mirrorReused ? " (reused the local mirror)" : "";
+              return `✓ ${verb} ${at} from ${result.source} in '${result.workspaceName}'${reused}`;
             })
             .join("\n"),
       });
@@ -791,7 +794,8 @@ export const wsUpdateCommand = defineCommand({
           out += "\n";
           for (const mount of result.mounts) {
             if (mount.action === "create") {
-              out += `  ✔ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
+              const reused = mount.mirrorReused ? ", reused the local mirror" : "";
+              out += `  ✔ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)}${reused})\n`;
             } else if (mount.action === "checkout") {
               out += `  ✔ ${mount.path}: back on ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
             } else if (mount.action === "fast_forward") {

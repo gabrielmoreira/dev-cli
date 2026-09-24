@@ -69,6 +69,7 @@ describe("Workspace add local Git integration (Phase 2)", () => {
     expect(addResult.workspaceName).toBe("payment-task");
     expect(addResult.mountName).toBe(git.deriveDefaultMountPath(bareRemotePath));
     expect(addResult.revision.mode).toBe("track");
+    expect(addResult.mirrorReused).toBe(false);
 
     // Verify 4 locations:
     // A. Central mirror
@@ -106,6 +107,7 @@ describe("Workspace add local Git integration (Phase 2)", () => {
     });
 
     expect(addResult.mountName).toBe("v1-mount");
+    expect(addResult.mirrorReused).toBe(true);
     expect(fs.exists(addResult.mountPath)).toBe(true);
     expect(fs.exists(join(addResult.mountPath, "v1.txt"))).toBe(true);
 

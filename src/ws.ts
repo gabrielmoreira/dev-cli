@@ -56,6 +56,8 @@ export interface WorkspaceAddInput {
 export interface WorkspaceAddResult {
   /** mounted: checked out now; adopted: an existing checkout was declared; already_mounted: nothing to do. */
   outcome: "mounted" | "adopted" | "already_mounted";
+  /** True when the checkout came from a mirror already in the local pool, so nothing was cloned. */
+  mirrorReused?: boolean;
   workspaceName: string;
   mountPath: string;
   mountName: string;
@@ -633,6 +635,7 @@ export async function add(
   let commitSha: string;
   let hookWarning: string | undefined;
   let createdWorktree: { adminRepoPath: string } | undefined;
+  let mirrorReused: boolean | undefined;
   if (adopted) {
     ({ revision, commitSha } = adopted);
   } else {
@@ -659,6 +662,7 @@ export async function add(
       source: input.source,
       extraHeader: input.extraHeader,
     });
+    mirrorReused = !mirror.created;
 
     // 2. Ensure private workspace admin bare clone
     const admin = await deps.git.ensureWorkspaceRepo({
@@ -776,6 +780,7 @@ export async function add(
 
   return {
     outcome: adopted ? "adopted" : "mounted",
+    mirrorReused,
     workspaceName: input.workspaceName,
     mountPath,
     mountName: plan.mountName,
@@ -1193,6 +1198,8 @@ export interface MountUpdateResult {
   reason?: UpdateSkipReason;
   /** The declared revision a create or checkout converged to. */
   revision?: manifest.MountRevision;
+  /** On create: the checkout came from a mirror already in the local pool. */
+  mirrorReused?: boolean;
   /** Non-fatal condition reported to the user (e.g. stash pop conflict). */
   warning?: string;
 }
@@ -1226,7 +1233,7 @@ async function createDeclaredMount(params: {
   workspacePath: string;
   mount: manifest.MountDefinition;
   deps: WorkspaceDeps;
-}): Promise<{ commitSha: string; hookWarning?: string }> {
+}): Promise<{ commitSha: string; mirrorReused: boolean; hookWarning?: string }> {
   const { input, workspacePath, mount, deps } = params;
   const mountPath = join(workspacePath, mount.path);
   const hookEnv = {
@@ -1263,11 +1270,12 @@ async function createDeclaredMount(params: {
     deps,
   });
 
-  const { mirrorPath, sourceKey } = await deps.git.ensureMirror({
+  const mirror = await deps.git.ensureMirror({
     root: input.root,
     source: mount.source,
     extraHeader: await input.resolveExtraHeader?.(mount.source),
   });
+  const { mirrorPath, sourceKey } = mirror;
   const { adminRepoPath } = await deps.git.ensureWorkspaceRepo({
     root: input.root,
     workspaceName: input.workspaceName,
@@ -1290,7 +1298,7 @@ async function createDeclaredMount(params: {
     throwOnFailure: false,
     deps,
   });
-  return { commitSha, hookWarning: postCheckoutRes.warning };
+  return { commitSha, mirrorReused: !mirror.created, hookWarning: postCheckoutRes.warning };
 }
 
 export async function update(
@@ -1367,6 +1375,7 @@ export async function update(
         source: item.source,
         action: "create",
         revision: mount.revision,
+        mirrorReused: created.mirrorReused,
         newCommit: created.commitSha,
         warning: created.hookWarning,
       });
