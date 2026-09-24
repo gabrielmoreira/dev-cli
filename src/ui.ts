@@ -34,15 +34,17 @@ export const ui = {
     }
   },
 
+  /** Narration: what is happening. Never the answer, so never stdout. */
   info(...args: unknown[]): void {
     if (!isQuietMode) {
-      console.log(...args);
+      console.error(...args);
     }
   },
 
+  /** Narration: something succeeded. Never the answer, so never stdout. */
   success(...args: unknown[]): void {
     if (!isQuietMode) {
-      console.log(...args);
+      console.error(...args);
     }
   },
 
@@ -85,7 +87,7 @@ export const ui = {
     const prompt = initial ? `${message} (${initial}): ` : `${message}: `;
     const readline = createInterface({
       input: process.stdin,
-      output: process.stdout,
+      output: process.stderr,
       terminal: true,
     });
     try {
