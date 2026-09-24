@@ -646,7 +646,8 @@ export async function sync(
       env: { DEV_ROOT: input.root },
     });
     if (res.exitCode !== 0) {
-      hookWarning = `post_sync hook failed with exit code ${res.exitCode}: ${res.stderr || res.stdout}`;
+      const output = (res.stderr || res.stdout).trim();
+      hookWarning = `post_sync hook failed with exit code ${res.exitCode}${output ? `: ${output}` : ""}`;
     }
   }
   stageMs.set("hooks", Date.now() - stageStart);

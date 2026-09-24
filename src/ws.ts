@@ -373,7 +373,8 @@ export async function executeHook(params: {
   });
 
   if (res.exitCode !== 0) {
-    const errorMsg = `${params.hookName} hook failed with exit code ${res.exitCode}: ${res.stderr || res.stdout}`;
+    const output = (res.stderr || res.stdout).trim();
+    const errorMsg = `${params.hookName} hook failed with exit code ${res.exitCode}${output ? `: ${output}` : ""}`;
     if (params.throwOnFailure) {
       throw new WorkspaceError("HOOK_FAILED", errorMsg, {
         exitCode: res.exitCode,
@@ -1494,7 +1495,8 @@ export async function update(
       });
 
       if (res.exitCode !== 0) {
-        hookWarning = `post_sync hook failed with exit code ${res.exitCode}: ${res.stderr || res.stdout}`;
+        const output = (res.stderr || res.stdout).trim();
+        hookWarning = `post_sync hook failed with exit code ${res.exitCode}${output ? `: ${output}` : ""}`;
       }
     }
   }
