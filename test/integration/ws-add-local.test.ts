@@ -198,4 +198,32 @@ describe("Workspace add local Git integration (Phase 2)", () => {
     expect(code).toBe("MOUNT_PATH_EXISTS_ON_DISK");
     expect(await fs.readText(join(tempRoot, "ws", "foreign", mountName, "notes.txt"))).toBe("mine");
   });
+
+  it("refuses a plain clone sitting at the mount path", async () => {
+    await ws.init({ root: tempRoot, name: "cloned" });
+    const mountName = git.deriveDefaultMountPath(bareRemotePath);
+    await git.runGit(["clone", "-q", bareRemotePath, join(tempRoot, "ws", "cloned", mountName)]);
+
+    const code = await codeOf(() =>
+      ws.add({ root: tempRoot, workspaceName: "cloned", source: bareRemotePath, branch: "main" }),
+    );
+
+    expect(code).toBe("MOUNT_PATH_EXISTS_ON_DISK");
+  });
+
+  it("does not call a declared mount switched to another branch already mounted", async () => {
+    await ws.init({ root: tempRoot, name: "switched" });
+    const request = {
+      root: tempRoot,
+      workspaceName: "switched",
+      source: bareRemotePath,
+      branch: "main",
+    };
+    const first = await ws.add(request);
+    await git.runGit(["checkout", "-q", "-b", "elsewhere"], { cwd: first.mountPath });
+
+    const code = await codeOf(() => ws.add(request));
+
+    expect(code).toBe("MOUNT_ALREADY_EXISTS");
+  });
 });

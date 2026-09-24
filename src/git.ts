@@ -515,7 +515,8 @@ export async function currentRevision(
 
 export async function worktreeAdminRepoPath(worktreePath: string): Promise<string | undefined> {
   const gitEntryPath = join(worktreePath, ".git");
-  if (!fs.exists(gitEntryPath)) return undefined;
+  // A worktree has a .git file; a plain clone has a .git directory.
+  if (!fs.exists(gitEntryPath) || (await fs.isDirectory(gitEntryPath))) return undefined;
   const gitdir = (await fs.readText(gitEntryPath)).replace(/^gitdir:\s*/, "").trim();
   return dirname(dirname(gitdir));
 }
@@ -608,6 +609,21 @@ export async function inspectWorktree(worktreePath: string): Promise<ObservedWor
         aheadCount = Number.parseInt(parts[1], 10) || 0;
       }
     }
+  } else if (rev.commitSha) {
+    // A detached HEAD has no upstream: its local commits are the ones no
+    // branch, tag or remote reaches, and a checkout would leave them behind.
+    const countRes = await runGit([
+      "-C",
+      worktreePath,
+      "rev-list",
+      "--count",
+      "HEAD",
+      "--not",
+      "--branches",
+      "--tags",
+      "--remotes",
+    ]);
+    if (countRes.exitCode === 0) aheadCount = Number.parseInt(countRes.stdout, 10) || 0;
   }
 
   return {

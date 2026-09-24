@@ -213,6 +213,29 @@ describe("Workspace update planning pure rules (Phase 5)", () => {
     expect(readonly.reason).toBe("readonly");
   });
 
+  it("keeps a mount on the wrong revision where it is when it holds commits nothing else has", () => {
+    const detachedWithWork = verdict("wrong_revision", {
+      currentRevision: { commitSha: "local-work" },
+      aheadCount: 1,
+    });
+
+    const [planned] = planWorkspaceUpdate([baseMount], [detachedWithWork]);
+
+    expect(planned.action).toBe("skipped");
+    expect(planned.reason).toBe("ahead_commits");
+  });
+
+  it("offline, skips creating a mount whose mirror is not on disk", () => {
+    const missing = verdict("missing", { exists: false, isGitWorktree: false });
+
+    const [planned] = planWorkspaceUpdate([baseMount], [missing], {
+      missingMirrors: new Set([baseMount.source]),
+    });
+
+    expect(planned.action).toBe("skipped");
+    expect(planned.reason).toBe("no_local_mirror");
+  });
+
   it("skips readonly mounts", () => {
     const readonlyMount: MountDefinition = {
       ...baseMount,

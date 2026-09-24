@@ -572,10 +572,27 @@ export async function add(
   const canonicalSource = deps.git.stripCredentialsFromUrl(input.source);
   const sourceKey = deps.git.normalizeSourceKey(input.source);
   const onDisk = deps.fs.exists(mountPath);
+  const expectedAdminRepoPath = workspaceAdminRepoPath({
+    root: input.root,
+    workspaceName: input.workspaceName,
+    sourceKey,
+  });
 
-  // Already so: this exact mount is declared and checked out.
+  // Already so: this exact mount is declared and checked out at its revision.
   if (plan.declared && onDisk) {
-    const observed = await deps.git.currentRevision(mountPath);
+    const observed = await observeAdoptableWorktree({
+      mountPath,
+      expectedAdminRepoPath,
+      requested: plan.declared.revision,
+      deps,
+    });
+    if (!observed) {
+      throw new WorkspaceError(
+        "MOUNT_ALREADY_EXISTS",
+        `'${plan.mountName}' is declared in ws.md, but ${mountPath} is not its checkout at ${describeRevision(plan.declared.revision)}`,
+        { mountPath, source: plan.declared.source },
+      );
+    }
     return {
       outcome: "already_mounted",
       workspaceName: input.workspaceName,
@@ -584,7 +601,7 @@ export async function add(
       source: plan.declared.source,
       sourceKey,
       revision: plan.declared.revision,
-      commitSha: observed.commitSha ?? "",
+      commitSha: observed.commitSha,
       readonly: plan.readonly,
     };
   }
@@ -596,11 +613,7 @@ export async function add(
   if (!plan.declared && onDisk) {
     adopted = await observeAdoptableWorktree({
       mountPath,
-      expectedAdminRepoPath: workspaceAdminRepoPath({
-        root: input.root,
-        workspaceName: input.workspaceName,
-        sourceKey,
-      }),
+      expectedAdminRepoPath,
       requested: plan.revision,
       deps,
     });
@@ -613,11 +626,14 @@ export async function add(
     }
   }
 
+  // A declared mount being checked out again runs the hooks ws.md declares.
+  const hooks = input.hooks ?? plan.declared?.hooks;
+
   // Pre-validate hook trust before any side effects
   const preCheckout = validateMountHookTrust({
     sourceUrl: input.source,
     hookName: "pre_checkout",
-    mountHook: input.hooks?.pre_checkout,
+    mountHook: hooks?.pre_checkout,
     trustedScopes: input.trustedScopes,
     explicitConsent: input.explicitConsent,
     deps,
@@ -626,7 +642,7 @@ export async function add(
   const postCheckout = validateMountHookTrust({
     sourceUrl: input.source,
     hookName: "post_checkout",
-    mountHook: input.hooks?.post_checkout,
+    mountHook: hooks?.post_checkout,
     trustedScopes: input.trustedScopes,
     explicitConsent: input.explicitConsent,
     deps,
@@ -992,6 +1008,7 @@ export type UpdateSkipReason =
   | "ahead_commits"
   | "diverged_history"
   | "not_a_worktree"
+  | "no_local_mirror"
   | "readonly"
   | "not_tracking_branch"
   | "rebase_conflict";
@@ -1012,7 +1029,12 @@ export interface PlannedMountUpdate {
 export function planWorkspaceUpdate(
   mounts: manifest.MountDefinition[],
   statusList: MountStatusVerdict[],
-  options: { autostash?: boolean; rebase?: boolean } = {},
+  options: {
+    autostash?: boolean;
+    rebase?: boolean;
+    /** Offline: sources with no mirror on disk, so no mount of theirs can be created. */
+    missingMirrors?: Set<string>;
+  } = {},
 ): PlannedMountUpdate[] {
   const statusByPath = new Map(statusList.map((s) => [s.path, s]));
 
@@ -1029,7 +1051,9 @@ export function planWorkspaceUpdate(
         branch: mount.revision.mode === "track" ? mount.revision.branch : undefined,
         ...(occupied
           ? { action: "skipped" as const, reason: "not_a_worktree" as const }
-          : { action: "create" as const, revision: mount.revision }),
+          : options.missingMirrors?.has(mount.source)
+            ? { action: "skipped" as const, reason: "no_local_mirror" as const }
+            : { action: "create" as const, revision: mount.revision }),
       };
     }
 
@@ -1107,8 +1131,18 @@ export function planWorkspaceUpdate(
     }
 
     // Status reports wrong_revision only for a clean worktree, so the checkout
-    // cannot overwrite uncommitted work.
+    // cannot overwrite uncommitted work. Commits only this checkout holds (on
+    // a detached HEAD, or unpushed on another branch) keep it where it is.
     if (status.state === "wrong_revision") {
+      if ((status.observed.aheadCount ?? 0) > 0) {
+        return {
+          path: mount.path,
+          source: mount.source,
+          branch: mount.revision.mode === "track" ? mount.revision.branch : undefined,
+          action: "skipped",
+          reason: "ahead_commits",
+        };
+      }
       return {
         path: mount.path,
         source: mount.source,
@@ -1229,13 +1263,38 @@ function revisionTarget(revision: manifest.MountRevision): string {
 }
 
 /** Checks out a mount declared in ws.md that is missing from disk, with its hooks. */
+interface CheckoutHooks {
+  preCheckout: ReturnType<typeof validateMountHookTrust>;
+  postCheckout: ReturnType<typeof validateMountHookTrust>;
+}
+
+/** Throws UNTRUSTED_HOOK_BLOCKED before anything is created. */
+function resolveCheckoutHooks(
+  mount: manifest.MountDefinition,
+  input: WorkspaceUpdateInput,
+  deps: WorkspaceDeps,
+): CheckoutHooks {
+  const trustHook = (hookName: "pre_checkout" | "post_checkout") =>
+    validateMountHookTrust({
+      sourceUrl: mount.source,
+      hookName,
+      mountHook: mount.hooks?.[hookName],
+      trustedScopes: input.trustedScopes,
+      explicitConsent: input.explicitConsent,
+      deps,
+    });
+  return { preCheckout: trustHook("pre_checkout"), postCheckout: trustHook("post_checkout") };
+}
+
 async function createDeclaredMount(params: {
   input: WorkspaceUpdateInput;
   workspacePath: string;
   mount: manifest.MountDefinition;
+  hooks: CheckoutHooks;
   deps: WorkspaceDeps;
 }): Promise<{ commitSha: string; mirrorReused: boolean; hookWarning?: string }> {
   const { input, workspacePath, mount, deps } = params;
+  const { preCheckout, postCheckout } = params.hooks;
   const mountPath = join(workspacePath, mount.path);
   const hookEnv = {
     DEV_ROOT: input.root,
@@ -1244,22 +1303,6 @@ async function createDeclaredMount(params: {
     DEV_SOURCE: mount.source,
     DEV_REVISION: revisionTarget(mount.revision),
   };
-  const preCheckout = validateMountHookTrust({
-    sourceUrl: mount.source,
-    hookName: "pre_checkout",
-    mountHook: mount.hooks?.pre_checkout,
-    trustedScopes: input.trustedScopes,
-    explicitConsent: input.explicitConsent,
-    deps,
-  });
-  const postCheckout = validateMountHookTrust({
-    sourceUrl: mount.source,
-    hookName: "post_checkout",
-    mountHook: mount.hooks?.post_checkout,
-    trustedScopes: input.trustedScopes,
-    explicitConsent: input.explicitConsent,
-    deps,
-  });
 
   await executeHook({
     command: preCheckout.command,
@@ -1321,14 +1364,31 @@ export async function update(
   const manifestPath = join(statusRes.workspacePath, "ws.md");
   const { manifest: currentManifest } = await deps.manifest.readWorkspace(manifestPath);
 
+  // Offline, a mount can only be created from a mirror already on disk.
+  const missingMirrors = input.offline
+    ? new Set(
+        currentManifest.mounts
+          .map((mount) => mount.source)
+          .filter((source) => !deps.fs.exists(gitPoolPath({ root: input.root, source }))),
+      )
+    : undefined;
+
   // Step 2: Plan
   const plan = planWorkspaceUpdate(currentManifest.mounts, statusRes.mounts, {
     autostash: input.autostash,
     rebase: input.rebase,
+    missingMirrors,
   });
 
-  // Step 3: Validate
+  // Step 3: Validate, including the hooks of every mount about to be created,
+  // so an untrusted hook stops the run before anything changes.
   validateUpdatePlan(plan);
+  const mountByPath = new Map(currentManifest.mounts.map((mount) => [mount.path, mount]));
+  const createHooks = new Map(
+    plan
+      .filter((item) => item.action === "create")
+      .map((item) => [item.path, resolveCheckoutHooks(mountByPath.get(item.path)!, input, deps)]),
+  );
 
   if (input.dryRun) {
     const current = new Map(statusRes.mounts.map((m) => [m.path, m.observed.currentRevision]));
@@ -1364,11 +1424,12 @@ export async function update(
     const prevCommit = statusForMount?.observed.currentRevision?.commitSha;
 
     if (item.action === "create") {
-      const mount = currentManifest.mounts.find((m) => m.path === item.path)!;
+      const mount = mountByPath.get(item.path)!;
       const created = await createDeclaredMount({
         input,
         workspacePath: statusRes.workspacePath,
         mount,
+        hooks: createHooks.get(item.path)!,
         deps,
       });
       mountResults.push({

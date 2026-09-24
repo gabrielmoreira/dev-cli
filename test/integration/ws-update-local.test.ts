@@ -185,4 +185,36 @@ describe("Local workspace safe update integration (Phase 5)", () => {
     );
     expect(second.mounts.map((m) => m.action)).toEqual(["up_to_date", "up_to_date"]);
   });
+
+  it("leaves a detached mount with its own commits where it is", async () => {
+    await ws.init({ root: tempRoot, name: "detached-work" });
+    const main = await git.runGit(["rev-parse", "main"], { cwd: bareRemotePath });
+    const locked = await ws.add({
+      root: tempRoot,
+      workspaceName: "detached-work",
+      source: bareRemotePath,
+      path: "locked",
+      commit: main.stdout.trim(),
+    });
+    await git.runGit(
+      [
+        "-c",
+        "user.name=a",
+        "-c",
+        "user.email=a@b",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "local work",
+      ],
+      { cwd: locked.mountPath },
+    );
+    const localHead = (await git.currentRevision(locked.mountPath)).commitSha;
+
+    const result = await ws.update({ root: tempRoot, workspaceName: "detached-work" });
+
+    expect(result.mounts.map((m) => [m.action, m.reason])).toEqual([["skipped", "ahead_commits"]]);
+    expect((await git.currentRevision(locked.mountPath)).commitSha).toBe(localHead);
+  });
 });
