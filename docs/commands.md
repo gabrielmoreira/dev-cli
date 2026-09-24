@@ -8,14 +8,15 @@ Complete command, argument, option, and subcommand reference generated from the 
 
 Developer CLI & Workspace Engine
 
-**Usage:** `dev [--root <value>] [--json] [--quiet] [--ws <value>] <command>`
+**Usage:** `dev [--root <value>] [--json] [--quiet] [--non-interactive] [--ws <value>] <command>`
 
-| Argument         | Type    | Description                      |
-| ---------------- | ------- | -------------------------------- |
-| `--root <value>` | string  | Explicit dev root directory      |
-| `--json`         | boolean | Output in structured JSON format |
-| `-q`, `--quiet`  | boolean | Silence non-essential output     |
-| `--ws <value>`   | string  | Target workspace name            |
+| Argument            | Type    | Description                                                                                   |
+| ------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `--root <value>`    | string  | Explicit dev root directory                                                                   |
+| `--json`            | boolean | Output in structured JSON format                                                              |
+| `-q`, `--quiet`     | boolean | Silence non-essential output                                                                  |
+| `--non-interactive` | boolean | Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent |
+| `--ws <value>`      | string  | Target workspace name                                                                         |
 
 | Subcommand       | Description                                                                       |
 | ---------------- | --------------------------------------------------------------------------------- |
@@ -232,24 +233,23 @@ Manage task-oriented multi-repo workspaces
 | `--root <value>` | string     | Explicit dev root directory                     |
 | `--json`         | boolean    | Output in structured JSON format                |
 
-| Subcommand         | Description                                        |
-| ------------------ | -------------------------------------------------- |
-| `dev ws init`      | Initialize a new workspace with ws.md and .local/  |
-| `dev ws add`       | Mount a repository into the workspace              |
-| `dev ws status`    | Inspect Desired vs Observed workspace status       |
-| `dev ws update`    | Safely fast-forward clean workspace mounts         |
-| `dev ws track`     | Switch mount to track a branch tip                 |
-| `dev ws lock`      | Freeze mount to current disk or specified commit   |
-| `dev ws unlock`    | Unlock mount back to tracking a branch             |
-| `dev ws tag`       | Pin mount to an immutable tag                      |
-| `dev ws up`        | Materialize and reconcile mounts declared in ws.md |
-| `dev ws remove`    | Remove mount worktree and prune from ws.md         |
-| `dev ws list`      | List all workspaces in $DEV_ROOT/ws/               |
-| `dev ws duplicate` | Duplicate a workspace with independent worktrees   |
-| `dev ws path`      | Print absolute path of target or current workspace |
-| `dev ws jump`      | Print jump target path for shell cd integration    |
-| `dev ws pick`      | Interactive picker for workspace mounts            |
-| `dev ws start`     | Start or focus OMP in HerdR for a dev workspace    |
+| Subcommand         | Description                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `dev ws init`      | Initialize a new workspace with ws.md and .local/                                     |
+| `dev ws add`       | Mount a repository into the workspace                                                 |
+| `dev ws status`    | Inspect Desired vs Observed workspace status                                          |
+| `dev ws update`    | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones |
+| `dev ws track`     | Switch mount to track a branch tip                                                    |
+| `dev ws lock`      | Freeze mount to current disk or specified commit                                      |
+| `dev ws unlock`    | Unlock mount back to tracking a branch                                                |
+| `dev ws tag`       | Pin mount to an immutable tag                                                         |
+| `dev ws remove`    | Remove mount worktree and prune from ws.md                                            |
+| `dev ws list`      | List all workspaces in $DEV_ROOT/ws/                                                  |
+| `dev ws duplicate` | Duplicate a workspace with independent worktrees                                      |
+| `dev ws path`      | Print absolute path of target or current workspace                                    |
+| `dev ws jump`      | Print jump target path for shell cd integration                                       |
+| `dev ws pick`      | Interactive picker for workspace mounts                                               |
+| `dev ws start`     | Start or focus OMP in HerdR for a dev workspace                                       |
 
 ## `dev ws init`
 
@@ -308,18 +308,19 @@ Inspect Desired vs Observed workspace status
 
 ## `dev ws update`
 
-Safely fast-forward clean workspace mounts
+Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones
 
-**Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--offline] [--autostash] [--rebase] [--consent] [--force] [--root <value>] [--json]`
+**Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--offline] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                                                        |
 | ---------------- | ---------- | ------------------------------------------------------------------ |
-| `target`         | positional | Workspace name or target mount                                     |
+| `target`         | positional | Workspace name or path to ws.md                                    |
 | `--ws <value>`   | string     | Target workspace name                                              |
 | `--refresh`      | boolean    | Fetch latest remote refs before fast-forwarding                    |
 | `--offline`      | boolean    | Read strictly from local mirror without network                    |
 | `--autostash`    | boolean    | Stash uncommitted changes, fast-forward, then pop the stash        |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict) |
+| `--dry-run`      | boolean    | Print the plan and change nothing                                  |
 | `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                      |
 | `--force`        | boolean    | Alias for --consent                                                |
 | `--root <value>` | string     | Explicit dev root directory                                        |
@@ -386,21 +387,6 @@ Pin mount to an immutable tag
 | `--ws <value>`      | string     | Target workspace name            |
 | `--root <value>`    | string     | Explicit dev root directory      |
 | `--json`            | boolean    | Output in structured JSON format |
-
-## `dev ws up`
-
-Materialize and reconcile mounts declared in ws.md
-
-**Usage:** `dev ws up [target] [--ws <value>] [--consent] [--force] [--root <value>] [--json]`
-
-| Argument         | Type       | Description                                    |
-| ---------------- | ---------- | ---------------------------------------------- |
-| `target`         | positional | Workspace name or path to ws.md                |
-| `--ws <value>`   | string     | Target workspace name                          |
-| `--consent`      | boolean    | Grant explicit consent to run repository hooks |
-| `--force`        | boolean    | Alias for --consent                            |
-| `--root <value>` | string     | Explicit dev root directory                    |
-| `--json`         | boolean    | Output in structured JSON format               |
 
 ## `dev ws remove`
 
