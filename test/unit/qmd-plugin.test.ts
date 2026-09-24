@@ -60,7 +60,7 @@ function makeHarness(devYaml?: string): Harness {
     root,
     config,
     shell,
-    ui: { error: () => {}, log: () => {}, warn: () => {} },
+    ui: { error: () => {}, info: () => {}, log: () => {}, warn: () => {} },
   } as unknown as PluginBase;
   return { base, shell, root };
 }
@@ -120,10 +120,10 @@ describe("qmd sync label selection", () => {
 });
 
 describe("qmd sync", () => {
-  it("errors without a label", async () => {
+  it("succeeds without touching qmd when no index label is configured", async () => {
     const { base, shell, root } = makeHarness();
     const plugin = createQmdPlugin(base);
-    expect(await plugin.run({ subcommand: "sync", label: "" })).toBe(1);
+    expect(await plugin.run({ subcommand: "sync", label: "" })).toBe(0);
     expect(shell.calls).toHaveLength(0);
     rmSync(root, { recursive: true, force: true });
   });

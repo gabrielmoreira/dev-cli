@@ -892,16 +892,18 @@ describe("smart CLI input", () => {
     select.mockRestore();
   });
 
-  test("reports missing index labels for argument-free qmd sync", async () => {
+  test("treats argument-free qmd sync with no index labels as an empty state", async () => {
     const exitCode = await runCli({
-      argv: ["qmd", "sync", "--root", root, "--json"],
+      argv: ["qmd", "sync", "--root", root],
       cwd: root,
       env: {},
       isTTY: false,
     });
 
-    expect(exitCode).toBe(1);
-    expect(errors.join("\n")).toContain("No index:* labels configured");
+    expect(exitCode).toBe(0);
+    const narration = errors.join("\n");
+    expect(narration).toContain("nothing to index");
+    expect(narration).toContain("dev mirror label add <source> index:docs");
   });
 
   test("prompts for a repository source before creating a mirror", async () => {

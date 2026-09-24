@@ -117,8 +117,10 @@ export async function syncCollections(
 ): Promise<number> {
   const labels = qmdSyncLabels(base.config, opts.label);
   if (labels.length === 0) {
-    base.ui.error("Error: No index:* labels configured in dev.yaml");
-    return 1;
+    // An empty state, not a failure: nothing is labeled for indexing yet.
+    base.ui.info("No index:* labels in dev.yaml, so there is nothing to index.");
+    base.ui.info("↳ dev mirror label add <source> index:docs");
+    return 0;
   }
 
   for (const [index, label] of labels.entries()) {
