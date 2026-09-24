@@ -32,6 +32,10 @@ export async function runGit(
       env: {
         ...process.env,
         GIT_TERMINAL_PROMPT: "0",
+        // Messages must be untranslated: some call sites match git's own wording.
+        // gettext picks LANGUAGE first, so both are needed to be certain.
+        LANGUAGE: "",
+        LC_ALL: "C",
         ...options.env,
       },
       stdout: "pipe",
