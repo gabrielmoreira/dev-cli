@@ -554,6 +554,8 @@ export async function add(
     deps,
   });
 
+  const canonicalSource = deps.git.stripCredentialsFromUrl(input.source);
+
   // Execute pre_checkout hook if resolved and allowed
   await executeHook({
     command: preCheckout.command,
@@ -563,15 +565,13 @@ export async function add(
       DEV_ROOT: input.root,
       DEV_WORKSPACE: input.workspaceName,
       DEV_MOUNT_PATH: mountPath,
-      DEV_SOURCE: input.source,
+      DEV_SOURCE: canonicalSource,
       DEV_REVISION: input.branch || input.tag || input.commit || "HEAD",
     },
     hookName: "pre_checkout",
     throwOnFailure: true,
     deps,
   });
-
-  const canonicalSource = deps.git.stripCredentialsFromUrl(input.source);
 
   // 1. Ensure central bare mirror
   const mirror = await deps.git.ensureMirror({
@@ -612,7 +612,7 @@ export async function add(
       DEV_ROOT: input.root,
       DEV_WORKSPACE: input.workspaceName,
       DEV_MOUNT_PATH: mountPath,
-      DEV_SOURCE: input.source,
+      DEV_SOURCE: canonicalSource,
       DEV_REVISION:
         revision.mode === "track"
           ? revision.branch
@@ -663,7 +663,7 @@ export async function add(
       ),
       DEV_MOUNT: plan.mountName,
       DEV_MOUNT_PATH: mountPath,
-      DEV_SOURCE: input.source,
+      DEV_SOURCE: canonicalSource,
       DEV_REVISION:
         revision.mode === "track"
           ? revision.branch
