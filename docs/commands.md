@@ -482,13 +482,14 @@ Interactive picker for workspace mounts
 
 Start or focus OMP in HerdR for a dev workspace
 
-**Usage:** `dev ws start [name] [--root <value>] [--json]`
+**Usage:** `dev ws start [name] [--root <value>] [--session <value>] [--json]`
 
-| Argument         | Type       | Description                            |
-| ---------------- | ---------- | -------------------------------------- |
-| `name`           | positional | Optional workspace name or fuzzy query |
-| `--root <value>` | string     | Explicit dev root directory            |
-| `--json`         | boolean    | Output in structured JSON format       |
+| Argument            | Type       | Description                            |
+| ------------------- | ---------- | -------------------------------------- |
+| `name`              | positional | Optional workspace name or fuzzy query |
+| `--root <value>`    | string     | Explicit dev root directory            |
+| `--session <value>` | string     | HerdR session to target                |
+| `--json`            | boolean    | Output in structured JSON format       |
 
 ## `dev mirror`
 
@@ -868,10 +869,11 @@ QMD plugin: collections from labeled sources (scoped registry)
 | `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
 | `--root <value>` | string     | Explicit dev root directory              |
 
-| Subcommand     | Description                                             |
-| -------------- | ------------------------------------------------------- |
-| `dev qmd sync` | Reconcile qmd collections from sources carrying a label |
-| `dev qmd x`    | Raw qmd passthrough with the scoped registry env        |
+| Subcommand       | Description                                               |
+| ---------------- | --------------------------------------------------------- |
+| `dev qmd sync`   | Reconcile qmd collections from sources carrying a label   |
+| `dev qmd search` | Search the scoped qmd index (shortcut for 'qmd x search') |
+| `dev qmd x`      | Raw qmd passthrough with the scoped registry env          |
 
 ## `dev qmd sync`
 
@@ -884,6 +886,17 @@ Reconcile qmd collections from sources carrying a label
 | `label`          | positional | Label whose sources become collections   |
 | `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
 | `--root <value>` | string     | Explicit dev root directory              |
+
+## `dev qmd search`
+
+Search the scoped qmd index (shortcut for 'qmd x search')
+
+**Usage:** `dev qmd search <query> [--root <value>]`
+
+| Argument         | Type       | Description                 |
+| ---------------- | ---------- | --------------------------- |
+| `query`          | positional | Search query Required.      |
+| `--root <value>` | string     | Explicit dev root directory |
 
 ## `dev qmd x`
 

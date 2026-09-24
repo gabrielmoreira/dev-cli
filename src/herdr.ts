@@ -19,12 +19,19 @@ export interface StartHerdrWorkspaceInput {
   path: string;
   insideHerdr: boolean;
   openClient?: boolean;
+  session?: string;
+}
+
+export interface HerdrSession {
+  name: string;
+  running: boolean;
 }
 
 export interface StartHerdrWorkspaceResult {
   workspace: string;
   path: string;
   herdrWorkspaceId: string;
+  session?: string;
   paneId: string;
   agentName: string;
   reused: boolean;
@@ -36,6 +43,9 @@ export interface HerdrDeps {
   startServer(): void;
   openClient(): void;
   wait(milliseconds: number): Promise<void>;
+  interactions?: {
+    chooseSession?(sessions: HerdrSession[]): Promise<string>;
+  };
 }
 
 interface PaneSummary {
@@ -51,7 +61,7 @@ interface AgentSummary extends PaneSummary {
   interactiveReady: boolean;
 }
 
-const defaultDeps: HerdrDeps = {
+export const defaultDeps: HerdrDeps = {
   run: async (args) => await shell.runCommand("herdr", args),
   canonicalize: async (path) => {
     try {
@@ -190,6 +200,68 @@ async function listAgents(deps: HerdrDeps): Promise<AgentSummary[]> {
   return parseAgents(result.stdout);
 }
 
+export function parseSessions(stdout: string): HerdrSession[] {
+  const sessions: HerdrSession[] = [];
+  for (const line of stdout.split(/\r?\n/)) {
+    const match = /^(\S+)\s+(running|stopped)\b/.exec(line.trim());
+    if (match) sessions.push({ name: match[1]!, running: match[2] === "running" });
+  }
+  return sessions;
+}
+
+async function listSessions(deps: HerdrDeps): Promise<HerdrSession[]> {
+  const result = await deps.run(["session", "list"]);
+  if (result.exitCode !== 0) throw commandError(["session", "list"], result);
+  return parseSessions(result.stdout);
+}
+
+async function resolveSession(
+  input: StartHerdrWorkspaceInput,
+  deps: HerdrDeps,
+): Promise<string | undefined> {
+  // Inside a pane the CLI already targets the surrounding session.
+  if (input.insideHerdr) return undefined;
+
+  const sessions = await listSessions(deps);
+  if (input.session) {
+    const chosen = sessions.find((session) => session.name === input.session);
+    if (!chosen?.running) {
+      throw new HerdrError(
+        "HERDR_SESSION_NOT_RUNNING",
+        `HerdR session '${input.session}' is not running. Running sessions: ${runningNames(sessions) || "none"}.`,
+        { session: input.session, sessions },
+      );
+    }
+    return chosen.name;
+  }
+
+  const running = sessions.filter((session) => session.running);
+  if (running.length === 0) return undefined;
+  if (running.length === 1) return running[0]!.name;
+
+  const choose = deps.interactions?.chooseSession;
+  if (!choose) {
+    throw new HerdrError(
+      "HERDR_AMBIGUOUS_SESSION",
+      `Multiple HerdR sessions are running (${runningNames(sessions)}). Pass --session <name>.`,
+      { sessions: running },
+    );
+  }
+  return await choose(running);
+}
+
+function runningNames(sessions: HerdrSession[]): string {
+  return sessions
+    .filter((session) => session.running)
+    .map((session) => session.name)
+    .join(", ");
+}
+
+function scopedDeps(deps: HerdrDeps, session: string | undefined): HerdrDeps {
+  if (!session) return deps;
+  return { ...deps, run: (args) => deps.run(["--session", session, ...args]) };
+}
+
 async function isServerRunning(deps: HerdrDeps): Promise<boolean> {
   const result = await deps.run(["status", "server"]);
   if (result.exitCode !== 0) throw commandError(["status", "server"], result);
@@ -251,8 +323,10 @@ function uniqueAgentName(workspace: string, agents: AgentSummary[]): string {
 
 export async function startWorkspace(
   input: StartHerdrWorkspaceInput,
-  deps: HerdrDeps = defaultDeps,
+  rawDeps: HerdrDeps = defaultDeps,
 ): Promise<StartHerdrWorkspaceResult> {
+  const session = await resolveSession(input, rawDeps);
+  const deps = scopedDeps(rawDeps, session);
   await ensureServer(input, deps);
 
   const targetPath = normalizePath(await deps.canonicalize(input.path));
@@ -270,6 +344,7 @@ export async function startWorkspace(
         workspace: input.workspace,
         path: input.path,
         herdrWorkspaceId: agent.workspaceId,
+        session,
         paneId: agent.paneId,
         agentName: agent.name ?? baseAgentName(input.workspace),
         reused: true,
@@ -329,6 +404,7 @@ export async function startWorkspace(
     workspace: input.workspace,
     path: input.path,
     herdrWorkspaceId: pane.workspaceId,
+    session,
     paneId: pane.paneId,
     agentName,
     reused: false,

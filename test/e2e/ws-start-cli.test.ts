@@ -8,12 +8,20 @@ import * as herdr from "../../src/herdr.ts";
 const fakeHerdr = `#!/usr/bin/env bun
 import { appendFile, readFile } from "node:fs/promises";
 
-const args = Bun.argv.slice(2);
-await appendFile(process.env.HERDR_CALLS, JSON.stringify(args) + "\\n");
+const raw = Bun.argv.slice(2);
+await appendFile(process.env.HERDR_CALLS, JSON.stringify(raw) + "\\n");
+const args = raw[0] === "--session" ? raw.slice(2) : raw;
 const scenario = process.env.HERDR_SCENARIO;
 const workspacePath = process.env.HERDR_WORKSPACE_PATH;
 const response = (result) => console.log(JSON.stringify({ id: "test", result }));
 
+
+if (args[0] === "session" && args[1] === "list") {
+  const status = scenario === "server-down" ? "stopped" : "running";
+  console.log("name     status   directory   socket");
+  console.log("default  " + status + "  /herdr   /herdr/herdr.sock");
+  process.exit(0);
+}
 if (args[0] === "status" && args[1] === "server") {
   const calls = await readFile(process.env.HERDR_CALLS, "utf8");
   const running = scenario !== "server-down" || calls.includes('["server"]');
@@ -72,8 +80,15 @@ describe("dev ws start CLI", () => {
     binDir = join(tempRoot, "bin");
     callsPath = join(tempRoot, "herdr-calls.jsonl");
     await mkdir(binDir, { recursive: true });
-    await Bun.write(join(binDir, "herdr"), fakeHerdr);
-    await chmod(join(binDir, "herdr"), 0o755);
+    // A shebang file is not executable on Windows: PATH lookup would fall through
+    // to the real herdr and drive the developer's live session.
+    await Bun.write(join(binDir, "herdr-fake.ts"), fakeHerdr);
+    if (process.platform === "win32") {
+      await Bun.write(join(binDir, "herdr.cmd"), `@echo off\r\nbun "%~dp0herdr-fake.ts" %*\r\n`);
+    } else {
+      await Bun.write(join(binDir, "herdr"), fakeHerdr);
+      await chmod(join(binDir, "herdr"), 0o755);
+    }
     const workspace = await ws.init({
       root: tempRoot,
       name: "payment-fix",
@@ -119,7 +134,13 @@ describe("dev ws start CLI", () => {
     );
     const stdout = await new Response(proc.stdout).text();
     const stderr = await new Response(proc.stderr).text();
-    return { exitCode: await proc.exited, stdout, stderr };
+    const exitCode = await proc.exited;
+    // Empty call log means PATH resolved something other than the fake: refuse to
+    // interpret results produced by a real HerdR session.
+    const calls = await readFile(callsPath, "utf8");
+    if (calls.trim() === "")
+      throw new Error("fake herdr was never invoked; the real binary may have run");
+    return { exitCode, stdout, stderr };
   }
 
   it("creates a HerdR workspace at the dev workspace root and starts OMP", async () => {
@@ -238,12 +259,33 @@ describe("dev ws start CLI", () => {
       .split("\n")
       .map((line) => JSON.parse(line));
     expect(calls).toEqual([
-      ["status", "server"],
-      ["pane", "list"],
-      ["agent", "list"],
-      ["workspace", "create", "--cwd", workspacePath, "--label", "payment-fix", "--no-focus"],
-      ["agent", "start", "payment-fix-omp", "--kind", "omp", "--pane", "w7:p1"],
-      ["workspace", "focus", "w7"],
+      ["session", "list"],
+      ["--session", "default", "status", "server"],
+      ["--session", "default", "pane", "list"],
+      ["--session", "default", "agent", "list"],
+      [
+        "--session",
+        "default",
+        "workspace",
+        "create",
+        "--cwd",
+        workspacePath,
+        "--label",
+        "payment-fix",
+        "--no-focus",
+      ],
+      [
+        "--session",
+        "default",
+        "agent",
+        "start",
+        "payment-fix-omp",
+        "--kind",
+        "omp",
+        "--pane",
+        "w7:p1",
+      ],
+      ["--session", "default", "workspace", "focus", "w7"],
     ]);
   });
 
@@ -255,7 +297,8 @@ describe("dev ws start CLI", () => {
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    expect(calls.slice(0, 4)).toEqual([
+    expect(calls.slice(0, 5)).toEqual([
+      ["session", "list"],
       ["status", "server"],
       ["server"],
       ["status", "server"],

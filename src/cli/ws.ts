@@ -1594,6 +1594,7 @@ export const wsStartCommand = defineCommand({
       required: false,
     },
     root: { type: "string", description: "Explicit dev root directory" },
+    session: { type: "string", description: "HerdR session to target" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
@@ -1615,18 +1616,33 @@ export const wsStartCommand = defineCommand({
     );
 
     try {
-      const result = await herdr.startWorkspace({
-        workspace: workspace.value,
-        path: workspacePath,
-        insideHerdr: ambient.env.HERDR_ENV === "1",
-        openClient:
-          ambient.env.HERDR_ENV !== "1" && ambient.isTTY && ambient.stdinIsTTY && !args.json,
-      });
+      const interactive = ambient.isTTY && ambient.stdinIsTTY && !args.json;
+      const result = await herdr.startWorkspace(
+        {
+          workspace: workspace.value,
+          path: workspacePath,
+          insideHerdr: ambient.env.HERDR_ENV === "1",
+          session: args.session,
+          openClient: ambient.env.HERDR_ENV !== "1" && interactive,
+        },
+        interactive
+          ? {
+              ...herdr.defaultDeps,
+              interactions: {
+                chooseSession: async (sessions) =>
+                  await ui.select(
+                    "Which HerdR session?",
+                    sessions.map((session) => ({ label: session.name, value: session.name })),
+                  ),
+              },
+            }
+          : undefined,
+      );
       ui.result({
         data: result,
         json: args.json,
         text: () =>
-          `${result.reused ? "Focused" : "Started"} OMP '${result.agentName}' for workspace '${result.workspace}' in HerdR.`,
+          `${result.reused ? "Focused" : "Started"} OMP '${result.agentName}' for workspace '${result.workspace}' in HerdR${result.session ? ` session '${result.session}'` : ""}.`,
       });
       return 0;
     } catch (error) {
