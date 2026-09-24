@@ -45,18 +45,26 @@ function persistWorksets(config: RuntimeConfig, worksets: Record<string, Workset
   config.worksets = worksets;
 }
 
+/** created is false when a workset with this exact definition already exists. */
 export function createWorkset(
   config: RuntimeConfig,
   name: string,
   definition: WorksetDefinition,
-): WorksetDefinition {
+): { definition: WorksetDefinition; created: boolean } {
   const normalizedName = name.trim();
-  if (Object.hasOwn(config.worksets, normalizedName)) {
-    throw new WorksetError("WORKSET_EXISTS", `Workset '${normalizedName}' already exists.`);
-  }
   const parsed = WorksetDefinitionSchema.parse(definition);
+  if (Object.hasOwn(config.worksets, normalizedName)) {
+    const existing = config.worksets[normalizedName]!;
+    if (Bun.deepEquals(WorksetDefinitionSchema.parse(existing), parsed)) {
+      return { definition: existing, created: false };
+    }
+    throw new WorksetError(
+      "WORKSET_EXISTS",
+      `Workset '${normalizedName}' already exists with a different definition.`,
+    );
+  }
   persistWorksets(config, { ...config.worksets, [normalizedName]: parsed });
-  return parsed;
+  return { definition: parsed, created: true };
 }
 
 export function renameWorkset(
@@ -83,10 +91,14 @@ export function renameWorkset(
   return definition;
 }
 
+function memberIdentity(member: WorksetDefinition["members"][number]): string {
+  return JSON.stringify([member.source, member.ref ?? null, member.path ?? null]);
+}
+
 function validateUniqueMembers(members: WorksetDefinition["members"]): void {
   const identities = new Set<string>();
   for (const member of members) {
-    const identity = JSON.stringify([member.source, member.ref ?? null, member.path ?? null]);
+    const identity = memberIdentity(member);
     if (identities.has(identity)) {
       throw new WorksetError(
         "WORKSET_MEMBER_EXISTS",
@@ -97,23 +109,26 @@ function validateUniqueMembers(members: WorksetDefinition["members"]): void {
   }
 }
 
+/** added is false when a member with the same source, ref and path is already there. */
 export function addWorksetMember(
   config: RuntimeConfig,
   name: string,
   member: WorksetDefinition["members"][number],
-): WorksetDefinition {
+): { definition: WorksetDefinition; added: boolean } {
   const definition = config.worksets[name];
   if (!definition) {
     throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
   }
-  const members = [...definition.members, member];
-  validateUniqueMembers(members);
+  const identity = memberIdentity(member);
+  if (definition.members.some((existing) => memberIdentity(existing) === identity)) {
+    return { definition, added: false };
+  }
   const updated = WorksetDefinitionSchema.parse({
     ...definition,
-    members,
+    members: [...definition.members, member],
   });
   persistWorksets(config, { ...config.worksets, [name]: updated });
-  return updated;
+  return { definition: updated, added: true };
 }
 
 type WorksetMember = WorksetDefinition["members"][number];

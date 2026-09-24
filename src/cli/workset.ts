@@ -87,12 +87,13 @@ export const worksetCreateCommand = defineCommand({
         ui.log(renderWorkset(name.value, draft));
         if (!(await ui.confirm("Create this workset?", true))) return 0;
       }
-      const definition = workset.createWorkset(config, name.value, draft);
-      const result = { name: name.value, ...definition };
+      const { definition, created } = workset.createWorkset(config, name.value, draft);
       ui.result({
-        data: result,
+        data: { name: name.value, created, ...definition },
         json: args.json,
-        text: `Created workset '${name.value}'.`,
+        text: created
+          ? `✓ Created workset '${name.value}' with ${member.source}`
+          : `○ Workset '${name.value}' already exists with this definition`,
       });
       return 0;
     } catch (error) {
@@ -407,11 +408,13 @@ export const worksetRepoAddCommand = defineCommand({
         ui.log(renderWorkset(selectedWorkset.value, { members: [member] }));
         if (!(await ui.confirm("Add this repository?", true))) return 0;
       }
-      const definition = workset.addWorksetMember(config, selectedWorkset.value, member);
+      const { definition, added } = workset.addWorksetMember(config, selectedWorkset.value, member);
       ui.result({
-        data: { name: selectedWorkset.value, ...definition },
+        data: { name: selectedWorkset.value, added, ...definition },
         json: args.json,
-        text: `Added repository to workset '${selectedWorkset.value}'.`,
+        text: added
+          ? `✓ Added ${member.source} to workset '${selectedWorkset.value}'`
+          : `○ ${member.source} is already in workset '${selectedWorkset.value}'`,
       });
       return 0;
     } catch (error) {

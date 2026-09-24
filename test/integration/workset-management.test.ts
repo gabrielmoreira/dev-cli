@@ -47,6 +47,35 @@ plugins:
     await rm(root, { recursive: true, force: true });
   });
 
+  test("reports an identical create as already so and a different one as a conflict", async () => {
+    const create = (description: string) =>
+      runCli({
+        argv: [
+          "workset",
+          "create",
+          "incident",
+          "https://github.com/example/checkout-api.git",
+          "--description",
+          description,
+          "--root",
+          root,
+          "--json",
+        ],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      });
+
+    expect(await create("Checkout incident")).toBe(0);
+    const afterFirst = await fs.readText(join(root, "dev.yaml"));
+    logs.length = 0;
+    expect(await create("Checkout incident")).toBe(0);
+    expect(logs.join("\n")).toContain('"created": false');
+    expect(await create("Another incident")).toBe(1);
+    expect(logs.join("\n")).toContain('"code": "WORKSET_EXISTS"');
+    expect(await fs.readText(join(root, "dev.yaml"))).toBe(afterFirst);
+  });
+
   test("creates a workset without disturbing unrelated YAML", async () => {
     const code = await runCli({
       argv: [
@@ -443,7 +472,7 @@ worksets:
     confirm.mockRestore();
   });
 
-  test("rejects a duplicate repository identity", async () => {
+  test("treats a repository with the same identity as already in the workset", async () => {
     const initial = `version: 1
 worksets:
   incident:
@@ -474,8 +503,8 @@ worksets:
       isTTY: false,
     });
 
-    expect(code).toBe(1);
-    expect(logs.join("\n")).toContain('"code": "WORKSET_MEMBER_EXISTS"');
+    expect(code).toBe(0);
+    expect(logs.join("\n")).toContain('"added": false');
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(initial);
   });
 

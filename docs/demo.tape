@@ -181,7 +181,7 @@ Enter
 Wait+Screen@20s /Add this repository/
 Sleep 1s
 Type "y"
-Wait+Screen@20s /Added repository to workset 'incident'/
+Wait+Screen@20s /to workset 'incident'/
 Sleep 2s
 Type "clear"
 Enter
