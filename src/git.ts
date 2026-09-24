@@ -67,7 +67,9 @@ export async function listRemoteBranches(options: {
   const result = await runGit(args, { source: options.source });
   if (result.exitCode !== 0) {
     throw new Error(
-      `Failed to list branches for ${stripCredentialsFromUrl(options.source)}: ${result.stderr || result.stdout}`,
+      redactCredentials(
+        `Failed to list branches for ${options.source}: ${result.stderr || result.stdout}`,
+      ),
     );
   }
   let defaultBranch: string | undefined;
@@ -92,6 +94,16 @@ export async function listRemoteBranches(options: {
 
 export function stripCredentialsFromUrl(url: string): string {
   return url.trim().replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@/]+@/i, "$1");
+}
+
+/**
+ * Removes `user:secret@` from every URL inside a free-text string. Use this on anything
+ * that reaches a user, a log or a hook: error messages, git stderr, reports. Unlike
+ * stripCredentialsFromUrl it is not anchored, so it also cleans URLs embedded in a
+ * sentence, and it is safe to apply to text that contains no URL at all.
+ */
+export function redactCredentials(text: string): string {
+  return text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@\s/]+@/gi, "$1");
 }
 
 export function normalizeSourceKey(url: string): string {
@@ -175,7 +187,11 @@ export async function ensureMirror(options: EnsureMirrorOptions): Promise<Ensure
 
   const res = await runGit(cloneArgs, { source: options.source });
   if (res.exitCode !== 0) {
-    throw new Error(`Failed to create mirror for ${options.source}: ${res.stderr || res.stdout}`);
+    throw new Error(
+      redactCredentials(
+        `Failed to create mirror for ${options.source}: ${res.stderr || res.stdout}`,
+      ),
+    );
   }
 
   // Configure gc invariants
@@ -202,7 +218,11 @@ export async function fetchMirror(options: FetchMirrorOptions): Promise<void> {
 
   const res = await runGit(args, { source });
   if (res.exitCode !== 0) {
-    throw new Error(`Failed to fetch mirror at ${options.mirrorPath}: ${res.stderr || res.stdout}`);
+    throw new Error(
+      redactCredentials(
+        `Failed to fetch mirror at ${options.mirrorPath}: ${res.stderr || res.stdout}`,
+      ),
+    );
   }
 }
 
@@ -220,7 +240,11 @@ export async function fetchAdminRepo(adminRepoPath: string, mirrorPath?: string)
     source: mirrorPath ?? (origin?.exitCode === 0 ? origin.stdout : undefined),
   });
   if (res.exitCode !== 0) {
-    throw new Error(`Failed to fetch admin repo at ${adminRepoPath}: ${res.stderr || res.stdout}`);
+    throw new Error(
+      redactCredentials(
+        `Failed to fetch admin repo at ${adminRepoPath}: ${res.stderr || res.stdout}`,
+      ),
+    );
   }
 }
 
@@ -422,7 +446,9 @@ export async function addWorktree(options: AddWorktreeOptions): Promise<{ commit
   }
 
   if (res.exitCode !== 0) {
-    throw new Error(`Failed to create worktree mount: ${res.stderr || res.stdout}`);
+    throw new Error(
+      redactCredentials(`Failed to create worktree mount: ${res.stderr || res.stdout}`),
+    );
   }
 
   if (options.revision.mode === "track") {
@@ -655,7 +681,9 @@ export async function fastForward(options: FastForwardOptions): Promise<void> {
   const res = await runGit(["-C", options.worktreePath, "merge", "--ff-only", options.targetRef]);
   if (res.exitCode !== 0) {
     throw new Error(
-      `Failed to fast-forward worktree at ${options.worktreePath} to ${options.targetRef}: ${res.stderr || res.stdout}`,
+      redactCredentials(
+        `Failed to fast-forward worktree at ${options.worktreePath} to ${options.targetRef}: ${res.stderr || res.stdout}`,
+      ),
     );
   }
 }
@@ -664,7 +692,9 @@ export async function switchBranch(worktreePath: string, branch: string): Promis
   const res = await runGit(["-C", worktreePath, "checkout", branch]);
   if (res.exitCode !== 0) {
     throw new Error(
-      `Failed to switch worktree at ${worktreePath} to branch '${branch}': ${res.stderr || res.stdout}`,
+      redactCredentials(
+        `Failed to switch worktree at ${worktreePath} to branch '${branch}': ${res.stderr || res.stdout}`,
+      ),
     );
   }
 }
@@ -673,7 +703,9 @@ export async function checkoutRevision(worktreePath: string, target: string): Pr
   const res = await runGit(["-C", worktreePath, "checkout", target]);
   if (res.exitCode !== 0) {
     throw new Error(
-      `Failed to checkout '${target}' in worktree at ${worktreePath}: ${res.stderr || res.stdout}`,
+      redactCredentials(
+        `Failed to checkout '${target}' in worktree at ${worktreePath}: ${res.stderr || res.stdout}`,
+      ),
     );
   }
 }
@@ -690,7 +722,11 @@ export async function removeWorktree(
   args.push(worktreePath);
   const res = await runGit(args);
   if (res.exitCode !== 0) {
-    throw new Error(`Failed to remove worktree at ${worktreePath}: ${res.stderr || res.stdout}`);
+    throw new Error(
+      redactCredentials(
+        `Failed to remove worktree at ${worktreePath}: ${res.stderr || res.stdout}`,
+      ),
+    );
   }
 }
 

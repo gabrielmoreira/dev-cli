@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   deriveDefaultMountPath,
   normalizeSourceKey,
+  redactCredentials,
   stripCredentialsFromUrl,
 } from "../../src/git.ts";
 import { planMount, WorkspaceError } from "../../src/ws.ts";
@@ -122,5 +123,19 @@ describe("Git topology pure rules (Phase 2)", () => {
         ],
       }),
     ).toThrow("Branch 'main' is already mounted for this repository");
+  });
+
+  it("removes credentials from anywhere inside a message", () => {
+    const message =
+      "Failed to create mirror for https://user:ghp_secret@github.com/org/repo: fatal: could not read from https://user:ghp_secret@github.com/org/repo";
+    const safe = redactCredentials(message);
+    expect(safe).not.toContain("ghp_secret");
+    expect(safe).not.toContain("user:");
+    expect(safe).toContain("https://github.com/org/repo");
+  });
+
+  it("leaves text without credentials untouched", () => {
+    expect(redactCredentials("fatal: repository not found")).toBe("fatal: repository not found");
+    expect(redactCredentials("https://github.com/org/repo")).toBe("https://github.com/org/repo");
   });
 });
