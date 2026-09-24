@@ -1,5 +1,5 @@
 import yaml from "yaml";
-import { readText, writeText } from "./fs.ts";
+import { readText, writeTextAtomic } from "./fs.ts";
 
 export interface RevisionTracking {
   mode: "track";
@@ -127,5 +127,5 @@ export async function writeWorkspace(
   body?: string,
 ): Promise<void> {
   const content = serializeWorkspace(manifest, body);
-  await writeText(filePath, content);
+  await writeTextAtomic(filePath, content);
 }

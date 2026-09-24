@@ -107,7 +107,7 @@ export async function loadGlobalConfig(configPath?: string): Promise<GlobalConfi
 export async function saveGlobalConfig(config: GlobalConfig, configPath?: string): Promise<void> {
   const targetPath = resolve(configPath || getGlobalConfigPath());
   const content = serializeGlobalToml(config);
-  await fs.writeText(targetPath, content);
+  await fs.writeTextAtomic(targetPath, content);
 }
 
 export function registerGlobalRoot(

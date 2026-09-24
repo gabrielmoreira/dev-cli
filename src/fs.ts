@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { chmod, mkdir, readdir, rename, rm, stat, unlink } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
 export async function ensureDir(dirPath: string): Promise<void> {
   await mkdir(dirPath, { recursive: true });
@@ -25,6 +25,37 @@ export async function readText(path: string): Promise<string> {
 
 export async function writeText(path: string, content: string): Promise<void> {
   await Bun.write(path, content);
+}
+
+/**
+ * Writes a file the way a durable record must be written: to a temporary file
+ * first, then renamed over the target. A crash mid-write leaves either the old
+ * content or the new one, never a truncated file.
+ */
+export async function writeTextAtomic(path: string, content: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+
+  const tempPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  await Bun.write(tempPath, content);
+
+  let attempts = 15;
+  while (attempts > 0) {
+    try {
+      await rename(tempPath, path);
+      return;
+    } catch (err: any) {
+      if (
+        (err?.code === "EPERM" || err?.code === "EBUSY" || err?.code === "EEXIST") &&
+        attempts > 1
+      ) {
+        attempts--;
+        await Bun.sleep(10 + Math.floor(Math.random() * 20));
+        continue;
+      }
+      await unlink(tempPath).catch(() => {});
+      throw err;
+    }
+  }
 }
 export async function makeExecutable(path: string): Promise<void> {
   await chmod(path, 0o755);

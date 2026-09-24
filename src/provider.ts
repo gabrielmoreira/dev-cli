@@ -40,7 +40,7 @@ export async function addProvider(root: string, provider: ProviderConfig): Promi
   filtered.push(provider);
 
   doc.set("providers", filtered);
-  await fs.writeText(devYamlPath, doc.toString());
+  await fs.writeTextAtomic(devYamlPath, doc.toString());
 }
 
 export async function removeProvider(root: string, id: string): Promise<boolean> {
@@ -67,7 +67,7 @@ export async function removeProvider(root: string, id: string): Promise<boolean>
   }
 
   doc.set("providers", filtered);
-  await fs.writeText(devYamlPath, doc.toString());
+  await fs.writeTextAtomic(devYamlPath, doc.toString());
   return true;
 }
 

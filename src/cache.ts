@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { mkdir, rename, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { glob } from "tinyglobby";
+import { writeTextAtomic } from "./fs.ts";
 import { cacheDir, inventoryCachePath, prsCachePath, workItemsCachePath } from "./paths.ts";
 
 const cacheSubdir = ({ root, kind }: { root: string; kind: string }): string =>
@@ -29,33 +29,6 @@ export interface ReadInventoryOptions {
   tenant: string;
 }
 
-async function writeCacheAtomic(filePath: string, content: string): Promise<void> {
-  const dir = dirname(filePath);
-  await mkdir(dir, { recursive: true });
-
-  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
-  await Bun.write(tempPath, content);
-
-  let attempts = 15;
-  while (attempts > 0) {
-    try {
-      await rename(tempPath, filePath);
-      return;
-    } catch (err: any) {
-      if (
-        (err?.code === "EPERM" || err?.code === "EBUSY" || err?.code === "EEXIST") &&
-        attempts > 1
-      ) {
-        attempts--;
-        await new Promise((r) => setTimeout(r, 10 + Math.floor(Math.random() * 20)));
-        continue;
-      }
-      await unlink(tempPath).catch(() => {});
-      throw err;
-    }
-  }
-}
-
 /**
  * Resolves the absolute path to a tenant inventory JSONL cache file:
  * $DEV_ROOT/.dev/cache/inventory/<tenant>/repos.jsonl
@@ -72,7 +45,7 @@ export async function writeInventory(options: WriteInventoryOptions): Promise<st
   const content =
     options.records.map((r) => JSON.stringify(r)).join("\n") +
     (options.records.length > 0 ? "\n" : "");
-  await writeCacheAtomic(filePath, content);
+  await writeTextAtomic(filePath, content);
   return filePath;
 }
 
@@ -181,7 +154,7 @@ export async function writePullRequests(options: WritePullRequestsOptions): Prom
   const content =
     options.records.map((r) => JSON.stringify(r)).join("\n") +
     (options.records.length > 0 ? "\n" : "");
-  await writeCacheAtomic(filePath, content);
+  await writeTextAtomic(filePath, content);
   return filePath;
 }
 
@@ -232,7 +205,7 @@ export async function writePullRequestSelection(
   const content =
     options.records.map((record) => JSON.stringify(record)).join("\n") +
     (options.records.length > 0 ? "\n" : "");
-  await writeCacheAtomic(filePath, content);
+  await writeTextAtomic(filePath, content);
   return filePath;
 }
 
@@ -332,7 +305,7 @@ export function resolveWorkItemCachePath(
 export async function writeWorkItems(options: WriteWorkItemsOptions): Promise<string> {
   const filePath = resolveWorkItemCachePath(options.root, options.tenant, options.project);
   const content = options.records.map((r) => JSON.stringify(r)).join("\n") + "\n";
-  await writeCacheAtomic(filePath, content);
+  await writeTextAtomic(filePath, content);
   return filePath;
 }
 
