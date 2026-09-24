@@ -389,7 +389,10 @@ export const syncCommand = defineCommand({
     // The inventory sync has no dry run: never let the flag start a real one.
     if (rawArgs.includes("--dry-run")) {
       return reportError(
-        "--dry-run previews a workspace sync. Run it inside a workspace, or pass --ws <name>.",
+        new ws.WorkspaceError(
+          "CONFLICTING_OPTIONS",
+          "--dry-run previews a workspace sync. Run it inside a workspace, or pass --ws <name>.",
+        ),
         args.json,
       );
     }

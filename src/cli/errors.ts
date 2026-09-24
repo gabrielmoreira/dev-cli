@@ -9,7 +9,6 @@ import { CancelledError, ui } from "../ui.ts";
 const NEXT_STEPS: Record<string, string> = {
   BRANCH_ALREADY_MOUNTED: "dev ws status",
   CREDENTIAL_NOT_AVAILABLE: "gh auth login    # or: az login",
-  DIVERGED: "dev ws update --rebase",
   MANIFEST_NOT_FOUND: "dev ls",
   MOUNT_ALREADY_EXISTS: "dev ws status",
   MOUNT_NOT_FOUND: "dev ws status",
@@ -44,12 +43,11 @@ const EXIT_CODES: Record<string, number> = {
   INVALID_SOURCE: EXIT_USAGE,
   INVALID_WORKSPACE_NAME: EXIT_USAGE,
   LABEL_VALIDATION: EXIT_USAGE,
+  // mirror add --branch <default>: that checkout is the mirror itself.
+  DEFAULT_BRANCH: EXIT_USAGE,
 
-  AHEAD_COMMITS: 3,
   BRANCH_ALREADY_MOUNTED: 3,
-  DEFAULT_BRANCH: 3,
   DIRTY_WORKTREE: 3,
-  DIVERGED: 3,
   MOUNT_ALREADY_EXISTS: 3,
   MOUNT_PATH_EXISTS_ON_DISK: 3,
   UNSAFE_REMOVE: 3,
@@ -106,10 +104,6 @@ export function describeError(error: unknown): StructuredError {
   };
 }
 
-/**
- * Reports a failure the same way everywhere: the hazard, then the way out.
- * Returns the exit code so a handler can `return reportError(error, args.json)`.
- */
 // citty drops the value a subcommand returns, so the code reportError decided
 // is kept here for runCli to read.
 let reportedExitCode: number | undefined;
@@ -121,6 +115,10 @@ export function takeReportedExitCode(): number | undefined {
   return code;
 }
 
+/**
+ * Reports a failure the same way everywhere: the hazard, then the way out.
+ * Returns the exit code so a handler can `return reportError(error, args.json)`.
+ */
 export function reportError(error: unknown, json?: boolean): number {
   // The prompt already shows it was cancelled; 130 is the shell's code for Ctrl+C.
   if (error instanceof CancelledError) return (reportedExitCode = 130);
