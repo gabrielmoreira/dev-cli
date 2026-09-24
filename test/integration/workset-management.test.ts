@@ -71,7 +71,7 @@ plugins:
     logs.length = 0;
     expect(await create("Checkout incident")).toBe(0);
     expect(logs.join("\n")).toContain('"created": false');
-    expect(await create("Another incident")).toBe(1);
+    expect(await create("Another incident")).toBe(3);
     expect(logs.join("\n")).toContain('"code": "WORKSET_EXISTS"');
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(afterFirst);
   });
@@ -170,7 +170,7 @@ worksets:
       isTTY: false,
     });
 
-    expect(code).toBe(1);
+    expect(code).toBe(3);
     const config = yaml.parse(await fs.readText(join(root, "dev.yaml"))) as TestConfig;
     expect(Object.keys(config.worksets ?? {})).toEqual(["incident", "payments"]);
   });
@@ -330,7 +330,7 @@ worksets:
       isTTY: false,
     });
 
-    expect(code).toBe(1);
+    expect(code).toBe(3);
     expect(logs.join("\n")).toContain('"code": "WORKSET_LAST_MEMBER"');
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(initial);
   });

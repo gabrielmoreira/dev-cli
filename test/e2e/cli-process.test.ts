@@ -30,7 +30,7 @@ describe("CLI Process E2E (Phase 0)", () => {
     expect(stdout.trim()).toBe("dev v0.0.0-development");
   });
 
-  it("fails with exit code 1 on unknown command", async () => {
+  it("exits 2 on an unknown command", async () => {
     const proc = Bun.spawn(["bun", "run", cliPath, "nonexistent-cmd"], {
       stdout: "pipe",
       stderr: "pipe",
@@ -38,7 +38,7 @@ describe("CLI Process E2E (Phase 0)", () => {
     const stderr = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr).toContain("Unknown command: 'nonexistent-cmd'");
     expect(stderr).toContain("↳ dev --help");
   });

@@ -73,8 +73,8 @@ describe("dev ws hook execution and trust model CLI E2E (Phase 16)", () => {
     const exitCode = await addProc.exited;
     const stderr = await new Response(addProc.stderr).text();
 
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("UNTRUSTED_HOOK_BLOCKED");
+    expect(exitCode).toBe(3);
+    expect(stderr).toContain("rerun with --consent");
   });
 
   it("allows untrusted hook when --consent flag is provided", async () => {
@@ -147,8 +147,8 @@ describe("dev ws hook execution and trust model CLI E2E (Phase 16)", () => {
     const exitCode = await addProc.exited;
     const stderr = await new Response(addProc.stderr).text();
 
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("HOOK_FAILED");
+    expect(exitCode).toBe(4);
+    expect(stderr).toContain("pre_checkout hook failed with exit code 5\n");
 
     // Mount directory must not exist
     const mountPath = join(tempRoot, "ws", "ws-cli-fail-pre", "failing-mount");

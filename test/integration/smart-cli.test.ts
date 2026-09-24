@@ -365,7 +365,7 @@ describe("smart CLI input", () => {
       stdinIsTTY: true,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(errors.join("\n")).toContain('"code": "INTERACTION_REQUIRED"');
     expect(errors.join("\n")).toContain('"field": "name"');
     expect(errors.join("\n")).toContain("dev ws init <name|repository-uri|pull-request-url>");
@@ -761,7 +761,7 @@ describe("smart CLI input", () => {
       isTTY: false,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(errors.join("\n")).toContain('"field": "mount"');
     expect(errors.join("\n")).toContain("--all");
   });
@@ -1356,7 +1356,7 @@ describe("smart CLI input", () => {
         env: {},
         isTTY: false,
       }),
-    ).toBe(1);
+    ).toBe(2);
     expect(errors.join("\n")).toContain('"field": "provider"');
 
     errors = [];
@@ -1367,7 +1367,7 @@ describe("smart CLI input", () => {
         env: {},
         isTTY: false,
       }),
-    ).toBe(1);
+    ).toBe(2);
     expect(errors.join("\n")).toContain('"field": "project"');
   });
 
@@ -1439,7 +1439,7 @@ describe("smart CLI input", () => {
       stdinIsTTY: true,
     });
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(errors.join("\n")).toContain("Workspace name is required");
     prompt.mockRestore();
     select.mockRestore();

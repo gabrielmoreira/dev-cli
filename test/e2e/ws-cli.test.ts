@@ -112,7 +112,7 @@ describe("dev ws init E2E (Phase 1)", () => {
     expect(fs.exists(join(tempRoot, "ws", "local-quick-source", "quick-source"))).toBe(true);
   });
 
-  it("fails and exits with code 1 when workspace already exists", async () => {
+  it("refuses with exit 3 when the workspace already exists", async () => {
     const proc = Bun.spawn(
       ["bun", "run", cliPath, "ws", "init", "e2e-feature", "--root", tempRoot],
       {
@@ -124,11 +124,11 @@ describe("dev ws init E2E (Phase 1)", () => {
     const stderr = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
 
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("WORKSPACE_ALREADY_EXISTS");
+    expect(exitCode).toBe(3);
+    expect(stderr).toContain("↳ dev go e2e-feature");
   });
 
-  it("fails and exits with code 1 when workspace name is omitted", async () => {
+  it("exits 2 when the workspace name is omitted", async () => {
     const proc = Bun.spawn(["bun", "run", cliPath, "ws", "init", "--root", tempRoot], {
       stdout: "pipe",
       stderr: "pipe",
@@ -137,7 +137,7 @@ describe("dev ws init E2E (Phase 1)", () => {
     const stderr = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(2);
     expect(stderr).toContain("Workspace name is required");
   });
 });

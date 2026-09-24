@@ -80,8 +80,8 @@ describe("dev ws status --refresh & --offline CLI E2E (Phase 4)", () => {
     const stderr = await new Response(proc.stderr).text();
     const exitCode = await proc.exited;
 
-    expect(exitCode).toBe(1);
-    expect(stderr).toContain("CONFLICTING_OPTIONS");
+    expect(exitCode).toBe(2);
+    expect(stderr).toContain("Cannot specify both --refresh and --offline");
   });
 
   it("executes status with --offline successfully without accessing network", async () => {
