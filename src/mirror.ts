@@ -256,10 +256,23 @@ export async function track(
 
   const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
   if (!input.alias && input.branch === defaultBranch) {
-    throw new CanonicalMirrorError(
-      "DEFAULT_BRANCH",
-      `'${input.branch}' is the default branch: it is already the canonical checkout. Track a different branch, or pass --name to keep a second checkout of it.`,
+    // The default branch is the canonical checkout itself: the request is the
+    // canonical mirror, so satisfy it the same way `mirror add` does.
+    const canonical = await ensure(
+      {
+        root: input.root,
+        canonicalPrefix: input.canonicalPrefix,
+        source: input.source,
+        extraHeader: input.extraHeader,
+      },
+      deps,
     );
+    return {
+      sourceKey,
+      branch: canonical.branch,
+      path: canonical.path,
+      created: canonical.created,
+    };
   }
 
   const plan = planCanonicalCheckout({

@@ -87,18 +87,14 @@ describe("Canonical checkout naming against the default branch", () => {
     expect(second.path).toBe(first.path);
   });
 
-  it("refuses to track the default branch as a sibling of itself", async () => {
+  it("answers a track of the default branch with the canonical checkout", async () => {
     const root = join(tempRoot, "track-default");
-    await mirror.ensure({ root, source: bareRemotePath });
+    const canonical = await mirror.ensure({ root, source: bareRemotePath });
 
-    let code: string | undefined;
-    try {
-      await mirror.track({ root, source: bareRemotePath, branch: "main" });
-    } catch (error) {
-      code = (error as mirror.CanonicalMirrorError).code;
-    }
+    const tracked = await mirror.track({ root, source: bareRemotePath, branch: "main" });
 
-    expect(code).toBe("DEFAULT_BRANCH");
+    expect(tracked.created).toBe(false);
+    expect(tracked.path).toBe(canonical.path);
     expect(fs.exists(join(root, "mirrors", "local", "remote@main"))).toBe(false);
   });
 });
