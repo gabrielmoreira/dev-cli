@@ -109,7 +109,7 @@ Enter
 Wait+Screen@20s /Create these mounts/
 Sleep 1s
 Type "y"
-Wait+Screen@30s /Mounted checkout-api @/
+Wait+Screen@30s /✓ Mounted checkout-api @/
 Sleep 3s
 Type "clear"
 Enter
