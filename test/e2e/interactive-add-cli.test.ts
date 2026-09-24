@@ -71,7 +71,7 @@ describe("CLI E2E - Repository Selection from Inventory (Phase 11)", () => {
 
       expect(addExit).toBe(0);
       const out = logs.join("\n");
-      expect(out).toContain("Mounted repository 'alpha-service' in workspace 'feature-work'");
+      expect(out).toContain("✓ Mounted alpha-service @ ");
 
       // Verify worktree exists on disk
       const mountPath = join(tempRoot, "ws", "feature-work", "alpha-service");

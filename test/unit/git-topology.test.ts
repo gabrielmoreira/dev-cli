@@ -93,19 +93,19 @@ describe("Git topology pure rules (Phase 2)", () => {
     }
   });
 
-  it("rejects duplicate mount paths in mount planning", () => {
-    expect(() =>
-      planMount({
-        source: "https://github.com/company/core.git",
-        existingMounts: [
-          {
-            path: "core",
-            source: "https://github.com/company/core.git",
-            revision: { mode: "track", branch: "main" },
-          },
-        ],
-      }),
-    ).toThrow(WorkspaceError);
+  it("treats a declared path as already mounted only when source and ref match too", () => {
+    const declared = {
+      path: "core",
+      source: "https://github.com/company/core.git",
+      revision: { mode: "track" as const, branch: "main" },
+    };
+    const plan = (branch?: string, source = declared.source) =>
+      planMount({ source, branch, existingMounts: [declared] });
+
+    expect(plan().declared).toBe(declared);
+    expect(plan("main").declared).toBe(declared);
+    expect(() => plan("develop")).toThrow(WorkspaceError);
+    expect(() => plan("main", "https://github.com/other/core.git")).toThrow(WorkspaceError);
   });
 
   it("rejects the same branch twice for one repository", () => {
@@ -122,7 +122,7 @@ describe("Git topology pure rules (Phase 2)", () => {
           },
         ],
       }),
-    ).toThrow("Branch 'main' is already mounted for this repository");
+    ).toThrow("Branch 'main' of this repository is already mounted at 'core-main'");
   });
 
   it("removes credentials from anywhere inside a message", () => {

@@ -1,4 +1,4 @@
-import { isAbsolute, join, relative, win32 } from "node:path";
+import { isAbsolute, join, relative, resolve, win32 } from "node:path";
 import * as fs from "./fs.ts";
 import * as git from "./git.ts";
 import { gitPoolPath, workspaceAdminRepoPath, workspacePath, workspacesDir } from "./paths.ts";
@@ -54,6 +54,8 @@ export interface WorkspaceAddInput {
 }
 
 export interface WorkspaceAddResult {
+  /** mounted: checked out now; adopted: an existing checkout was declared; already_mounted: nothing to do. */
+  outcome: "mounted" | "adopted" | "already_mounted";
   workspaceName: string;
   mountPath: string;
   mountName: string;
@@ -382,6 +384,24 @@ export async function executeHook(params: {
   return { exitCode: 0 };
 }
 
+/** Same ref: mode and target equal, and an upstream only when both name one. */
+function sameRevision(a: manifest.MountRevision, b: manifest.MountRevision): boolean {
+  if (a.mode === "track" && b.mode === "track") {
+    return a.branch === b.branch && (a.upstream ?? b.upstream) === (b.upstream ?? a.upstream);
+  }
+  if (a.mode === "tag" && b.mode === "tag") return a.tag === b.tag;
+  if (a.mode === "lock" && b.mode === "lock") return a.commit === b.commit;
+  return false;
+}
+
+export function describeRevision(revision: manifest.MountRevision): string {
+  return revision.mode === "track"
+    ? revision.branch
+    : revision.mode === "tag"
+      ? `tag ${revision.tag}`
+      : `commit ${revision.commit.slice(0, 8)}`;
+}
+
 export function planMount(input: {
   source: string;
   path?: string;
@@ -391,7 +411,13 @@ export function planMount(input: {
   commit?: string;
   readonly?: boolean;
   existingMounts: manifest.MountDefinition[];
-}): { mountName: string; revision?: manifest.MountRevision; readonly: boolean } {
+}): {
+  mountName: string;
+  revision?: manifest.MountRevision;
+  readonly: boolean;
+  /** Set when this exact mount (source, ref and path) is already declared. */
+  declared?: manifest.MountDefinition;
+} {
   if (!input.source || input.source.trim().length === 0) {
     throw new WorkspaceError("INVALID_SOURCE", "Repository source URL or specifier is required");
   }
@@ -401,33 +427,6 @@ export function planMount(input: {
       ? input.path
       : git.deriveDefaultMountPath(input.source),
   );
-
-  if (input.existingMounts.some((m) => m.path === mountName)) {
-    throw new WorkspaceError(
-      "MOUNT_ALREADY_EXISTS",
-      `Mount path '${mountName}' is already declared in this workspace`,
-      {
-        mountName,
-      },
-    );
-  }
-
-  const branch = input.branch?.trim();
-  if (
-    branch &&
-    input.existingMounts.some(
-      (mount) =>
-        git.normalizeSourceKey(mount.source) === git.normalizeSourceKey(input.source) &&
-        mount.revision.mode === "track" &&
-        mount.revision.branch === branch,
-    )
-  ) {
-    throw new WorkspaceError(
-      "BRANCH_ALREADY_MOUNTED",
-      `Branch '${branch}' is already mounted for this repository`,
-      { branch, source: input.source },
-    );
-  }
 
   let revision: manifest.MountRevision | undefined;
   if (input.commit) {
@@ -440,6 +439,46 @@ export function planMount(input: {
       branch: input.branch.trim(),
       upstream: input.upstreamBranch?.trim(),
     };
+  }
+
+  // Identity is source + ref + path. An omitted ref asks for "this source here",
+  // which any declared ref satisfies.
+  const sourceKey = git.normalizeSourceKey(input.source);
+  const declared = input.existingMounts.find((m) => m.path === mountName);
+  if (declared) {
+    if (
+      git.normalizeSourceKey(declared.source) === sourceKey &&
+      (!revision || sameRevision(declared.revision, revision))
+    ) {
+      return {
+        mountName,
+        revision: declared.revision,
+        readonly: Boolean(declared.readonly),
+        declared,
+      };
+    }
+    throw new WorkspaceError(
+      "MOUNT_ALREADY_EXISTS",
+      `Mount path '${mountName}' is already declared for ${declared.source} @ ${describeRevision(declared.revision)}`,
+      { mountName },
+    );
+  }
+
+  const branch = input.branch?.trim();
+  const sameBranch =
+    branch &&
+    input.existingMounts.find(
+      (mount) =>
+        git.normalizeSourceKey(mount.source) === sourceKey &&
+        mount.revision.mode === "track" &&
+        mount.revision.branch === branch,
+    );
+  if (sameBranch) {
+    throw new WorkspaceError(
+      "BRANCH_ALREADY_MOUNTED",
+      `Branch '${branch}' of this repository is already mounted at '${sameBranch.path}'. Git checks out a branch in one place only: mount another branch, or pin a commit with --commit.`,
+      { branch, source: input.source, mountName: sameBranch.path },
+    );
   }
 
   return {
@@ -527,12 +566,48 @@ export async function add(
   });
 
   const mountPath = join(workspacePath, plan.mountName);
-  if (deps.fs.exists(mountPath)) {
-    throw new WorkspaceError(
-      "MOUNT_PATH_EXISTS_ON_DISK",
-      `Directory already exists on disk at ${mountPath}`,
-      { mountPath },
-    );
+  const canonicalSource = deps.git.stripCredentialsFromUrl(input.source);
+  const sourceKey = deps.git.normalizeSourceKey(input.source);
+  const onDisk = deps.fs.exists(mountPath);
+
+  // Already so: this exact mount is declared and checked out.
+  if (plan.declared && onDisk) {
+    const observed = await deps.git.currentRevision(mountPath);
+    return {
+      outcome: "already_mounted",
+      workspaceName: input.workspaceName,
+      mountPath,
+      mountName: plan.mountName,
+      source: plan.declared.source,
+      sourceKey,
+      revision: plan.declared.revision,
+      commitSha: observed.commitSha ?? "",
+      readonly: plan.readonly,
+    };
+  }
+
+  // A directory the manifest does not mention: adopt it only when it is this
+  // workspace's own checkout of the source at the requested ref (what an
+  // interrupted `ws add` leaves behind). Anything else is someone's data.
+  let adopted: { revision: manifest.MountRevision; commitSha: string } | undefined;
+  if (!plan.declared && onDisk) {
+    adopted = await observeAdoptableWorktree({
+      mountPath,
+      expectedAdminRepoPath: workspaceAdminRepoPath({
+        root: input.root,
+        workspaceName: input.workspaceName,
+        sourceKey,
+      }),
+      requested: plan.revision,
+      deps,
+    });
+    if (!adopted) {
+      throw new WorkspaceError(
+        "MOUNT_PATH_EXISTS_ON_DISK",
+        `${mountPath} already exists and is not this workspace's checkout of ${canonicalSource}`,
+        { mountPath, source: canonicalSource },
+      );
+    }
   }
 
   // Pre-validate hook trust before any side effects
@@ -554,95 +629,108 @@ export async function add(
     deps,
   });
 
-  const canonicalSource = deps.git.stripCredentialsFromUrl(input.source);
+  let revision: manifest.MountRevision;
+  let commitSha: string;
+  let hookWarning: string | undefined;
+  let createdWorktree: { adminRepoPath: string } | undefined;
+  if (adopted) {
+    ({ revision, commitSha } = adopted);
+  } else {
+    // Execute pre_checkout hook if resolved and allowed
+    await executeHook({
+      command: preCheckout.command,
+      allowed: preCheckout.allowed,
+      cwd: workspacePath,
+      env: {
+        DEV_ROOT: input.root,
+        DEV_WORKSPACE: input.workspaceName,
+        DEV_MOUNT_PATH: mountPath,
+        DEV_SOURCE: canonicalSource,
+        DEV_REVISION: input.branch || input.tag || input.commit || "HEAD",
+      },
+      hookName: "pre_checkout",
+      throwOnFailure: true,
+      deps,
+    });
 
-  // Execute pre_checkout hook if resolved and allowed
-  await executeHook({
-    command: preCheckout.command,
-    allowed: preCheckout.allowed,
-    cwd: workspacePath,
-    env: {
-      DEV_ROOT: input.root,
-      DEV_WORKSPACE: input.workspaceName,
-      DEV_MOUNT_PATH: mountPath,
-      DEV_SOURCE: canonicalSource,
-      DEV_REVISION: input.branch || input.tag || input.commit || "HEAD",
-    },
-    hookName: "pre_checkout",
-    throwOnFailure: true,
-    deps,
-  });
+    // 1. Ensure central bare mirror
+    const mirror = await deps.git.ensureMirror({
+      root: input.root,
+      source: input.source,
+      extraHeader: input.extraHeader,
+    });
 
-  // 1. Ensure central bare mirror
-  const mirror = await deps.git.ensureMirror({
-    root: input.root,
-    source: input.source,
-    extraHeader: input.extraHeader,
-  });
+    // 2. Ensure private workspace admin bare clone
+    const admin = await deps.git.ensureWorkspaceRepo({
+      root: input.root,
+      workspaceName: input.workspaceName,
+      sourceKey: mirror.sourceKey,
+      canonicalUrl: canonicalSource,
+      mirrorPath: mirror.mirrorPath,
+    });
 
-  // 2. Ensure private workspace admin bare clone
-  const admin = await deps.git.ensureWorkspaceRepo({
-    root: input.root,
-    workspaceName: input.workspaceName,
-    sourceKey: mirror.sourceKey,
-    canonicalUrl: canonicalSource,
-    mirrorPath: mirror.mirrorPath,
-  });
+    // 3. Resolve revision
+    revision = plan.revision ?? {
+      mode: "track",
+      branch: await deps.git.resolveDefaultBranch(admin.adminRepoPath),
+    };
 
-  // 3. Resolve revision
-  let revision = plan.revision;
-  if (!revision) {
-    const defaultBranch = await deps.git.resolveDefaultBranch(admin.adminRepoPath);
-    revision = { mode: "track", branch: defaultBranch };
+    // 4. Create worktree mount
+    ({ commitSha } = await deps.git.addWorktree({
+      adminRepoPath: admin.adminRepoPath,
+      mountPath,
+      revision,
+    }));
+    createdWorktree = { adminRepoPath: admin.adminRepoPath };
+
+    // Post-checkout hook execution
+    const postCheckoutRes = await executeHook({
+      command: postCheckout.command,
+      allowed: postCheckout.allowed,
+      cwd: mountPath,
+      env: {
+        DEV_ROOT: input.root,
+        DEV_WORKSPACE: input.workspaceName,
+        DEV_MOUNT_PATH: mountPath,
+        DEV_SOURCE: canonicalSource,
+        DEV_REVISION:
+          revision.mode === "track"
+            ? revision.branch
+            : revision.mode === "lock"
+              ? revision.commit
+              : revision.tag,
+      },
+      hookName: "post_checkout",
+      throwOnFailure: false,
+      deps,
+    });
+    hookWarning = postCheckoutRes.warning;
   }
 
-  // 4. Create worktree mount
-  const worktreeResult = await deps.git.addWorktree({
-    adminRepoPath: admin.adminRepoPath,
-    mountPath,
-    revision,
-  });
+  // 5. Update ws.md manifest, unless the mount was already declared and only
+  // its checkout was missing.
+  if (!plan.declared) {
+    const newMount: manifest.MountDefinition = {
+      path: plan.mountName,
+      source: canonicalSource,
+      readonly: plan.readonly ? true : undefined,
+      revision,
+      hooks: input.hooks,
+    };
 
-  // Post-checkout hook execution
-  const postCheckoutRes = await executeHook({
-    command: postCheckout.command,
-    allowed: postCheckout.allowed,
-    cwd: mountPath,
-    env: {
-      DEV_ROOT: input.root,
-      DEV_WORKSPACE: input.workspaceName,
-      DEV_MOUNT_PATH: mountPath,
-      DEV_SOURCE: canonicalSource,
-      DEV_REVISION:
-        revision.mode === "track"
-          ? revision.branch
-          : revision.mode === "lock"
-            ? revision.commit
-            : revision.tag,
-    },
-    hookName: "post_checkout",
-    throwOnFailure: false,
-    deps,
-  });
-  let hookWarning = postCheckoutRes.warning;
-
-  // 5. Update ws.md manifest
-  const newMount: manifest.MountDefinition = {
-    path: plan.mountName,
-    source: canonicalSource,
-    readonly: plan.readonly ? true : undefined,
-    revision,
-    hooks: input.hooks,
-  };
-
-  currentManifest.mounts.push(newMount);
-  try {
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
-  } catch (error) {
-    // The worktree exists but the manifest does not mention it. Remove it, so the
-    // next `dev ws add` starts from a clean state instead of MOUNT_PATH_EXISTS_ON_DISK.
-    await deps.git.removeWorktree(admin.adminRepoPath, mountPath, { force: true }).catch(() => {});
-    throw error;
+    currentManifest.mounts.push(newMount);
+    try {
+      await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+    } catch (error) {
+      // The worktree exists but the manifest does not mention it. Remove the one
+      // this run created, so the next `dev ws add` starts from a clean state.
+      if (createdWorktree) {
+        await deps.git
+          .removeWorktree(createdWorktree.adminRepoPath, mountPath, { force: true })
+          .catch(() => {});
+      }
+      throw error;
+    }
   }
 
   // 6. Execute post_add hook if configured
@@ -687,16 +775,49 @@ export async function add(
   }
 
   return {
+    outcome: adopted ? "adopted" : "mounted",
     workspaceName: input.workspaceName,
     mountPath,
     mountName: plan.mountName,
     source: canonicalSource,
-    sourceKey: mirror.sourceKey,
+    sourceKey,
     revision,
-    commitSha: worktreeResult.commitSha,
+    commitSha,
     readonly: plan.readonly,
     hookWarning,
   };
+}
+
+/**
+ * The revision of an existing directory when it is a worktree of the expected
+ * admin repository at the requested ref; undefined for anything else.
+ */
+async function observeAdoptableWorktree(params: {
+  mountPath: string;
+  expectedAdminRepoPath: string;
+  requested?: manifest.MountRevision;
+  deps: WorkspaceDeps;
+}): Promise<{ revision: manifest.MountRevision; commitSha: string } | undefined> {
+  const { mountPath, expectedAdminRepoPath, requested, deps } = params;
+  const adminRepoPath = await deps.git.worktreeAdminRepoPath(mountPath);
+  if (!adminRepoPath || resolve(adminRepoPath) !== resolve(expectedAdminRepoPath)) return undefined;
+
+  const observed = await deps.git.currentRevision(mountPath);
+  if (!observed.commitSha) return undefined;
+  const commitSha = observed.commitSha;
+
+  if (!requested) {
+    return observed.branch
+      ? { revision: { mode: "track", branch: observed.branch }, commitSha }
+      : undefined;
+  }
+  const matches =
+    requested.mode === "track"
+      ? observed.branch === requested.branch
+      : requested.mode === "tag"
+        ? observed.tag === requested.tag
+        : commitSha.startsWith(requested.commit);
+  return matches ? { revision: requested, commitSha } : undefined;
 }
 
 export function compareWorkspace(

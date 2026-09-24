@@ -598,7 +598,7 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Mounted repository 'dev-cli'");
+    expect(logs.join("\n")).toContain("✓ Mounted dev-cli @ ");
     prompt.mockRestore();
   });
 

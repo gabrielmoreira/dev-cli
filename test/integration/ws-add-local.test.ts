@@ -114,4 +114,86 @@ describe("Workspace add local Git integration (Phase 2)", () => {
     expect(readManifest.mounts.length).toBe(2);
     expect(readManifest.mounts.some((m) => m.path === "v1-mount")).toBe(true);
   });
+
+  async function codeOf(run: () => Promise<unknown>): Promise<string | undefined> {
+    try {
+      await run();
+    } catch (error) {
+      return (error as ws.WorkspaceError).code;
+    }
+    return undefined;
+  }
+
+  it("reports the same mount requested twice as already mounted", async () => {
+    await ws.init({ root: tempRoot, name: "twice" });
+    const request = {
+      root: tempRoot,
+      workspaceName: "twice",
+      source: bareRemotePath,
+      branch: "main",
+    };
+
+    const first = await ws.add(request);
+    const second = await ws.add(request);
+
+    expect(first.outcome).toBe("mounted");
+    expect(second.outcome).toBe("already_mounted");
+    expect(second.mountPath).toBe(first.mountPath);
+    expect(second.commitSha).toBe(first.commitSha);
+    const { manifest: read } = await manifest.readWorkspace(join(tempRoot, "ws", "twice", "ws.md"));
+    expect(read.mounts.length).toBe(1);
+  });
+
+  it("refuses a declared path requested with a different branch", async () => {
+    const code = await codeOf(() =>
+      ws.add({
+        root: tempRoot,
+        workspaceName: "twice",
+        source: bareRemotePath,
+        branch: "feature/v1",
+      }),
+    );
+    expect(code).toBe("MOUNT_ALREADY_EXISTS");
+  });
+
+  it("adopts the worktree an interrupted add left behind", async () => {
+    await ws.init({ root: tempRoot, name: "interrupted" });
+    const manifestPath = join(tempRoot, "ws", "interrupted", "ws.md");
+    const request = {
+      root: tempRoot,
+      workspaceName: "interrupted",
+      source: bareRemotePath,
+      branch: "feature/v1",
+    };
+    const first = await ws.add(request);
+    // The process died after the worktree existed and before ws.md mentioned it.
+    const { manifest: declared, body } = await manifest.readWorkspace(manifestPath);
+    await manifest.writeWorkspace(manifestPath, { ...declared, mounts: [] }, body);
+
+    const retry = await ws.add(request);
+
+    expect(retry.outcome).toBe("adopted");
+    expect(retry.commitSha).toBe(first.commitSha);
+    const { manifest: read } = await manifest.readWorkspace(manifestPath);
+    expect(read.mounts).toEqual([
+      {
+        path: first.mountName,
+        source: bareRemotePath,
+        revision: { mode: "track", branch: "feature/v1" },
+      },
+    ]);
+  });
+
+  it("refuses to adopt a directory that is not this workspace's checkout", async () => {
+    await ws.init({ root: tempRoot, name: "foreign" });
+    const mountName = git.deriveDefaultMountPath(bareRemotePath);
+    await fs.writeText(join(tempRoot, "ws", "foreign", mountName, "notes.txt"), "mine");
+
+    const code = await codeOf(() =>
+      ws.add({ root: tempRoot, workspaceName: "foreign", source: bareRemotePath, branch: "main" }),
+    );
+
+    expect(code).toBe("MOUNT_PATH_EXISTS_ON_DISK");
+    expect(await fs.readText(join(tempRoot, "ws", "foreign", mountName, "notes.txt"))).toBe("mine");
+  });
 });

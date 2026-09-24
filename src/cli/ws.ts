@@ -612,17 +612,17 @@ export const wsAddCommand = defineCommand({
         text: () =>
           results
             .map((result) => {
-              let out = `Mounted repository '${result.mountName}' in workspace '${result.workspaceName}':\n`;
-              out += `  Mount Path: ${result.mountPath}\n`;
-              out += `  Source:     ${result.source}\n`;
-              out += `  Revision:   ${result.revision.mode} (${result.commitSha.slice(0, 8)})`;
-              if (result.hookWarning) out += `\n  Warning:    ${result.hookWarning}`;
-              return out;
+              const at = `${result.mountName} @ ${ws.describeRevision(result.revision)}`;
+              if (result.outcome === "already_mounted") {
+                return `○ ${at} is already mounted in '${result.workspaceName}'`;
+              }
+              const verb = result.outcome === "adopted" ? "Adopted existing checkout" : "Mounted";
+              return `✓ ${verb} ${at} from ${result.source} in '${result.workspaceName}'`;
             })
             .join("\n"),
       });
       for (const result of results) {
-        if (result.hookWarning) ui.warn(`  Warning:    ${result.hookWarning}`);
+        if (result.hookWarning) ui.warn(`⚠ ${result.hookWarning}`);
       }
       return 0;
     } catch (error) {

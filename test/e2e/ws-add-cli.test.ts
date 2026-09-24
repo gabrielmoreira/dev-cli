@@ -70,7 +70,7 @@ describe("dev ws add CLI E2E (Phase 2)", () => {
 
     expect(addExit).toBe(0);
     expect(addStderr).toBe("");
-    expect(addStdout).toContain("Mounted repository 'alpha-service' in workspace 'payment-fix'");
+    expect(addStdout).toContain("✓ Mounted alpha-service @ ");
 
     // 3. Prove all four locations agree
     const sourceKey = git.normalizeSourceKey(fixture.gitUrl);
