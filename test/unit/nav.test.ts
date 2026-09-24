@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { generateShellInit, resolveJumpTarget } from "../../src/nav";
-import { formatHelp, formatWsHelp } from "../../src/cli";
+import { formatCommandHelp, formatHelp } from "../../src/cli";
 
 describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)", () => {
   describe("generateShellInit", () => {
@@ -129,7 +129,7 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
     test("formatHelp(false) scopes nested commands to group help", async () => {
       const rootHelp = await formatHelp(false);
       expect(rootHelp).toContain("shell-init");
-      const workspaceHelp = await formatWsHelp();
+      const workspaceHelp = await formatCommandHelp(["ws"]);
       expect(workspaceHelp).toContain("jump");
       expect(workspaceHelp).toContain("path");
     });

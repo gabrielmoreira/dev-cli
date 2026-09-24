@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { formatHelp, formatSubHelp, runCli, type AmbientContext } from "../../src/cli.ts";
+import { formatCommandHelp, formatHelp, runCli, type AmbientContext } from "../../src/cli.ts";
 
 describe("CLI entrypoint (Phase 0)", () => {
   it("generates human help text by default", async () => {
@@ -8,7 +8,7 @@ describe("CLI entrypoint (Phase 0)", () => {
     expect(help).toContain("COMMANDS");
     expect(help).toContain("ws");
     expect(help).toContain("mirror");
-    expect(await formatSubHelp("ws", "init")).toContain("[NAME]");
+    expect(await formatCommandHelp(["ws", "init"])).toContain("[NAME]");
   });
 
   it("generates structured JSON help when --llms is requested", async () => {

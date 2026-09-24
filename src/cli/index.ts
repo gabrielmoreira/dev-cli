@@ -124,59 +124,84 @@ export async function formatHelp(isLlms = false): Promise<string> {
   );
 }
 
-export async function formatWsHelp(): Promise<string> {
-  return await renderCommandUsage(wsCommand, mainCommand);
+async function subCommandsOf(
+  command: InspectableCommand,
+): Promise<Record<string, ResolvableValue<InspectableCommand>>> {
+  return await resolveDefinition(command.subCommands ?? {});
 }
 
-export async function formatMirrorHelp(): Promise<string> {
-  return await renderCommandUsage(mirrorCommand, mainCommand);
-}
-
-export async function formatSyncHelp(): Promise<string> {
-  return await renderCommandUsage(syncCommand, mainCommand);
-}
-
-export async function formatPrHelp(): Promise<string> {
-  return await renderCommandUsage(prCommand, mainCommand);
-}
-
-export async function formatProviderHelp(): Promise<string> {
-  return await renderCommandUsage(providerCommand, mainCommand);
-}
-
-export async function formatWiHelp(): Promise<string> {
-  return await renderCommandUsage(wiCommand, mainCommand);
-}
-
-const COMMAND_GROUPS = {
-  ws: wsCommand,
-  mirror: mirrorCommand,
-  sync: syncCommand,
-  pr: prCommand,
-  wi: wiCommand,
-  provider: providerCommand,
-  qmd: qmdCommand,
-  workset: worksetCommand,
-  root: rootCommand,
-} as const;
-
-function isCommandGroup(value: string | undefined): value is keyof typeof COMMAND_GROUPS {
-  return value !== undefined && Object.hasOwn(COMMAND_GROUPS, value);
-}
-
-export async function formatSubHelp(
-  group: keyof typeof COMMAND_GROUPS,
-  sub: string,
-): Promise<string> {
-  const groupCommand = COMMAND_GROUPS[group];
-  const inspectableGroup = groupCommand as unknown as InspectableCommand;
-  const subCommands = await resolveDefinition(inspectableGroup.subCommands ?? {});
-  const definition = subCommands[sub];
-  if (!definition) return await renderCommandUsage(groupCommand, mainCommand);
-
-  const command = await resolveDefinition(definition);
-  const parent: InspectableCommand = { meta: { name: `dev ${group}` } };
+/**
+ * Help for the deepest command the words name: `["ws", "add"]` renders
+ * `dev ws add`; words past the last known command are ignored.
+ */
+export async function formatCommandHelp(path: string[]): Promise<string> {
+  let command = mainCommand as unknown as InspectableCommand;
+  const names: string[] = [];
+  for (const word of path) {
+    const next = (await subCommandsOf(command))[word];
+    if (!next) break;
+    command = await resolveDefinition(next);
+    names.push(word);
+  }
+  if (names.length === 0) return await renderCommandUsage(mainCommand);
+  const parent: InspectableCommand = { meta: { name: ["dev", ...names.slice(0, -1)].join(" ") } };
   return await renderCommandUsage(command, parent);
+}
+
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i++) {
+    const current = [i];
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        previous[j]! + 1,
+        current[j - 1]! + 1,
+        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[b.length]!;
+}
+
+/**
+ * The command the user probably meant when a word is not a command: a
+ * sibling one or two edits away (`dev ws strat`), or a command elsewhere with
+ * exactly that name (`dev start` -> `dev ws start`).
+ */
+export async function suggestCommand(words: string[]): Promise<string | undefined> {
+  let command = mainCommand as unknown as InspectableCommand;
+  const names: string[] = [];
+  for (const word of words.filter((w) => !w.startsWith("-"))) {
+    const siblings = await subCommandsOf(command);
+    const next = siblings[word];
+    if (next) {
+      command = await resolveDefinition(next);
+      names.push(word);
+      continue;
+    }
+    // At most two edits, and fewer than half the word, so `xy` suggests nothing.
+    const near = Object.keys(siblings)
+      .map((name) => ({ name, distance: editDistance(name, word) }))
+      .filter(({ distance }) => distance <= 2 && distance < word.length / 2)
+      .sort((x, y) => x.distance - y.distance)[0];
+    if (near) return ["dev", ...names, near.name].join(" ");
+    return await findByName(mainCommand as unknown as InspectableCommand, word, ["dev"]);
+  }
+  return undefined;
+}
+
+async function findByName(
+  command: InspectableCommand,
+  word: string,
+  path: string[],
+): Promise<string | undefined> {
+  for (const [name, definition] of Object.entries(await subCommandsOf(command))) {
+    if (name === word) return [...path, name].join(" ");
+    const found = await findByName(await resolveDefinition(definition), word, [...path, name]);
+    if (found) return found;
+  }
+  return undefined;
 }
 
 export const mainCommand = defineCommand({
@@ -286,24 +311,20 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     return 0;
   }
 
+  // `dev help ws add` is `dev ws add --help`.
+  if (argv[0] === "help") {
+    ui.log(await formatCommandHelp(normalizeCliArgs(argv.slice(1))));
+    return 0;
+  }
+
   if (argv.includes("--help") || argv.includes("-h")) {
     if (argv.includes("--llms")) {
       ui.log(await formatHelp(true));
     } else {
-      const helpArgs = normalizeCliArgs(
+      const words = normalizeCliArgs(
         argv.filter((argument) => argument !== "--help" && argument !== "-h"),
-      );
-      const group = helpArgs[0];
-      const sub = helpArgs[1];
-      if (isCommandGroup(group)) {
-        ui.log(
-          sub
-            ? await formatSubHelp(group, sub)
-            : await renderCommandUsage(COMMAND_GROUPS[group], mainCommand),
-        );
-      } else {
-        ui.log(await formatHelp(false));
-      }
+      ).filter((argument) => !argument.startsWith("-"));
+      ui.log(await formatCommandHelp(words));
     }
     return 0;
   }
@@ -357,7 +378,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       const match = cleanMsg.match(/Unknown command\s+([^\s]+)/i);
       const cmdName = match ? match[1] : argv[0];
       ui.error(`✗ Unknown command: '${cmdName}'`);
-      ui.error("↳ dev --help");
+      ui.error(`↳ ${(await suggestCommand(normalizedArgs)) ?? "dev --help"}`);
       return 1;
     }
 

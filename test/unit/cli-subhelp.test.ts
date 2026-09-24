@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { formatSubHelp, runCli, type AmbientContext } from "../../src/cli.ts";
+import { formatCommandHelp, runCli, suggestCommand, type AmbientContext } from "../../src/cli.ts";
 
 describe("subcommand help (UX)", () => {
   it("renders positional and option rows from the args schema", async () => {
-    const out = await formatSubHelp("ws", "update");
+    const out = await formatCommandHelp(["ws", "update"]);
     expect(out).toContain("dev ws update");
     expect(out).toContain("Converge mounts to ws.md");
     expect(out).toContain("USAGE dev ws update [OPTIONS] [TARGET]");
@@ -12,8 +12,14 @@ describe("subcommand help (UX)", () => {
     expect(out).toContain("--ws");
   });
 
+  it("suggests the command a mistyped or misplaced word most likely meant", async () => {
+    expect(await suggestCommand(["ws", "strat"])).toBe("dev ws start");
+    expect(await suggestCommand(["start"])).toBe("dev ws start");
+    expect(await suggestCommand(["zq"])).toBeUndefined();
+  });
+
   it("renders ws start as the HerdR OMP entrypoint", async () => {
-    const out = await formatSubHelp("ws", "start");
+    const out = await formatCommandHelp(["ws", "start"]);
 
     expect(out).toContain("dev ws start");
     expect(out).toContain("Start or focus OMP in HerdR for a dev workspace");
