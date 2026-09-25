@@ -22,6 +22,10 @@ function adoTenantFromOrg(organization: string): string {
   return organization.includes("/") ? organization : `dev.azure.com/${organization}`;
 }
 
+function providerError(code: "PROVIDER_NOT_CONFIGURED" | "PROVIDER_NOT_FOUND", message: string) {
+  return Object.assign(new Error(message), { code });
+}
+
 async function syncAdoProvider(
   root: string,
   provider: Extract<ProviderConfig, { type: "azure_devops" }>,
@@ -105,12 +109,12 @@ export const syncInventoryCommand = defineCommand({
       : config.providers;
 
     if (providers.length === 0) {
-      ui.error(
+      return reportError(
         args.provider
-          ? `No provider with id '${args.provider}' found. Run 'dev provider list' to see configured providers.`
-          : "No providers configured. Run 'dev provider add <type>' to register one.",
+          ? providerError("PROVIDER_NOT_FOUND", `No provider with id '${args.provider}' found.`)
+          : providerError("PROVIDER_NOT_CONFIGURED", "No providers configured."),
+        args.json,
       );
-      return 1;
     }
 
     const results: Array<{
@@ -231,8 +235,15 @@ export const syncDataCommand = defineCommand({
     );
 
     if (adoProviders.length === 0) {
-      ui.error("No Azure DevOps providers configured for data sync. Run 'dev provider add ado'.");
-      return 1;
+      return reportError(
+        args.provider
+          ? providerError(
+              "PROVIDER_NOT_FOUND",
+              `No Azure DevOps provider with id '${args.provider}' found.`,
+            )
+          : providerError("PROVIDER_NOT_CONFIGURED", "No Azure DevOps providers configured."),
+        args.json,
+      );
     }
 
     const providerChoice = await resolveChoiceInput({
@@ -252,8 +263,13 @@ export const syncDataCommand = defineCommand({
     });
     const provider = adoProviders.find((candidate) => candidate.id === providerChoice.value);
     if (!provider) {
-      ui.error(`No Azure DevOps provider with id '${providerChoice.value}' found.`);
-      return 1;
+      return reportError(
+        providerError(
+          "PROVIDER_NOT_FOUND",
+          `No Azure DevOps provider with id '${providerChoice.value}' found.`,
+        ),
+        args.json,
+      );
     }
     const tenant = adoTenantFromOrg(provider.organization);
 

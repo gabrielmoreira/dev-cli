@@ -13,6 +13,8 @@ const NEXT_STEPS: Record<string, string> = {
   MOUNT_ALREADY_EXISTS: "dev ws status",
   MOUNT_NOT_FOUND: "dev ws status",
   MOUNT_PATH_EXISTS_ON_DISK: "dev ws add <source> --path <another-name>",
+  PROVIDER_NOT_CONFIGURED: "dev provider add <type>",
+  PROVIDER_NOT_FOUND: "dev provider list",
   PULL_REQUEST_UNAVAILABLE: "dev pr list",
   UNSAFE_REMOVE: "git -C <path> status",
   UNTRUSTED_HOOK_BLOCKED: "rerun with --consent to allow hooks from <source>",
@@ -42,6 +44,8 @@ const EXIT_CODES: Record<string, number> = {
   INVALID_MOUNT_PATH: EXIT_USAGE,
   INVALID_SOURCE: EXIT_USAGE,
   INVALID_WORKSPACE_NAME: EXIT_USAGE,
+  PROVIDER_NOT_CONFIGURED: EXIT_USAGE,
+  PROVIDER_NOT_FOUND: EXIT_USAGE,
   LABEL_VALIDATION: EXIT_USAGE,
   // mirror add --branch <default>: that checkout is the mirror itself.
   DEFAULT_BRANCH: EXIT_USAGE,
