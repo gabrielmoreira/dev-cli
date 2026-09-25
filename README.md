@@ -9,7 +9,7 @@
 
 ## See it in action
 
-![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=v2.0.2)
+![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=v2.1.0)
 
 Under three minutes from `dev init`: a workspace from one URL, an incident workspace built from a workset, a jump with `dev go`, and a coding agent answering from the indexed docs. [MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
 
