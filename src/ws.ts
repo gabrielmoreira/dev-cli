@@ -25,6 +25,8 @@ export interface WorkspaceInitInput {
   name: string;
   description?: string;
   from?: string;
+  /** Return an existing workspace of that name instead of failing. */
+  reuseExisting?: boolean;
 }
 
 export interface WorkspaceInitResult {
@@ -33,6 +35,8 @@ export interface WorkspaceInitResult {
   manifestPath: string;
   localPath: string;
   createdAt: string;
+  /** False when an existing workspace was returned. */
+  created: boolean;
 }
 
 export interface WorkspaceAddInput {
@@ -510,7 +514,22 @@ export async function init(
   const name = input.name.trim();
   const workspacePath = deriveWorkspacePath(input.root, name, input.workspacePrefix);
 
+  const manifestPath = join(workspacePath, "ws.md");
+  const localPath = join(workspacePath, ".local");
   if (deps.fs.exists(workspacePath)) {
+    // Asking again for a workspace that exists is not an error, unless the caller
+    // wants something the existing one may not be (an explicit description).
+    if (input.reuseExisting && deps.fs.exists(manifestPath)) {
+      const { manifest: existing } = await deps.manifest.readWorkspace(manifestPath);
+      return {
+        name,
+        path: workspacePath,
+        manifestPath,
+        localPath,
+        createdAt: existing.created_at,
+        created: false,
+      };
+    }
     throw new WorkspaceError(
       "WORKSPACE_ALREADY_EXISTS",
       `Workspace directory already exists at ${workspacePath}`,
@@ -521,7 +540,6 @@ export async function init(
     );
   }
 
-  const localPath = join(workspacePath, ".local");
   await deps.fs.ensureDir(workspacePath);
   await deps.fs.ensureDir(localPath);
 
@@ -534,7 +552,6 @@ export async function init(
     mounts: [],
   };
 
-  const manifestPath = join(workspacePath, "ws.md");
   await deps.manifest.writeWorkspace(manifestPath, initialManifest);
 
   return {
@@ -543,6 +560,7 @@ export async function init(
     manifestPath,
     localPath,
     createdAt,
+    created: true,
   };
 }
 

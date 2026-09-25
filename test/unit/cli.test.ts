@@ -2,7 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatCommandHelp, formatHelp, runCli, type AmbientContext } from "../../src/cli.ts";
+import {
+  formatCommandHelp,
+  formatHelp,
+  normalizeCliArgs,
+  runCli,
+  type AmbientContext,
+} from "../../src/cli.ts";
 
 describe("CLI entrypoint (Phase 0)", () => {
   it("generates human help text by default", async () => {
@@ -118,5 +124,15 @@ describe("CLI entrypoint (Phase 0)", () => {
       console.error = originalError;
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("reads a pull request URL as dev ws init, with or without ws", () => {
+    const url = "https://dev.azure.com/org/project/_git/repo/pullrequest/18747";
+    expect(normalizeCliArgs([url])).toEqual(["ws", "init", url]);
+    expect(normalizeCliArgs(["ws", url, "--json"])).toEqual(["ws", "init", url, "--json"]);
+    expect(normalizeCliArgs(["ws", "https://dev.azure.com/org/project/_git/repo"])).toEqual([
+      "ws",
+      "https://dev.azure.com/org/project/_git/repo",
+    ]);
   });
 });

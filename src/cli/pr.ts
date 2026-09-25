@@ -547,22 +547,16 @@ export const prCheckoutCommand = defineCommand({
       );
     const branch = mode === "review" ? `review/${selected.id}-${slug}` : selected.sourceBranch;
 
-    // A workspace whose mount never landed would otherwise block every retry with
-    // WORKSPACE_ALREADY_EXISTS, so an existing one is reused and a workspace this
-    // run created is removed when the mount fails.
-    let created: ws.WorkspaceInitResult | undefined;
-    try {
-      created = await ws.init({
-        root: config.root,
-        workspacePrefix: config.workspacePrefix,
-        name: workspaceName,
-        description: `${mode === "review" ? "Review" : "Checkout"} PR #${selected.id}: ${selected.title}`,
-      });
-    } catch (error) {
-      if (!(error instanceof ws.WorkspaceError) || error.code !== "WORKSPACE_ALREADY_EXISTS") {
-        throw error;
-      }
-    }
+    // A workspace whose mount never landed would otherwise block every retry, so an
+    // existing one is reused and a workspace this run created is removed when the
+    // mount fails.
+    const workspace = await ws.init({
+      root: config.root,
+      workspacePrefix: config.workspacePrefix,
+      name: workspaceName,
+      description: `${mode === "review" ? "Review" : "Checkout"} PR #${selected.id}: ${selected.title}`,
+      reuseExisting: true,
+    });
 
     let mounted: ws.WorkspaceAddResult;
     try {
@@ -578,22 +572,20 @@ export const prCheckoutCommand = defineCommand({
         globalHooks: config.hooks,
       });
     } catch (error) {
-      if (created) await fs.removeDir(created.path);
+      if (workspace.created) await fs.removeDir(workspace.path);
       throw error;
     }
 
-    const workspacePath =
-      created?.path ?? ws.deriveWorkspacePath(config.root, workspaceName, config.workspacePrefix);
     ui.result({
       data: {
         mode,
-        workspace: created ?? { name: workspaceName, path: workspacePath },
+        workspace,
         mount: mounted,
         pullRequest: selected,
       },
       json: args.json,
       text: () =>
-        `${created ? "Created" : "Reused"} workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${workspacePath}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
+        `${workspace.created ? "Created" : "Reused"} workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${workspace.path}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
     });
     return 0;
   },

@@ -16,6 +16,7 @@ import { EXIT_CODE_MEANINGS, EXIT_USAGE, reportError, takeReportedExitCode } fro
 import { qmdCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
+import { parsePullRequestUrl } from "../pr-workspace.ts";
 
 export { type AmbientContext, detectWorkspaceFromCwd };
 
@@ -284,6 +285,11 @@ export function normalizeCliArgs(argv: string[]): string[] {
     normalized = ["ws", first, ...normalized.slice(1)];
   } else if (first === "workitem") {
     normalized = ["wi", ...normalized.slice(1)];
+  } else if (first && parsePullRequestUrl(first)) {
+    // A pull request URL names its own intent: `dev <url>` is `dev ws init <url>`.
+    normalized = ["ws", "init", ...normalized];
+  } else if (first === "ws" && normalized[1] && parsePullRequestUrl(normalized[1])) {
+    normalized = ["ws", "init", ...normalized.slice(1)];
   }
 
   if (!workspace) return normalized;
@@ -345,6 +351,9 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   // dev status -> dev ws status
   // dev update -> dev ws update
   const normalizedArgs = normalizeCliArgs(argv);
+  if (normalizedArgs[1] === "init" && !argv.includes("init")) {
+    ui.info(`↳ dev ws init ${normalizedArgs[2]}`);
+  }
 
   try {
     const result = await runCommand(mainCommand, { rawArgs: normalizedArgs });

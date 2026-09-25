@@ -205,8 +205,10 @@ export const wsInitCommand = defineCommand({
         workspacePrefix: config.workspacePrefix,
         name: name.value,
         description: description || undefined,
+        // Running the same init again converges; an explicit --desc may disagree.
+        reuseExisting: args.desc === undefined,
       });
-      initializedPath = result.path;
+      if (result.created) initializedPath = result.path;
       const mounted: ws.WorkspaceAddResult[] = [];
       for (const mount of mounts) {
         mounted.push(
@@ -234,11 +236,16 @@ export const wsInitCommand = defineCommand({
         data,
         json: args.json,
         text: () => {
-          let out = `Initialized workspace '${result.name}' at:\n`;
+          let out = result.created
+            ? `Initialized workspace '${result.name}' at:\n`
+            : `○ Workspace '${result.name}' already exists at:\n`;
           out += `  Directory: ${result.path}\n`;
           out += `  Manifest:  ${result.manifestPath}`;
           for (const mount of mounted) {
-            out += `\n  Mounted:   ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
+            out +=
+              mount.outcome === "already_mounted"
+                ? `\n  ○ Mounted: ${mount.mountName} (already there)`
+                : `\n  Mounted:   ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
           }
           return out;
         },

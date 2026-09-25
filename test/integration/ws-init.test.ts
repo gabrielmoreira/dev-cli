@@ -73,4 +73,20 @@ describe("Workspace initialization integration (Phase 1)", () => {
     expect(Array.isArray(read.manifest.mounts)).toBe(true);
     expect(read.manifest.mounts.length).toBe(0);
   });
+
+  it("returns an existing workspace when asked to reuse it, and refuses otherwise", async () => {
+    const first = await ws.init({ root: tempRoot, name: "again", description: "first" });
+    const again = await ws.init({ root: tempRoot, name: "again", reuseExisting: true });
+
+    expect(first.created).toBe(true);
+    expect(again.created).toBe(false);
+    expect(again.path).toBe(first.path);
+    expect(again.createdAt).toBe(first.createdAt);
+    const { manifest: kept } = await manifest.readWorkspace(first.manifestPath);
+    expect(kept.description).toBe("first");
+
+    await expect(ws.init({ root: tempRoot, name: "again" })).rejects.toMatchObject({
+      code: "WORKSPACE_ALREADY_EXISTS",
+    });
+  });
 });
