@@ -18,26 +18,26 @@ Developer CLI & Workspace Engine
 | `--non-interactive` | boolean | Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent |
 | `--ws <value>`      | string  | Target workspace name                                                                         |
 
-| Subcommand       | Description                                                                       |
-| ---------------- | --------------------------------------------------------------------------------- |
-| `dev init`       | Initialize or update a dev root; without arguments, guide providers and inventory |
-| `dev list`       | List all workspaces in $DEV_ROOT/ws/                                              |
-| `dev use`        | Switch active dev root environment or update global default                       |
-| `dev go`         | Select a workspace and print its path for shell navigation                        |
-| `dev current`    | Display currently resolved dev root path and discovery source                     |
-| `dev roots`      | List registered dev root environments from ~/.dev.toml                            |
-| `dev root`       | Register, select, and unregister dev roots                                        |
-| `dev provider`   | Manage explicit remote providers in dev.yaml                                      |
-| `dev ws`         | Manage task-oriented multi-repo workspaces                                        |
-| `dev mirror`     | Manage canonical reference repositories                                           |
-| `dev sync`       | Synchronize workspace or offline cache from remote providers                      |
-| `dev pr`         | Inspect and cache pull requests                                                   |
-| `dev wi`         | Inspect and cache work items                                                      |
-| `dev doctor`     | Inspect runtime environment, dependencies, and git configuration                  |
-| `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                       |
-| `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell               |
-| `dev qmd`        | QMD plugin: collections from labeled sources (scoped registry)                    |
-| `dev workset`    | Manage reusable repository worksets                                               |
+| Subcommand       | Description                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev init`       | Initialize or update a dev root; without arguments, guide providers and inventory                                                        |
+| `dev list`       | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
+| `dev use`        | Switch active dev root environment or update global default                                                                              |
+| `dev go`         | Select a workspace and print its path for shell navigation                                                                               |
+| `dev current`    | Display currently resolved dev root path and discovery source                                                                            |
+| `dev roots`      | List registered dev root environments from ~/.dev.toml                                                                                   |
+| `dev root`       | Register, select, and unregister dev roots                                                                                               |
+| `dev provider`   | Manage explicit remote providers in dev.yaml                                                                                             |
+| `dev ws`         | Manage task-oriented multi-repo workspaces                                                                                               |
+| `dev mirror`     | Manage canonical reference repositories                                                                                                  |
+| `dev sync`       | Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project |
+| `dev pr`         | Inspect and cache pull requests                                                                                                          |
+| `dev wi`         | Inspect and cache work items                                                                                                             |
+| `dev doctor`     | Inspect runtime environment, dependencies, and git configuration                                                                         |
+| `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                                                                              |
+| `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell                                                                      |
+| `dev qmd`        | QMD plugin: collections from labeled sources (scoped registry)                                                                           |
+| `dev workset`    | Manage reusable repository worksets                                                                                                      |
 
 ## `dev init`
 
@@ -623,7 +623,7 @@ Remove a label from a declared source
 
 ## `dev sync`
 
-Synchronize workspace or offline cache from remote providers
+Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project
 
 **Usage:** `dev sync [--root <value>] [--json] [--ws <value>] <command>`
 

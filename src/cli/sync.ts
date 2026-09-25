@@ -72,6 +72,90 @@ async function syncGithubProvider(
   return { ok: true, result };
 }
 
+type InventorySyncSummary = {
+  providerId: string;
+  tenant: string;
+  total: number;
+  added: number;
+  updated: number;
+  cachePath: string;
+  repositories: cache.InventoryRecord[];
+};
+
+async function syncProviderInventories(
+  config: ReturnType<typeof getActiveConfig>,
+  providers: ProviderConfig[],
+  project?: string,
+): Promise<{ results: InventorySyncSummary[]; errors: string[] }> {
+  const adoCredential = providers.some((provider) => provider.type === "azure_devops")
+    ? resolveAzureDevOpsCredential(config)
+    : undefined;
+  const githubCredential = providers.some((provider) => provider.type === "github")
+    ? resolveGitHubCredential(config)
+    : undefined;
+
+  const outcomes = await Promise.all(
+    providers.map(async (provider) => ({
+      provider,
+      outcome:
+        provider.type === "azure_devops"
+          ? await syncAdoProvider(config.root, provider, adoCredential!, project)
+          : await syncGithubProvider(config.root, provider, githubCredential!),
+    })),
+  );
+
+  const results: InventorySyncSummary[] = [];
+  const errors: string[] = [];
+  for (const { provider, outcome } of outcomes) {
+    if (outcome.ok) {
+      results.push({
+        providerId: provider.id,
+        tenant: outcome.result.tenant,
+        total: outcome.result.total,
+        added: outcome.result.added,
+        updated: outcome.result.updated,
+        cachePath: outcome.result.cachePath,
+        repositories: outcome.result.repositories,
+      });
+    } else {
+      errors.push(outcome.error);
+    }
+  }
+  return { results, errors };
+}
+
+function formatInventoryResults(results: InventorySyncSummary[]): string {
+  let out = "";
+  for (const result of results) {
+    out += `Synchronized repository inventory for '${result.tenant}': ${result.total} repositories (${result.added} added, ${result.updated} updated).\n`;
+    out += `  Cache: ${result.cachePath}\n`;
+  }
+  return out.trimEnd();
+}
+
+function formatDataResult(result: sync.SyncDataResult): string {
+  let out = `Data synchronization complete for ${result.tenant}${result.project ? ` / ${result.project}` : ""} (${result.timestamp}):\n`;
+  out += `  Repositories:  ${result.inventory.total} (added ${result.inventory.added}, updated ${result.inventory.updated}, removed ${result.inventory.removed})\n`;
+  if (result.workItems) {
+    out += `  Work Items:    ${result.workItems.total} (added ${result.workItems.added}, updated ${result.workItems.updated})\n`;
+  }
+  const prTotal = result.pullRequests.reduce((acc, pr) => acc + pr.total, 0);
+  const prAdded = result.pullRequests.reduce((acc, pr) => acc + pr.added, 0);
+  const prUpdated = result.pullRequests.reduce((acc, pr) => acc + pr.updated, 0);
+  out += `  Pull Requests: ${prTotal} across ${result.pullRequests.length} repositories (added ${prAdded}, updated ${prUpdated})\n`;
+  if (result.skippedDisabled.length > 0) {
+    out += `  ○ ${result.skippedDisabled.length} repositories are disabled in Azure DevOps; their pull requests were skipped\n`;
+  }
+  if (result.canonicalRepos) {
+    out += `  Canonical:     ${result.canonicalRepos.updated.length} updated, ${result.canonicalRepos.skipped.length} skipped\n`;
+  }
+  if (result.errors && result.errors.length > 0) {
+    out += "\nWarnings/Errors:\n";
+    for (const err of result.errors) out += `  - ${err}\n`;
+  }
+  return out.trimEnd();
+}
+
 // ---------------------------------------------------------------------------
 // sync inventory
 // ---------------------------------------------------------------------------
@@ -117,62 +201,15 @@ export const syncInventoryCommand = defineCommand({
       );
     }
 
-    const results: Array<{
-      providerId: string;
-      tenant: string;
-      total: number;
-      added: number;
-      updated: number;
-      cachePath: string;
-      repositories: cache.InventoryRecord[];
-    }> = [];
-    const errors: string[] = [];
-    const adoCredential = providers.some((provider) => provider.type === "azure_devops")
-      ? resolveAzureDevOpsCredential(config)
-      : undefined;
-    const githubCredential = providers.some((provider) => provider.type === "github")
-      ? resolveGitHubCredential(config)
-      : undefined;
-
-    const outcomes = await Promise.all(
-      providers.map(async (provider) => ({
-        provider,
-        outcome:
-          provider.type === "azure_devops"
-            ? await syncAdoProvider(config.root, provider, adoCredential!, args.project)
-            : await syncGithubProvider(config.root, provider, githubCredential!),
-      })),
-    );
-
-    for (const { provider, outcome } of outcomes) {
-      if (outcome.ok) {
-        results.push({
-          providerId: provider.id,
-          tenant: outcome.result.tenant,
-          total: outcome.result.total,
-          added: outcome.result.added,
-          updated: outcome.result.updated,
-          cachePath: outcome.result.cachePath,
-          repositories: outcome.result.repositories,
-        });
-      } else {
-        errors.push(outcome.error);
-      }
-    }
+    const { results, errors } = await syncProviderInventories(config, providers, args.project);
 
     ui.result({
       data: { results, errors },
       json: args.json,
       text: () => {
-        let out = "";
-        for (const result of results) {
-          out += `Synchronized repository inventory for '${result.tenant}': ${result.total} repositories (${result.added} added, ${result.updated} updated).\n`;
-          out += `  Cache: ${result.cachePath}\n`;
-        }
-        for (const error of errors) {
-          out += `  Warning: ${error}\n`;
-        }
-        return out.trimEnd();
+        let out = formatInventoryResults(results);
+        for (const error of errors) out += `\n  Warning: ${error}`;
+        return out.trim();
       },
     });
 
@@ -348,30 +385,7 @@ export const syncDataCommand = defineCommand({
     ui.result({
       data: result,
       json: args.json,
-      text: () => {
-        let out = `Data synchronization complete for ${tenant} (${result.timestamp}):\n`;
-        out += `  Repositories:  ${result.inventory.total} (added ${result.inventory.added}, updated ${result.inventory.updated}, removed ${result.inventory.removed})\n`;
-        if (result.workItems) {
-          out += `  Work Items:    ${result.workItems.total} (added ${result.workItems.added}, updated ${result.workItems.updated})\n`;
-        }
-        const prTotal = result.pullRequests.reduce((acc, pr) => acc + pr.total, 0);
-        const prAdded = result.pullRequests.reduce((acc, pr) => acc + pr.added, 0);
-        const prUpdated = result.pullRequests.reduce((acc, pr) => acc + pr.updated, 0);
-        out += `  Pull Requests: ${prTotal} across ${result.pullRequests.length} repositories (added ${prAdded}, updated ${prUpdated})\n`;
-        if (result.skippedDisabled.length > 0) {
-          out += `  ○ ${result.skippedDisabled.length} repositories are disabled in Azure DevOps; their pull requests were skipped\n`;
-        }
-        if (result.canonicalRepos) {
-          out += `  Canonical:     ${result.canonicalRepos.updated.length} updated, ${result.canonicalRepos.skipped.length} skipped\n`;
-        }
-        if (result.errors && result.errors.length > 0) {
-          out += "\nWarnings/Errors:\n";
-          for (const err of result.errors) {
-            out += `  - ${err}\n`;
-          }
-        }
-        return out.trimEnd();
-      },
+      text: () => formatDataResult(result),
     });
     return 0;
   },
@@ -384,7 +398,8 @@ export const syncDataCommand = defineCommand({
 export const syncCommand = defineCommand({
   meta: {
     name: "sync",
-    description: "Synchronize workspace or offline cache from remote providers",
+    description:
+      "Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project",
   },
   args: {
     root: { type: "string", description: "Explicit dev root directory" },
@@ -415,7 +430,69 @@ export const syncCommand = defineCommand({
         args.json,
       );
     }
-    if (!args.json) ui.info("Sync action: provider inventory.");
-    return await runNestedCommand(syncInventoryCommand, rawArgs);
+    const dataProviders = config.providers.filter(
+      (p): p is Extract<ProviderConfig, { type: "azure_devops" }> =>
+        p.type === "azure_devops" && Boolean(p.project),
+    );
+    if (dataProviders.length === 0) {
+      if (!args.json) ui.info("Sync action: provider inventory.");
+      return await runNestedCommand(syncInventoryCommand, rawArgs);
+    }
+
+    // A provider with a configured project gets its inventory, work items, and pull
+    // requests; every other provider gets its inventory.
+    if (!args.json) {
+      ui.info(
+        "Sync action: provider inventory, plus work items and pull requests of configured projects.",
+      );
+    }
+    const inventoryProviders = config.providers.filter(
+      (p) => !dataProviders.some((dataProvider) => dataProvider.id === p.id),
+    );
+    const credential = resolveAzureDevOpsCredential(config);
+    const [inventory, data] = await Promise.all([
+      syncProviderInventories(config, inventoryProviders),
+      Promise.all(
+        dataProviders.map(async (provider) => {
+          try {
+            const client = createAzureDevOps({
+              organization: provider.organization,
+              token: (await credential).token,
+            });
+            const result = await sync.syncData({
+              root: config.root,
+              tenant: adoTenantFromOrg(provider.organization),
+              client,
+              project: provider.project,
+            });
+            return { providerId: provider.id, result };
+          } catch (err) {
+            return {
+              providerId: provider.id,
+              error: `[${provider.id}] ${err instanceof Error ? err.message : String(err)}`,
+            };
+          }
+        }),
+      ),
+    ]);
+    const dataResults = data.flatMap((item) =>
+      item.result ? [{ providerId: item.providerId, ...item.result }] : [],
+    );
+    const errors = [...inventory.errors, ...data.flatMap((item) => item.error ?? [])];
+
+    ui.result({
+      data: { inventory: inventory.results, data: dataResults, errors },
+      json: args.json,
+      text: () => {
+        const parts = [
+          formatInventoryResults(inventory.results),
+          ...dataResults.map(formatDataResult),
+        ];
+        let out = parts.filter(Boolean).join("\n");
+        for (const error of errors) out += `\n  Warning: ${error}`;
+        return out.trim();
+      },
+    });
+    return errors.length > 0 && inventory.results.length === 0 && dataResults.length === 0 ? 1 : 0;
   },
 });
