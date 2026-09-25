@@ -322,7 +322,7 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
   });
 
   test("refreshes distinct projects for pull requests the user wrote or reviews, once each", async () => {
-    const calls: Array<{ project: string; creatorId?: string; reviewerId?: string }> = [];
+    const calls: Array<{ project?: string; creatorId?: string; reviewerId?: string }> = [];
     const fakeClient: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
       getCurrentUser: async () => ({ id: "reviewer-1", displayName: "Current User" }),
       listProjectPullRequests: async (project, options) => {

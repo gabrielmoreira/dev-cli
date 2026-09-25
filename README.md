@@ -110,7 +110,7 @@ Come back in a week, or hand the folder to an agent, and the brief is already th
 
 ## Pull requests and work items, without leaving the terminal
 
-`dev pr` lists the open pull requests assigned to you across your connected providers. Pick one repository with `-i`, or narrow to a group of repositories with a label. Azure DevOps work items come along with `dev wi`. Both read a local cache; `--refresh` pulls the latest.
+`dev pr` lists the open pull requests you wrote or are asked to review, live, across your connected providers. In a terminal, type to find one and choose what to do with it: check it out, open it in the browser, or read its details. Pick one repository with `-i`, or narrow to a group of repositories with a label. Azure DevOps work items come along with `dev wi`, which reads a local cache until `--refresh` pulls the latest.
 
 ```bash
 dev pr
@@ -196,7 +196,7 @@ dev qmd sync index:platform-docs
 A workspace is already a brief: `ws.md` holds the objective, the decisions so far and the next steps, and the repositories the task needs are one folder down. Point an agent at the folder, or let `dev` start one there:
 
 ```bash
-dev ws start        # opens OMP in a HerdR pane for this workspace, and finds it again next time
+dev start           # dev ws start: opens OMP in a HerdR pane for this workspace, and finds it again next time
 ```
 
 The workspace, pull request and work item commands take `--json`, and `dev --help --llms` prints the command contract in a form written for models, so an agent can drive `dev` itself. [OMP](https://omp.sh) and [HerdR](https://herdr.dev) are optional; see [Integrations](docs/integrations.md).

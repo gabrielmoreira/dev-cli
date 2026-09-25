@@ -9,13 +9,14 @@ import {
 import { resolveAzureDevOpsCredential, resolveExtraHeader } from "../credentials.ts";
 import * as labels from "../labels.ts";
 import { normalizeSourceKey } from "../git.ts";
-import { ui } from "../ui.ts";
+import { CancelledError, ui } from "../ui.ts";
+import * as shell from "../shell.ts";
 import { reportError } from "./errors.ts";
 import { warnHealFailures } from "./ws.ts";
 import * as ws from "../ws.ts";
 import * as fs from "../fs.ts";
 import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
-import { findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
+import { canPrompt, findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
@@ -258,7 +259,7 @@ export const prListCommand = defineCommand({
           return out.trimEnd();
         },
       });
-      return 0;
+      return canPrompt() && shown.length > 0 ? await actOnPullRequest(shown, args.root) : 0;
     }
 
     const allPrs: cache.PullRequestRecord[] = [];
@@ -312,12 +313,14 @@ export const prListCommand = defineCommand({
               );
             });
             const configuredProject = args.project ?? provider.project;
-            const projects = configuredProject
-              ? [configuredProject]
-              : [...new Set(providerInventory.flatMap((record) => record.project ?? []))];
-            if (projects.length === 0) {
+            // Without a project, one organization-wide query per filter, not one per project.
+            const projects = configuredProject ? [configuredProject] : [];
+            // An organization with no cached repository is one this user cannot read yet.
+            if (!configuredProject && providerInventory.length === 0) {
               if (args.provider) {
-                throw new Error("No cached projects. Run 'dev sync inventory' first.");
+                throw new Error(
+                  "No cached repositories for this provider. Run 'dev sync inventory' first.",
+                );
               }
               if (isDefaultMineQuery) {
                 await cache.writePullRequestSelection({
@@ -391,9 +394,54 @@ export const prListCommand = defineCommand({
         return out.trimEnd();
       },
     });
-    return errors.length > 0 && shown.length === 0 ? 1 : 0;
+    if (errors.length > 0 && shown.length === 0) return 1;
+    return canPrompt() && shown.length > 0 ? await actOnPullRequest(shown, args.root) : 0;
   },
 });
+
+/**
+ * In a terminal the listing is also a picker: search a pull request, then act on it.
+ * Esc leaves without doing anything, so a look at the list costs one keypress.
+ */
+async function actOnPullRequest(items: cache.PullRequestRecord[], root?: string): Promise<number> {
+  try {
+    const index = await ui.select(
+      "Act on a pull request (Esc to exit)",
+      items.map((item, index) => ({
+        label: `#${item.id} ${draftTag(item)}${item.repository}: ${item.title} — ${item.author}`,
+        value: String(index),
+      })),
+    );
+    const item = items[Number(index)]!;
+    const action = await ui.select(`#${item.id} ${item.title}`, [
+      { label: "Check out in a new workspace", value: "checkout" },
+      { label: "Check out for review (isolated local branch)", value: "review" },
+      { label: "Open in browser", value: "browser" },
+      { label: "Show details", value: "view" },
+    ]);
+    if (action === "browser") {
+      const opened = await shell.openUrl(item.url);
+      if (opened.exitCode !== 0) {
+        return reportError(`Could not open a browser (${opened.stderr}). Open ${item.url}`);
+      }
+      ui.success(`Opened ${item.url}`);
+      return 0;
+    }
+    // A web URL names the organization and project; the REST fallback does not parse.
+    const reference = parseAzureDevOpsPullRequestUrl(item.url)
+      ? [item.url]
+      : [String(item.id), "--repo", item.repository];
+    const rest = [...(action === "review" ? ["--review"] : []), ...(root ? ["--root", root] : [])];
+    const result =
+      action === "view"
+        ? await runNestedCommand(prViewCommand, [...reference, ...rest])
+        : await runNestedCommand(prCheckoutCommand, [...reference, ...rest]);
+    return Number(result ?? 0);
+  } catch (error) {
+    if (error instanceof CancelledError) return 0;
+    throw error;
+  }
+}
 
 /** A draft is marked first, so it is never mistaken for a pull request ready to review. */
 function draftTag(item: cache.PullRequestRecord): string {

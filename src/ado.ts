@@ -201,7 +201,7 @@ export interface AzureDevOpsClient {
   listRepositories(project?: string): Promise<AdoRepository[]>;
   getCurrentUser(): Promise<AdoIdentity>;
   listProjectPullRequests(
-    project: string,
+    project: string | undefined,
     options?: ListProjectPullRequestsOptions,
   ): Promise<AdoPullRequest[]>;
   listPullRequests(
@@ -358,8 +358,9 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
       return data.authenticatedUser;
     },
 
+    /** Pull requests of one project, or of the whole organization when project is undefined. */
     async listProjectPullRequests(
-      project: string,
+      project: string | undefined,
       opts?: ListProjectPullRequestsOptions,
     ): Promise<AdoPullRequest[]> {
       const query = new URLSearchParams({ "api-version": apiVersion });
@@ -368,7 +369,7 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
       if (opts?.repositoryId) query.set("searchCriteria.repositoryId", opts.repositoryId);
       if (opts?.status) query.set("searchCriteria.status", opts.status);
       return await readPullRequestPages(
-        `${encodeURIComponent(project)}/_apis/git/pullrequests`,
+        `${project ? `${encodeURIComponent(project)}/` : ""}_apis/git/pullrequests`,
         query,
         opts?.limit,
       );

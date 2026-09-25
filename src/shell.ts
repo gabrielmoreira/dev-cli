@@ -50,6 +50,14 @@ export async function runCommand(
   }
 }
 
+/** Opens a URL in the default browser; rundll32 avoids cmd's quoting of `&` on Windows. */
+export async function openUrl(url: string): Promise<ShellExecResult> {
+  if (process.platform === "win32") {
+    return await runCommand("rundll32", ["url.dll,FileProtocolHandler", url]);
+  }
+  return await runCommand(process.platform === "darwin" ? "open" : "xdg-open", [url]);
+}
+
 export interface RunHookEnv {
   DEV_ROOT?: string;
   DEV_WORKSPACE?: string;

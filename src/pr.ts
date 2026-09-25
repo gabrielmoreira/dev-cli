@@ -234,6 +234,7 @@ export async function refreshProjectPullRequests(
   input: {
     root: string;
     tenant: string;
+    /** Projects to query; none queries the whole organization in one request. */
     projects: string[];
     mine: boolean;
     status?: PullRequestStatusFilter;
@@ -247,6 +248,7 @@ export async function refreshProjectPullRequests(
   truncatedProjects: string[];
 }> {
   const projects = [...new Set(input.projects.filter(Boolean))];
+  const scopes: Array<string | undefined> = projects.length > 0 ? projects : [undefined];
   // "Mine" is what I wrote or what waits for my review: two provider queries.
   const userId = input.mine ? (await input.client.getCurrentUser()).id : undefined;
   const syncedAt = input.now ? input.now() : new Date().toISOString();
@@ -256,7 +258,7 @@ export async function refreshProjectPullRequests(
     ? [{ creatorId: userId }, { reviewerId: userId }]
     : [{}];
   const batches = await Promise.all(
-    projects.flatMap((project) =>
+    scopes.flatMap((project) =>
       filters.map((filter) =>
         input.client.listProjectPullRequests(project, { ...filter, status, limit }),
       ),
@@ -274,7 +276,7 @@ export async function refreshProjectPullRequests(
   const truncatedProjects = [
     ...new Set(
       batches.flatMap((batch, index) =>
-        batch.length >= limit ? [projects[Math.floor(index / filters.length)]!] : [],
+        batch.length >= limit ? [scopes[Math.floor(index / filters.length)] ?? "all projects"] : [],
       ),
     ),
   ];
