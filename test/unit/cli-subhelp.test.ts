@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { formatCommandHelp, runCli, suggestCommand, type AmbientContext } from "../../src/cli.ts";
+import {
+  findUnknownOption,
+  formatCommandHelp,
+  runCli,
+  suggestCommand,
+  type AmbientContext,
+} from "../../src/cli.ts";
 
 describe("subcommand help (UX)", () => {
   it("renders positional and option rows from the args schema", async () => {
@@ -16,6 +22,30 @@ describe("subcommand help (UX)", () => {
     expect(await suggestCommand(["ws", "strat"])).toBe("dev ws start");
     expect(await suggestCommand(["start"])).toBe("dev ws start");
     expect(await suggestCommand(["zq"])).toBeUndefined();
+  });
+
+  it("rejects an option no command on the path declares, and suggests the near one", async () => {
+    expect(await findUnknownOption(["sync", "--dryrun"])).toEqual({
+      option: "--dryrun",
+      command: "dev sync",
+      suggestion: "--dry-run",
+    });
+    expect(await findUnknownOption(["ws", "add", "src", "--path=x", "--bogus"])).toMatchObject({
+      option: "--bogus",
+      command: "dev ws add",
+      suggestion: undefined,
+    });
+  });
+
+  it("accepts values, negations, globals, parent hand-offs and passthrough", async () => {
+    // `--root ws` is a value, not the ws command.
+    expect(await findUnknownOption(["--root", "ws", "ws", "ls", "--json"])).toBeUndefined();
+    expect(await findUnknownOption(["sync", "--no-refresh", "--dryRun"])).toBeUndefined();
+    expect(await findUnknownOption(["ws", "ls", "-q", "--non-interactive"])).toBeUndefined();
+    // `dev pr` hands off to its list command, whose options count.
+    expect(await findUnknownOption(["pr", "--all", "--status", "closed"])).toBeUndefined();
+    expect(await findUnknownOption(["qmd", "x", "--whatever", "-n", "5"])).toBeUndefined();
+    expect(await findUnknownOption(["nosuchcommand", "--bogus"])).toBeUndefined();
   });
 
   it("renders ws start as the HerdR OMP entrypoint", async () => {

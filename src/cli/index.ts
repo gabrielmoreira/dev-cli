@@ -9,11 +9,11 @@ import { shellInitCommand } from "./shell.ts";
 import { initCommand, useCommand, currentCommand, rootCommand, rootsCommand } from "./root.ts";
 import { providerCommand } from "./provider.ts";
 import { type AmbientContext, setAmbient } from "./context.ts";
-import { detectWorkspaceFromCwd } from "../ws.ts";
+import { detectWorkspaceFromCwd, WorkspaceError } from "../ws.ts";
 import { ui } from "../ui.ts";
 import { CliInputRequiredError } from "./input.ts";
 import { EXIT_CODE_MEANINGS, EXIT_USAGE, reportError, takeReportedExitCode } from "./errors.ts";
-import { qmdCommand } from "./qmd.ts";
+import { qmdCommand, qmdSearchCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
 import { parsePullRequestUrl } from "../pr-workspace.ts";
@@ -206,6 +206,96 @@ async function findByName(
   return undefined;
 }
 
+/** Hands everything after its name to another program, so any option is fine. */
+const PASSTHROUGH_COMMANDS = new Set<unknown>([qmdXCommand, qmdSearchCommand]);
+
+/** `dry-run` and `dryRun` spell the same option, as citty reads it; `dryrun` does not. */
+function optionKey(name: string): string {
+  return name.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+}
+
+/**
+ * The first option no command on the path declares. citty ignores those
+ * silently, so a typo like `--dryrun` would run the real thing. A command
+ * called without a subcommand may hand off to one (`dev ws` lists), so
+ * the options of its subcommands count too.
+ */
+export async function findUnknownOption(
+  argv: string[],
+): Promise<{ option: string; command: string; suggestion?: string } | undefined> {
+  const known = new Map<string, { name: string; takesValue: boolean }>();
+  const learn = async (command: InspectableCommand) => {
+    for (const [name, definition] of Object.entries(await resolveDefinition(command.args ?? {}))) {
+      if (definition.type === "positional") continue;
+      const option = {
+        name,
+        takesValue: definition.type === "string" || definition.type === "enum",
+      };
+      known.set(optionKey(name), option);
+      const aliases = "alias" in definition ? definition.alias : undefined;
+      for (const alias of typeof aliases === "string" ? [aliases] : (aliases ?? [])) {
+        known.set(optionKey(alias), option);
+      }
+    }
+  };
+
+  // Walk the path the way citty does: the first word that is not an option or its value.
+  let command = mainCommand as unknown as InspectableCommand;
+  const names = ["dev"];
+  await learn(command);
+  let rest = argv;
+  for (;;) {
+    const subCommands = await subCommandsOf(command);
+    if (Object.keys(subCommands).length === 0) break;
+    const index = rest.findIndex(
+      (word, i) =>
+        !word.startsWith("-") &&
+        !(
+          i > 0 &&
+          !rest[i - 1]!.includes("=") &&
+          known.get(optionKey(rest[i - 1]!.replace(/^-+/, "")))?.takesValue
+        ),
+    );
+    if (index < 0) {
+      for (const child of Object.values(subCommands)) await learn(await resolveDefinition(child));
+      break;
+    }
+    const next = subCommands[rest[index]!];
+    // Not a command: citty reports that, with its own suggestion.
+    if (!next) return undefined;
+    command = await resolveDefinition(next);
+    names.push(rest[index]!);
+    if (PASSTHROUGH_COMMANDS.has(command)) return undefined;
+    await learn(command);
+    rest = rest.slice(index + 1);
+  }
+
+  for (let index = 0; index < argv.length; index++) {
+    const word = argv[index]!;
+    if (word === "--") break;
+    if (!word.startsWith("-") || word === "-") continue;
+    const name = word.replace(/^-+/, "").split("=")[0]!;
+    const option = known.get(optionKey(name)) ?? known.get(optionKey(name.replace(/^no-/, "")));
+    if (option) {
+      if (option.takesValue && !word.includes("=")) index++;
+      continue;
+    }
+    const suggestion = [...new Set([...known.values()].map((candidate) => candidate.name))]
+      .map((candidate) => ({
+        candidate,
+        distance: editDistance(optionKey(candidate), optionKey(name)),
+      }))
+      .filter(({ distance }) => distance <= Math.min(2, Math.max(1, Math.floor(name.length / 2))))
+      .sort((x, y) => x.distance - y.distance)[0]?.candidate;
+    return {
+      option: word.split("=")[0]!,
+      command: names.join(" "),
+      suggestion: suggestion ? `--${suggestion}` : undefined,
+    };
+  }
+  return undefined;
+}
+
 export const mainCommand = defineCommand({
   meta: {
     name: "dev",
@@ -353,6 +443,19 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   const normalizedArgs = normalizeCliArgs(argv);
   if (normalizedArgs[1] === "init" && !argv.includes("init")) {
     ui.info(`↳ dev ws init ${normalizedArgs[2]}`);
+  }
+
+  const unknownOption = await findUnknownOption(normalizedArgs);
+  if (unknownOption) {
+    const { option, command, suggestion } = unknownOption;
+    return reportError(
+      new WorkspaceError(
+        "UNKNOWN_OPTION",
+        `'${command}' has no option ${option}${suggestion ? `; did you mean ${suggestion}?` : "."}`,
+        { option, usage: suggestion ? `${command} ${suggestion}` : `${command} --help` },
+      ),
+      currentAmbient.argv.includes("--json"),
+    );
   }
 
   try {

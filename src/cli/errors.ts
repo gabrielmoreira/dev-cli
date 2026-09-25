@@ -22,6 +22,8 @@ const NEXT_STEPS: Record<string, string> = {
   WORKSET_MEMBER_EXISTS: "dev workset list",
   WORKSET_MEMBER_NOT_FOUND: "dev workset list",
   WORKSET_NOT_FOUND: "dev workset list",
+  // The corrected command when an option is near a known one, else the command's help.
+  UNKNOWN_OPTION: "<usage>",
   WORKSPACE_ALREADY_EXISTS: "dev go <name>",
   WORKSPACE_NOT_FOUND: "dev ls",
   WORKTREE_NOT_FOUND: "dev ws sync",
@@ -47,6 +49,7 @@ const EXIT_CODES: Record<string, number> = {
   PROVIDER_NOT_CONFIGURED: EXIT_USAGE,
   PROVIDER_NOT_FOUND: EXIT_USAGE,
   LABEL_VALIDATION: EXIT_USAGE,
+  UNKNOWN_OPTION: EXIT_USAGE,
   // mirror add --branch <default>: that checkout is the mirror itself.
   DEFAULT_BRANCH: EXIT_USAGE,
 
@@ -147,6 +150,9 @@ export function reportError(error: unknown, json?: boolean): number {
     return reportedExitCode;
   }
 
+  // A relink that failed first usually explains the failure: show it before.
+  const healWarnings = described.details?.healWarnings;
+  if (Array.isArray(healWarnings)) for (const warning of healWarnings) ui.warn(`⚠ ${warning}`);
   ui.error(`✗ ${described.message}`);
   if (described.nextStep) ui.error(`↳ ${described.nextStep}`);
   return reportedExitCode;
