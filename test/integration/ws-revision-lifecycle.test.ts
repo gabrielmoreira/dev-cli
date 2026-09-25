@@ -164,7 +164,7 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
       workspaceName: "rev-ws",
       mountPath: "core-repo",
     });
-    expect(again).toEqual({ path: "core-repo", removed: false });
+    expect(again).toEqual({ path: "core-repo", removed: false, healWarnings: [] });
     expect(await Bun.file(manifestPath).text()).toBe(manifestData);
   });
 });

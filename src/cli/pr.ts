@@ -11,6 +11,7 @@ import * as labels from "../labels.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { ui } from "../ui.ts";
 import { reportError } from "./errors.ts";
+import { warnHealFailures } from "./ws.ts";
 import * as ws from "../ws.ts";
 import * as fs from "../fs.ts";
 import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
@@ -581,6 +582,7 @@ export const prCheckoutCommand = defineCommand({
       if (workspace.created) await fs.removeDir(workspace.path);
       throw error;
     }
+    warnHealFailures([mounted]);
 
     ui.result({
       data: {

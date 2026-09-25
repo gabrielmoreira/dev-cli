@@ -1245,7 +1245,7 @@ describe("smart CLI input", () => {
     uncachedRequest.mockRestore();
   });
 
-  test("lists cached pull requests without network access unless refresh is requested", async () => {
+  test("--offline lists the last synchronized pull requests without network access", async () => {
     const tenant = "dev.azure.com/example-org";
     await writeFile(
       join(root, "dev.yaml"),
@@ -1283,11 +1283,11 @@ describe("smart CLI input", () => {
       ],
     });
     const request = spyOn(globalThis, "fetch").mockRejectedValue(
-      new Error("default PR listing must not use the network"),
+      new Error("an offline PR listing must not use the network"),
     );
 
     const exitCode = await runCli({
-      argv: ["pr", "--root", root],
+      argv: ["pr", "--offline", "--root", root],
       cwd: root,
       env: {},
       isTTY: false,

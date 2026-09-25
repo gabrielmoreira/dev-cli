@@ -112,20 +112,24 @@ describe("dev ws init E2E (Phase 1)", () => {
     expect(fs.exists(join(tempRoot, "ws", "local-quick-source", "quick-source"))).toBe(true);
   });
 
-  it("refuses with exit 3 when the workspace already exists", async () => {
-    const proc = Bun.spawn(
-      ["bun", "run", cliPath, "ws", "init", "e2e-feature", "--root", tempRoot],
-      {
-        stdout: "pipe",
-        stderr: "pipe",
-      },
-    );
+  it("returns an existing workspace, but refuses with exit 3 when --desc could differ", async () => {
+    const run = async (...extra: string[]) => {
+      const proc = Bun.spawn(
+        ["bun", "run", cliPath, "ws", "init", "e2e-feature", "--root", tempRoot, ...extra],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+      return { stdout, stderr, exitCode: await proc.exited };
+    };
 
-    const stderr = await new Response(proc.stderr).text();
-    const exitCode = await proc.exited;
+    const again = await run("--json");
+    expect(again.exitCode).toBe(0);
+    expect(JSON.parse(again.stdout).created).toBe(false);
 
-    expect(exitCode).toBe(3);
-    expect(stderr).toContain("↳ dev go e2e-feature");
+    const described = await run("--desc", "something else");
+    expect(described.exitCode).toBe(3);
+    expect(described.stderr).toContain("↳ dev go e2e-feature");
   });
 
   it("exits 2 when the workspace name is omitted", async () => {

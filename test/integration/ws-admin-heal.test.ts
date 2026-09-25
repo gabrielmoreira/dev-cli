@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 import * as ws from "../../src/ws.ts";
-import { workspaceAdminRepoPath } from "../../src/paths.ts";
+import { gitPoolPath, workspaceAdminRepoPath } from "../../src/paths.ts";
 
 describe("Workspace admin self-heal integration", () => {
   let tempRoot: string;
@@ -88,5 +88,30 @@ describe("Workspace admin self-heal integration", () => {
     // the mount dirty by design, which is the safety guard working.
     const status = await ws.status({ root: tempRoot, workspaceName: "heal-orphan" });
     expect(status.mounts).toHaveLength(1);
+  });
+
+  it("reports a heal it could not do instead of hiding it", async () => {
+    const lostRemote = await mkdtemp(join(tmpdir(), "dev-cli-ws-heal-lost-"));
+    await git.runGit(["clone", "--bare", bareRemotePath, lostRemote]);
+    await ws.init({ root: tempRoot, name: "heal-lost" });
+    const { mountName, sourceKey } = await ws.add({
+      root: tempRoot,
+      workspaceName: "heal-lost",
+      source: lostRemote,
+      branch: "main",
+    });
+
+    // Admin, pool mirror, and the source itself are gone: nothing to rebuild from.
+    const retry = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 };
+    await rm(
+      workspaceAdminRepoPath({ root: tempRoot, workspaceName: "heal-lost", sourceKey }),
+      retry,
+    );
+    await rm(gitPoolPath({ root: tempRoot, source: lostRemote }), retry);
+    await rm(lostRemote, retry);
+
+    const status = await ws.status({ root: tempRoot, workspaceName: "heal-lost" });
+    expect(status.healWarnings).toHaveLength(1);
+    expect(status.healWarnings[0]).toContain(`Could not relink ${mountName}`);
   });
 });

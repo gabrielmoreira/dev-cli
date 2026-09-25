@@ -65,6 +65,14 @@ async function resolvePullRequestPlan(
   });
   return plan ? { plan, extraHeader } : undefined;
 }
+
+/** Admin repositories the workspace could not relink before the command ran, once each. */
+export function warnHealFailures(results: Array<{ healWarnings: string[] }>): void {
+  for (const warning of new Set(results.flatMap((result) => result.healWarnings))) {
+    ui.warn(`⚠ ${warning}`);
+  }
+}
+
 export const wsInitCommand = defineCommand({
   meta: {
     name: "init",
@@ -225,6 +233,7 @@ export const wsInitCommand = defineCommand({
           }),
         );
       }
+      warnHealFailures(mounted);
 
       const data =
         mounted.length === 0
@@ -634,6 +643,7 @@ export const wsAddCommand = defineCommand({
       for (const result of results) {
         if (result.hookWarning) ui.warn(`⚠ ${result.hookWarning}`);
       }
+      warnHealFailures(results);
       return 0;
     } catch (error) {
       return reportError(error, args.json);
@@ -673,6 +683,7 @@ export const wsStatusCommand = defineCommand({
         offline: args.offline,
         resolveExtraHeader: (source) => resolveExtraHeader(config, source),
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -767,6 +778,7 @@ export const wsUpdateCommand = defineCommand({
         explicitConsent: args.consent || args.force,
         globalHooks: config.hooks,
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -882,6 +894,7 @@ export const wsTrackCommand = defineCommand({
         branch: branch.value,
         manifestOnly: args["manifest-only"],
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -941,6 +954,7 @@ export const wsLockCommand = defineCommand({
         mountPath,
         commit: args.commit,
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -1005,6 +1019,7 @@ export const wsUnlockCommand = defineCommand({
         mountPath,
         branch,
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -1073,6 +1088,7 @@ export const wsTagCommand = defineCommand({
         mountPath: mount.value,
         tag: tag.value,
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,
@@ -1139,6 +1155,7 @@ export const wsRemoveCommand = defineCommand({
         mountPath: mount.value,
         force: args.force,
       });
+      warnHealFailures([result]);
 
       ui.result({
         data: result,

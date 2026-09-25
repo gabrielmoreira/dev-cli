@@ -62,6 +62,8 @@ export interface WorkspaceAddResult {
   outcome: "mounted" | "adopted" | "already_mounted";
   /** True when the checkout came from a mirror already in the local pool, so nothing was cloned. */
   mirrorReused?: boolean;
+  /** Mounts whose admin repository could not be rebuilt before the operation. */
+  healWarnings: string[];
   workspaceName: string;
   mountPath: string;
   mountName: string;
@@ -101,6 +103,8 @@ export interface WorkspaceStatusResult {
   manifestPath: string;
   isClean: boolean;
   mounts: MountStatusVerdict[];
+  /** Mounts whose admin repository could not be rebuilt before the comparison. */
+  healWarnings: string[];
 }
 
 export interface WorkspaceDeps {
@@ -211,6 +215,8 @@ export async function loadWorkspaceContext(
   manifestPath: string;
   manifest: manifest.WorkspaceManifest;
   body?: string;
+  /** Mounts whose admin repository could not be rebuilt; the handler shows them. */
+  healWarnings: string[];
 }> {
   const workspacePath = deriveWorkspacePath(root, workspaceName, workspacePrefix);
   if (!deps.fs.exists(workspacePath)) {
@@ -233,7 +239,7 @@ export async function loadWorkspaceContext(
   const { manifest: currentManifest, body } = await deps.manifest.readWorkspace(manifestPath);
   assertSafeManifestMountPaths(currentManifest);
 
-  await healWorkspaceAdmins({
+  const healWarnings = await healWorkspaceAdmins({
     root,
     workspacePath,
     workspaceName,
@@ -246,6 +252,7 @@ export async function loadWorkspaceContext(
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   };
 }
 /**
@@ -253,7 +260,7 @@ export async function loadWorkspaceContext(
  * .dev/repos/<workspace>/ (checkouts only inside the workspace directory).
  * Handles an admin that vanished (recreated from the pool, existing mount
  * directories re-adopted at their manifest revision). Best effort per
- * source: on failure the normal operation error surfaces later.
+ * source: a failure becomes a warning for the handler, and the operation goes on.
  */
 async function healWorkspaceAdmins(params: {
   root: string;
@@ -261,9 +268,10 @@ async function healWorkspaceAdmins(params: {
   workspaceName: string;
   manifest: manifest.WorkspaceManifest;
   deps: WorkspaceDeps;
-}): Promise<void> {
+}): Promise<string[]> {
   const { root, workspacePath, workspaceName, manifest, deps } = params;
-  if (manifest.mounts.length === 0) return;
+  const warnings: string[] = [];
+  if (manifest.mounts.length === 0) return warnings;
 
   const mountsBySource = new Map<string, manifest.MountDefinition[]>();
   for (const mount of manifest.mounts) {
@@ -309,11 +317,14 @@ async function healWorkspaceAdmins(params: {
           trackBranch,
         });
       }
-    } catch {
-      // Best effort: leave the broken state for the actual operation to
-      // report a precise domain error.
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      warnings.push(
+        `Could not relink ${mounts.map((mount) => mount.path).join(", ")} to ${deps.git.stripCredentialsFromUrl(mounts[0].source)}: ${reason}`,
+      );
     }
   }
+  return warnings;
 }
 
 export function findMountOrThrow(
@@ -572,6 +583,7 @@ export async function add(
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
 
   // Validate mount plan without I/O
@@ -613,6 +625,7 @@ export async function add(
     }
     return {
       outcome: "already_mounted",
+      healWarnings,
       workspaceName: input.workspaceName,
       mountPath,
       mountName: plan.mountName,
@@ -825,6 +838,7 @@ export async function add(
 
   return {
     outcome: adopted ? "adopted" : "mounted",
+    healWarnings,
     mirrorReused,
     workspaceName: input.workspaceName,
     mountPath,
@@ -979,6 +993,7 @@ export async function status(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
 
   // If refresh requested and not offline, fetch from remotes
@@ -1020,6 +1035,7 @@ export async function status(
     manifestPath,
     isClean,
     mounts,
+    healWarnings,
   };
 }
 
@@ -1280,6 +1296,8 @@ export interface WorkspaceUpdateResult {
     skipped: number;
   };
   hookWarning?: string;
+  /** Mounts whose admin repository could not be rebuilt before the update. */
+  healWarnings: string[];
 }
 
 function revisionTarget(revision: manifest.MountRevision): string {
@@ -1424,6 +1442,7 @@ export async function update(
       workspaceName: input.workspaceName,
       workspacePath: statusRes.workspacePath,
       dryRun: true,
+      healWarnings: statusRes.healWarnings,
       mounts: plan.map((item) => ({
         path: item.path,
         source: item.source,
@@ -1602,6 +1621,7 @@ export async function update(
       skipped: skippedCount,
     },
     hookWarning,
+    healWarnings: statusRes.healWarnings,
   };
 }
 
@@ -1629,12 +1649,19 @@ export interface WorkspaceTrackInput {
 export async function track(
   input: WorkspaceTrackInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ path: string; branch: string; manifestUpdated: boolean; worktreeSwitched: boolean }> {
+): Promise<{
+  path: string;
+  branch: string;
+  manifestUpdated: boolean;
+  worktreeSwitched: boolean;
+  healWarnings: string[];
+}> {
   const {
     workspacePath,
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   const { index: mountIndex } = findMountOrThrow(currentManifest, input.mountPath);
 
@@ -1663,6 +1690,7 @@ export async function track(
   return {
     path: input.mountPath,
     branch: input.branch,
+    healWarnings,
     manifestUpdated: true,
     worktreeSwitched,
   };
@@ -1679,12 +1707,13 @@ export interface WorkspaceLockInput {
 export async function lock(
   input: WorkspaceLockInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ lockedMounts: { path: string; commit: string }[] }> {
+): Promise<{ lockedMounts: { path: string; commit: string }[]; healWarnings: string[] }> {
   const {
     workspacePath,
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   const targetMounts = input.mountPath
     ? [findMountOrThrow(currentManifest, input.mountPath).mount]
@@ -1715,7 +1744,7 @@ export async function lock(
   }
 
   await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
-  return { lockedMounts: lockedResults };
+  return { lockedMounts: lockedResults, healWarnings };
 }
 
 export interface WorkspaceUnlockInput {
@@ -1729,12 +1758,13 @@ export interface WorkspaceUnlockInput {
 export async function unlock(
   input: WorkspaceUnlockInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ unlockedMounts: { path: string; branch: string }[] }> {
+): Promise<{ unlockedMounts: { path: string; branch: string }[]; healWarnings: string[] }> {
   const {
     workspacePath,
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   const targetMounts = input.mountPath
     ? [findMountOrThrow(currentManifest, input.mountPath).mount]
@@ -1763,7 +1793,7 @@ export async function unlock(
   }
 
   await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
-  return { unlockedMounts: unlockedResults };
+  return { unlockedMounts: unlockedResults, healWarnings };
 }
 
 export interface WorkspaceTagInput {
@@ -1777,12 +1807,13 @@ export interface WorkspaceTagInput {
 export async function tag(
   input: WorkspaceTagInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ path: string; tag: string }> {
+): Promise<{ path: string; tag: string; healWarnings: string[] }> {
   const {
     workspacePath,
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   const { index: mountIndex } = findMountOrThrow(currentManifest, input.mountPath);
 
@@ -1804,7 +1835,7 @@ export async function tag(
   });
 
   await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
-  return { path: input.mountPath, tag: input.tag };
+  return { path: input.mountPath, tag: input.tag, healWarnings };
 }
 
 export interface WorkspaceRemoveInput {
@@ -1817,16 +1848,17 @@ export interface WorkspaceRemoveInput {
 export async function remove(
   input: WorkspaceRemoveInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ path: string; removed: boolean }> {
+): Promise<{ path: string; removed: boolean; healWarnings: string[] }> {
   const {
     workspacePath,
     manifestPath,
     manifest: currentManifest,
     body,
+    healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   // Removing what is not mounted already holds: the result says so instead of failing.
   const mountIndex = currentManifest.mounts.findIndex((m) => m.path === input.mountPath);
-  if (mountIndex < 0) return { path: input.mountPath, removed: false };
+  if (mountIndex < 0) return { path: input.mountPath, removed: false, healWarnings };
   const mount = currentManifest.mounts[mountIndex];
   const worktreePath = join(workspacePath, assertSafeMountPath(mount.path));
 
@@ -1869,7 +1901,7 @@ export async function remove(
   currentManifest.mounts.splice(mountIndex, 1);
   await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
 
-  return { path: input.mountPath, removed: true };
+  return { path: input.mountPath, removed: true, healWarnings };
 }
 
 export function planDuplication(
