@@ -181,12 +181,19 @@ export interface ListProjectPullRequestsOptions {
   creatorId?: string;
   repositoryId?: string;
   status?: "active" | "completed" | "abandoned" | "all";
+  /** Most pull requests to read, newest first; omitted reads every page. */
+  limit?: number;
 }
 
 export interface ListPullRequestsOptions {
   project?: string;
   status?: "active" | "completed" | "abandoned" | "all";
+  /** Most pull requests to read, newest first; omitted reads every page. */
+  limit?: number;
 }
+
+/** Azure DevOps returns at most this many pull requests per request. */
+const PULL_REQUEST_PAGE_SIZE = 100;
 
 export interface AzureDevOpsClient {
   listProjects(): Promise<AdoProject[]>;
@@ -301,6 +308,24 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
     }
   }
 
+  /** Reads newest-first pages until the provider runs out or `limit` is reached. */
+  async function readPullRequestPages(
+    path: string,
+    query: URLSearchParams,
+    limit?: number,
+  ): Promise<AdoPullRequest[]> {
+    const results: AdoPullRequest[] = [];
+    while (limit === undefined || results.length < limit) {
+      const top = Math.min(PULL_REQUEST_PAGE_SIZE, (limit ?? Infinity) - results.length);
+      query.set("$top", String(top));
+      query.set("$skip", String(results.length));
+      const page = (await request<{ value?: AdoPullRequest[] }>(`${path}?${query}`)).value ?? [];
+      results.push(...page);
+      if (page.length < top) break;
+    }
+    return results;
+  }
+
   return {
     async listProjects(): Promise<AdoProject[]> {
       const data = await request<{ value: AdoProject[]; count: number }>(
@@ -341,10 +366,11 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
       if (opts?.creatorId) query.set("searchCriteria.creatorId", opts.creatorId);
       if (opts?.repositoryId) query.set("searchCriteria.repositoryId", opts.repositoryId);
       if (opts?.status) query.set("searchCriteria.status", opts.status);
-      const data = await request<{ value: AdoPullRequest[]; count: number }>(
-        `${encodeURIComponent(project)}/_apis/git/pullrequests?${query}`,
+      return await readPullRequestPages(
+        `${encodeURIComponent(project)}/_apis/git/pullrequests`,
+        query,
+        opts?.limit,
       );
-      return data.value || [];
     },
 
     async listPullRequests(
@@ -373,13 +399,9 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
         ? `${encodeURIComponent(resolvedProject)}/_apis/git/repositories/${encodeURIComponent(resolvedRepo)}`
         : `_apis/git/repositories/${encodeURIComponent(resolvedRepo)}`;
 
-      const statusQuery = opts?.status
-        ? `&searchCriteria.status=${encodeURIComponent(opts.status)}`
-        : "";
-      const path = `${repoPath}/pullrequests?api-version=${encodeURIComponent(apiVersion)}${statusQuery}`;
-
-      const data = await request<{ value: AdoPullRequest[]; count: number }>(path);
-      return data.value || [];
+      const query = new URLSearchParams({ "api-version": apiVersion });
+      if (opts?.status) query.set("searchCriteria.status", opts.status);
+      return await readPullRequestPages(`${repoPath}/pullrequests`, query, opts?.limit);
     },
 
     async getPullRequest(

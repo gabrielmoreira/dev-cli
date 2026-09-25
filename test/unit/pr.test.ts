@@ -210,12 +210,37 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
     expect(cached[0].id).toBe(100);
   });
 
-  test("refreshes distinct projects for the authenticated reviewer by default", async () => {
-    const calls: Array<{ project: string; reviewerId?: string }> = [];
+  test("an open-only sync drops cached open pull requests that were closed since", async () => {
+    const active = (pullRequestId: number, isDraft = false) => ({
+      pullRequestId,
+      status: "active",
+      title: `PR ${pullRequestId}`,
+      isDraft,
+      creationDate: "2026-09-14T20:00:00Z",
+      url: `https://dev.azure.com/org/p/_apis/git/pullRequests/${pullRequestId}`,
+    });
+    let open = [active(1), active(2)];
+    const client = {
+      listPullRequests: async () => open,
+    } as unknown as Pick<AzureDevOpsClient, "listPullRequests" | "getPullRequest">;
+    const input = { root: tempRoot, tenant: "t", repo: "r", status: "open" as const, client };
+
+    await syncPullRequests(input);
+    open = [active(2, true)];
+    const result = await syncPullRequests(input);
+
+    const cached = await readPullRequests({ root: tempRoot, tenant: "t", repo: "r" });
+    expect(cached.map((pr) => pr.id)).toEqual([2]);
+    expect(cached[0].isDraft).toBe(true);
+    expect(result.truncated).toBe(false);
+  });
+
+  test("refreshes distinct projects for pull requests the user wrote or reviews, once each", async () => {
+    const calls: Array<{ project: string; creatorId?: string; reviewerId?: string }> = [];
     const fakeClient: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
       getCurrentUser: async () => ({ id: "reviewer-1", displayName: "Current User" }),
       listProjectPullRequests: async (project, options) => {
-        calls.push({ project, reviewerId: options?.reviewerId });
+        calls.push({ project, creatorId: options?.creatorId, reviewerId: options?.reviewerId });
         return project === "Payments"
           ? [
               {
@@ -243,8 +268,10 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
     });
 
     expect(calls).toEqual([
-      { project: "Payments", reviewerId: "reviewer-1" },
-      { project: "Identity", reviewerId: "reviewer-1" },
+      { project: "Payments", creatorId: "reviewer-1", reviewerId: undefined },
+      { project: "Payments", creatorId: undefined, reviewerId: "reviewer-1" },
+      { project: "Identity", creatorId: "reviewer-1", reviewerId: undefined },
+      { project: "Identity", creatorId: undefined, reviewerId: "reviewer-1" },
     ]);
     expect(records.map((record) => record.repository)).toEqual(["payments-api"]);
     expect(

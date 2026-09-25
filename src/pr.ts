@@ -22,7 +22,10 @@ export interface PrSyncResult {
   total: number;
   updated: number;
   added: number;
+  /** What the provider returned for this query (the cache may hold more). */
   prs: PullRequestRecord[];
+  /** The provider had more than PULL_REQUEST_LIMIT pull requests for this query. */
+  truncated: boolean;
 }
 
 export interface PrDeps {
@@ -59,6 +62,12 @@ export function mapCanonicalToAdoStatus(
   if (status === "abandoned") return "abandoned";
   return "all";
 }
+
+/**
+ * Most pull requests one query reads, newest first. Listings ask for open pull
+ * requests only, so this is a safety bound rather than a page size.
+ */
+export const PULL_REQUEST_LIMIT = 2000;
 
 /**
  * Normalizes an Azure DevOps PR into a canonical PullRequestRecord.
@@ -130,6 +139,7 @@ export async function syncPullRequests(
   const rawPrs = await input.client.listPullRequests(input.repositoryIdOrName ?? input.repo, {
     project: input.project,
     status: adoStatus,
+    limit: PULL_REQUEST_LIMIT,
   });
 
   const incoming = rawPrs.map((pr) => normalizeAdoPullRequest(pr, input.tenant, input.repo, now));
@@ -151,7 +161,14 @@ export async function syncPullRequests(
     }
   }
 
-  const merged = mergePullRequestRecords(existing, incoming);
+  // A pull request cached as open that an open-only query no longer returns was
+  // completed or abandoned since; it stays out of every open listing.
+  const complete = rawPrs.length < PULL_REQUEST_LIMIT;
+  const kept =
+    adoStatus === "active" && complete
+      ? existing.filter((p) => p.status !== "open" || incoming.some((i) => i.id === p.id))
+      : existing;
+  const merged = mergePullRequestRecords(kept, incoming);
   const cachePath = await deps.cache.writePullRequests({
     root: input.root,
     tenant: input.tenant,
@@ -166,7 +183,8 @@ export async function syncPullRequests(
     total: merged.length,
     updated,
     added,
-    prs: merged,
+    prs: incoming,
+    truncated: !complete,
   };
 }
 
@@ -183,20 +201,28 @@ export async function refreshProjectPullRequests(
   deps: PrDeps = defaultDeps,
 ): Promise<PullRequestRecord[]> {
   const projects = [...new Set(input.projects.filter(Boolean))];
-  const reviewerId = input.mine ? (await input.client.getCurrentUser()).id : undefined;
+  // "Mine" is what I wrote or what waits for my review: two provider queries.
+  const userId = input.mine ? (await input.client.getCurrentUser()).id : undefined;
   const syncedAt = input.now ? input.now() : new Date().toISOString();
+  const status = mapCanonicalToAdoStatus(input.status);
+  const limit = PULL_REQUEST_LIMIT;
+  const filters: Array<{ reviewerId?: string; creatorId?: string }> = userId
+    ? [{ creatorId: userId }, { reviewerId: userId }]
+    : [{}];
   const batches = await Promise.all(
-    projects.map((project) =>
-      input.client.listProjectPullRequests(project, {
-        reviewerId,
-        status: mapCanonicalToAdoStatus(input.status),
-      }),
+    projects.flatMap((project) =>
+      filters.map((filter) =>
+        input.client.listProjectPullRequests(project, { ...filter, status, limit }),
+      ),
     ),
   );
+  const seen = new Set<number>();
   const records = batches.flatMap((batch) =>
     batch.flatMap((raw) => {
       const repository = raw.repository?.name;
-      return repository ? [normalizeAdoPullRequest(raw, input.tenant, repository, syncedAt)] : [];
+      if (!repository || seen.has(raw.pullRequestId)) return [];
+      seen.add(raw.pullRequestId);
+      return [normalizeAdoPullRequest(raw, input.tenant, repository, syncedAt)];
     }),
   );
 

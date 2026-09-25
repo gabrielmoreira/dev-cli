@@ -2,9 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createGitHubClient,
   normalizeGitHubRepository,
-  normalizeGitHubPullRequest,
   type GitHubRawRepository,
-  type GitHubRawPullRequest,
 } from "../../src/github";
 
 describe("GitHub Client and Normalization (Phase 15)", () => {
@@ -30,54 +28,6 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
     expect(record.description).toBe("TypeScript-first operation graph runtime");
     expect(record.last_changed).toBe("2026-09-14T10:00:00Z");
     expect(record.syncedAt).toBe("2026-09-15T12:00:00Z");
-  });
-
-  test("normalizeGitHubPullRequest converts GitHub PR payload to canonical PullRequestRecord", () => {
-    const openRaw: GitHubRawPullRequest = {
-      id: 111,
-      number: 42,
-      title: "Add operation graph compiler",
-      state: "open",
-      merged_at: null,
-      html_url: "https://github.com/example-owner/tiny-ops/pull/42",
-      head: { ref: "feature/compiler", sha: "abc1234" },
-      base: { ref: "main", sha: "def5678" },
-      user: { login: "example-owner" },
-      created_at: "2026-09-10T14:00:00Z",
-      updated_at: "2026-09-11T16:00:00Z",
-    };
-
-    const openRecord = normalizeGitHubPullRequest(openRaw, "tiny-ops", "2026-09-15T12:00:00Z");
-    expect(openRecord.id).toBe(42);
-    expect(openRecord.title).toBe("Add operation graph compiler");
-    expect(openRecord.status).toBe("open");
-    expect(openRecord.sourceBranch).toBe("feature/compiler");
-    expect(openRecord.targetBranch).toBe("main");
-    expect(openRecord.author).toBe("example-owner");
-    expect(openRecord.tenant).toBe("github.com");
-    expect(openRecord.repository).toBe("tiny-ops");
-
-    const mergedRaw: GitHubRawPullRequest = {
-      ...openRaw,
-      number: 43,
-      state: "closed",
-      merged_at: "2026-09-12T10:00:00Z",
-    };
-    const mergedRecord = normalizeGitHubPullRequest(mergedRaw, "tiny-ops", "2026-09-15T12:00:00Z");
-    expect(mergedRecord.status).toBe("completed");
-
-    const abandonedRaw: GitHubRawPullRequest = {
-      ...openRaw,
-      number: 44,
-      state: "closed",
-      merged_at: null,
-    };
-    const abandonedRecord = normalizeGitHubPullRequest(
-      abandonedRaw,
-      "tiny-ops",
-      "2026-09-15T12:00:00Z",
-    );
-    expect(abandonedRecord.status).toBe("abandoned");
   });
 
   test("createGitHubClient sends proper Authorization and User-Agent headers", async () => {

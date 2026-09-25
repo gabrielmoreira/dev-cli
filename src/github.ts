@@ -1,8 +1,6 @@
 import { withHostLimit } from "./host-limit";
 import type { InventoryRecord } from "./cache";
-import type { PullRequestRecord } from "./cache";
 import type { InventorySyncResult } from "./inventory";
-import type { PrSyncResult } from "./pr";
 import * as cache from "./cache";
 
 export interface GitHubRawRepository {
@@ -54,18 +52,9 @@ export interface GitHubClientOptions {
   fetch?: typeof fetch;
 }
 
-export interface ListGitHubPrOptions {
-  state?: "open" | "closed" | "all";
-}
-
 export interface GitHubClient {
   listRepositories(owner?: string): Promise<GitHubRawRepository[]>;
   getRepository(owner: string, repo: string): Promise<GitHubRawRepository>;
-  listPullRequests(
-    owner: string,
-    repo: string,
-    options?: ListGitHubPrOptions,
-  ): Promise<GitHubRawPullRequest[]>;
   getPullRequest(owner: string, repo: string, prNumber: number): Promise<GitHubRawPullRequest>;
 }
 
@@ -116,17 +105,6 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
       );
     },
 
-    async listPullRequests(
-      owner: string,
-      repo: string,
-      opts?: ListGitHubPrOptions,
-    ): Promise<GitHubRawPullRequest[]> {
-      const state = opts?.state || "all";
-      return await request<GitHubRawPullRequest[]>(
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls?state=${state}&per_page=100`,
-      );
-    },
-
     async getPullRequest(
       owner: string,
       repo: string,
@@ -162,37 +140,6 @@ export function normalizeGitHubRepository(
     syncedAt,
     project: raw.owner?.login,
     disabled: raw.disabled === true ? true : undefined,
-  };
-}
-
-/**
- * Normalizes a GitHub raw pull request payload into a canonical PullRequestRecord.
- */
-export function normalizeGitHubPullRequest(
-  raw: GitHubRawPullRequest,
-  repo: string,
-  syncedAt: string = new Date().toISOString(),
-): PullRequestRecord {
-  let status: "open" | "completed" | "abandoned" = "open";
-  if (raw.state === "closed") {
-    status = raw.merged_at ? "completed" : "abandoned";
-  }
-
-  return {
-    id: raw.number,
-    title: raw.title || `PR #${raw.number}`,
-    description: "",
-    status,
-    sourceBranch: raw.head?.ref || "unknown",
-    targetBranch: raw.base?.ref || "main",
-    author: raw.user?.login || "unknown",
-    repository: repo,
-    tenant: "github.com",
-    url: raw.html_url || "",
-    isDraft: false,
-    createdAt: raw.created_at || syncedAt,
-    updatedAt: raw.updated_at || syncedAt,
-    syncedAt,
   };
 }
 
@@ -235,58 +182,5 @@ export async function syncGitHubInventory(input: {
     removed,
     repositories: merged,
     fetched: normalized,
-  };
-}
-
-/**
- * Synchronizes GitHub pull requests for a repository to local JSONL cache.
- */
-export async function syncGitHubPullRequests(input: {
-  root: string;
-  owner: string;
-  repo: string;
-  client: GitHubClient;
-  now?: () => string;
-}): Promise<PrSyncResult> {
-  const timestamp = input.now ? input.now() : new Date().toISOString();
-  const rawPrs = await input.client.listPullRequests(input.owner, input.repo, { state: "all" });
-  const normalized = rawPrs.map((pr) => normalizeGitHubPullRequest(pr, input.repo, timestamp));
-
-  const tenant = `github.com/${input.owner}`;
-  const cachePath = cache.resolvePrCachePath(input.root, tenant, input.repo);
-  const existing = await cache.readPullRequests({ root: input.root, tenant, repo: input.repo });
-
-  const map = new Map<number, PullRequestRecord>();
-  for (const pr of existing) {
-    map.set(pr.id, pr);
-  }
-  let added = 0;
-  let updated = 0;
-
-  for (const pr of normalized) {
-    if (map.has(pr.id)) {
-      updated++;
-    } else {
-      added++;
-    }
-    map.set(pr.id, pr);
-  }
-
-  const merged = Array.from(map.values()).sort((a, b) => b.id - a.id);
-  await cache.writePullRequests({
-    root: input.root,
-    tenant,
-    repo: input.repo,
-    records: merged,
-  });
-
-  return {
-    tenant,
-    repo: input.repo,
-    cachePath,
-    total: merged.length,
-    added,
-    updated,
-    prs: merged,
   };
 }

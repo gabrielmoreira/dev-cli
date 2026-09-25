@@ -115,6 +115,8 @@ export async function syncData(
         repo: repoName,
         client: input.client,
         project: targetProject,
+        // Listings show open pull requests; closed ones are read only when asked for.
+        status: "open",
         now: () => timestamp,
       });
       pullRequests.push(prResult);

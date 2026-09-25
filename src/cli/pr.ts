@@ -34,7 +34,7 @@ const DEFAULT_PR_SELECTION = "mine-open";
 export const prListCommand = defineCommand({
   meta: {
     name: "list",
-    description: "List pull requests across all configured providers (cached or live)",
+    description: "List open pull requests across all configured providers",
   },
   args: {
     repoPositional: { type: "positional", description: "Target repository name", required: false },
@@ -45,18 +45,23 @@ export const prListCommand = defineCommand({
       description: "Select one repository from the local inventory",
     },
     label: { type: "string", description: "Limit to repositories carrying a dev-cli label" },
-    mine: { type: "boolean", description: "Show pull requests assigned to me (default)" },
+    mine: {
+      type: "boolean",
+      description: "Show pull requests I wrote or am asked to review (default)",
+    },
     all: { type: "boolean", description: "Show all pull requests instead of only mine" },
-    status: { type: "string", description: "Filter by status (open, completed, abandoned, all)" },
+    status: {
+      type: "string",
+      description: "Status to list: open (default), completed, abandoned, or all",
+    },
     provider: { type: "string", description: "Limit to a specific provider id" },
     offline: {
       type: "boolean",
-      description: "Read strictly from local cache with zero network access",
+      description: "Read the last synchronized pull requests from the local cache, without network",
     },
-    refresh: { type: "boolean", description: "Force fresh synchronization from remote provider" },
     project: { type: "string", description: "Filter by Azure DevOps project" },
     ws: { type: "string", description: "Use repositories from a workspace" },
-    limit: { type: "string", description: "Maximum number of results to show (default: 50)" },
+    limit: { type: "string", description: "Show at most this many pull requests (default: all)" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -71,7 +76,7 @@ export const prListCommand = defineCommand({
     });
     const statusFilter =
       (args.status as "open" | "completed" | "abandoned" | "all" | undefined) ?? "open";
-    const limit = args.limit ? parseInt(args.limit, 10) : 50;
+    const limit = args.limit ? parseInt(args.limit, 10) : Infinity;
     const providers = config.providers.filter(
       (provider): provider is Extract<ProviderConfig, { type: "azure_devops" }> =>
         provider.type === "azure_devops" && (!args.provider || provider.id === args.provider),
@@ -209,8 +214,11 @@ export const prListCommand = defineCommand({
         args.json,
       );
     }
-    const cachedDefaultSelections =
-      isDefaultMineQuery && !args.refresh && !args.offline
+    // Live by default: a cached list silently hides pull requests opened since.
+    if (providers.length === 0 || args.offline) {
+      const targetRepositories = new Set(targets.map((target) => target.repository));
+      const allowedTenants = new Set(providers.map((provider) => adoTenant(provider.organization)));
+      const cachedDefaultSelections = isDefaultMineQuery
         ? await Promise.all(
             providers.map((provider) =>
               cache.readPullRequestSelection({
@@ -221,21 +229,11 @@ export const prListCommand = defineCommand({
             ),
           )
         : [];
-    const hasCompleteDefaultCache =
-      cachedDefaultSelections.length === providers.length &&
-      cachedDefaultSelections.every((selection) => selection !== undefined);
-
-    if (
-      providers.length === 0 ||
-      args.offline ||
-      hasCompleteDefaultCache ||
-      (Boolean(workspaceContext) && !args.refresh)
-    ) {
-      const targetRepositories = new Set(targets.map((target) => target.repository));
-      const allowedTenants = new Set(providers.map((provider) => adoTenant(provider.organization)));
-      const all = hasCompleteDefaultCache
-        ? cachedDefaultSelections.flatMap((selection) => selection ?? [])
-        : await cache.loadAllCachedPullRequests(config.root);
+      const all =
+        cachedDefaultSelections.length > 0 &&
+        cachedDefaultSelections.every((selection) => selection !== undefined)
+          ? cachedDefaultSelections.flatMap((selection) => selection ?? [])
+          : await cache.loadAllCachedPullRequests(config.root);
       const filtered = all.filter(
         (item) =>
           (statusFilter === "all" || item.status === statusFilter) &&
@@ -249,9 +247,7 @@ export const prListCommand = defineCommand({
         text: () => {
           if (shown.length === 0) return "No cached pull requests found.";
           let out = `Pull Requests (${shown.length}${filtered.length > limit ? ` of ${filtered.length}` : ""}):\n`;
-          for (const item of shown) {
-            out += `  #${item.id} [${item.status}] ${item.repository}: ${item.sourceBranch} -> ${item.targetBranch}: ${item.title} (${item.author})\n`;
-          }
+          for (const item of shown) out += `  ${formatPullRequestLine(item)}\n`;
           return out.trimEnd();
         },
       });
@@ -288,7 +284,13 @@ export const prListCommand = defineCommand({
         }),
       );
       for (const result of results) {
-        if (result) allPrs.push(...result.prs);
+        if (!result) continue;
+        allPrs.push(...result.prs);
+        if (result.truncated) {
+          errors.push(
+            `${result.repo} has more than ${pr.PULL_REQUEST_LIMIT} ${statusFilter} pull requests; showing the newest ${pr.PULL_REQUEST_LIMIT}.`,
+          );
+        }
       }
     } else {
       const results = await Promise.all(
@@ -372,9 +374,7 @@ export const prListCommand = defineCommand({
           out += "No pull requests found.";
         } else {
           out += `Pull Requests (${shown.length}${deduped.length > limit ? ` of ${deduped.length}` : ""}):\n`;
-          for (const item of shown) {
-            out += `  #${item.id} [${item.status}] ${item.repository}: ${item.sourceBranch} -> ${item.targetBranch}: ${item.title} (${item.author})\n`;
-          }
+          for (const item of shown) out += `  ${formatPullRequestLine(item)}\n`;
         }
         return out.trimEnd();
       },
@@ -382,6 +382,15 @@ export const prListCommand = defineCommand({
     return errors.length > 0 && shown.length === 0 ? 1 : 0;
   },
 });
+
+/** A draft is marked first, so it is never mistaken for a pull request ready to review. */
+function draftTag(item: cache.PullRequestRecord): string {
+  return item.isDraft ? "[DRAFT] " : "";
+}
+
+function formatPullRequestLine(item: cache.PullRequestRecord): string {
+  return `#${item.id} ${draftTag(item)}[${item.status}] ${item.repository}: ${item.sourceBranch} -> ${item.targetBranch}: ${item.title} (${item.author})`;
+}
 
 function checkoutSlug(value: string): string {
   return value
@@ -423,10 +432,12 @@ export const prCheckoutCommand = defineCommand({
           item.tenant.toLowerCase() === adoTenant(urlReference.organization).toLowerCase(),
       );
     } else if (!args.reference) {
+      // The picker offers open pull requests; a closed one is checked out by its id or URL.
+      const open = cached.filter((item) => item.status === "open");
       const choice = await resolveChoiceInput({
         choices: async () =>
-          cached.map((item, index) => ({
-            label: `#${item.id} ${item.repository}: ${item.title} — ${item.author}`,
+          open.map((item, index) => ({
+            label: `#${item.id} ${draftTag(item)}${item.repository}: ${item.title} — ${item.author}`,
             value: String(index),
           })),
         message: "Select pull request",
@@ -437,7 +448,7 @@ export const prCheckoutCommand = defineCommand({
           description: "Pull request URL or ID",
         },
       });
-      selected = cached[Number(choice.value)];
+      selected = open[Number(choice.value)];
     } else if (/^\d+$/.test(args.reference)) {
       const id = Number(args.reference);
       const matches = cached.filter(
@@ -448,7 +459,7 @@ export const prCheckoutCommand = defineCommand({
         const choice = await resolveChoiceInput({
           choices: async () =>
             matches.map((item, index) => ({
-              label: `#${item.id} ${item.repository}: ${item.title}`,
+              label: `#${item.id} ${draftTag(item)}${item.repository}: ${item.title}`,
               value: String(index),
             })),
           message: "Select pull request",
@@ -610,13 +621,14 @@ export const prViewCommand = defineCommand({
     let selected: cache.PullRequestRecord | undefined;
     let idStr = args.id;
     if (!idStr) {
+      // The picker offers open pull requests; a closed one is viewed by its id or URL.
       const candidates = (await cache.loadAllCachedPullRequests(config.root)).filter(
-        (item) => !args.repo || item.repository === args.repo,
+        (item) => item.status === "open" && (!args.repo || item.repository === args.repo),
       );
       const choice = await resolveChoiceInput({
         choices: async () =>
           candidates.map((item, index) => ({
-            label: `#${item.id} ${item.repository}: ${item.title}`,
+            label: `#${item.id} ${draftTag(item)}${item.repository}: ${item.title}`,
             value: String(index),
           })),
         message: "Select pull request",
@@ -676,8 +688,8 @@ export const prViewCommand = defineCommand({
       data: item,
       json: args.json,
       text: () => {
-        let out = `Pull Request #${item.id}: ${item.title}\n`;
-        out += `  Status:      ${item.status}\n`;
+        let out = `Pull Request #${item.id}: ${draftTag(item)}${item.title}\n`;
+        out += `  Status:      ${item.status}${item.isDraft ? " (draft)" : ""}\n`;
         out += `  Repository:  ${item.repository}\n`;
         out += `  Author:      ${item.author}\n`;
         out += `  Branches:    ${item.sourceBranch} -> ${item.targetBranch}\n`;

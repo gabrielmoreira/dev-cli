@@ -92,6 +92,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
             added: 1,
             updated: 0,
             prs: [],
+            truncated: false,
           } as PrSyncResult;
         },
       },
@@ -200,6 +201,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
             added: 0,
             updated: 0,
             prs: [],
+            truncated: false,
           };
         },
       },
@@ -277,6 +279,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
             added: 1,
             updated: 0,
             prs: [],
+            truncated: false,
           };
         },
       },
@@ -342,6 +345,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
             added: 0,
             updated: 0,
             prs: [],
+            truncated: false,
           };
         },
       },

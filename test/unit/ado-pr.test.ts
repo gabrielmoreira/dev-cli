@@ -85,4 +85,47 @@ describe("Azure DevOps PR Client (Phase 12)", () => {
 
     await expect(client.getPullRequest("alpha", 999)).rejects.toThrow(AzureDevOpsError);
   });
+
+  test("reads every page of pull requests up to the limit", async () => {
+    const total = 230;
+    const skips: number[] = [];
+    const mockFetch: FetchFn = async (input) => {
+      const url = new URL(String(input));
+      const skip = Number(url.searchParams.get("$skip"));
+      const top = Number(url.searchParams.get("$top"));
+      skips.push(skip);
+      const count = Math.max(0, Math.min(top, total - skip));
+      const value = Array.from({ length: count }, (_, i) => ({ pullRequestId: total - skip - i }));
+      return new Response(JSON.stringify({ value }), { status: 200 });
+    };
+    const client = createAzureDevOps({
+      organization: "o",
+      token: "secret-token",
+      fetchFn: mockFetch,
+    });
+
+    const all = await client.listProjectPullRequests("p", { status: "active" });
+    expect(all).toHaveLength(total);
+    expect(skips).toEqual([0, 100, 200]);
+
+    const bounded = await client.listPullRequests("r", { project: "p", limit: 150 });
+    expect(bounded).toHaveLength(150);
+  });
+
+  test("reports the Azure DevOps message instead of its JSON envelope", async () => {
+    const body = JSON.stringify({
+      $id: "1",
+      message: "TF401019: The Git repository does not exist.",
+    });
+    const mockFetch: FetchFn = async () => new Response(body, { status: 404 });
+    const client = createAzureDevOps({
+      organization: "o",
+      token: "secret-token",
+      fetchFn: mockFetch,
+    });
+
+    await expect(client.getPullRequest("r", 1, { project: "p" })).rejects.toThrow(
+      "Resource not found on Azure DevOps: TF401019: The Git repository does not exist.",
+    );
+  });
 });
