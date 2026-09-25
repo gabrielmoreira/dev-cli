@@ -107,6 +107,11 @@ export function mergeWorkItemRecords(
   return merged;
 }
 
+/** Days of work item history a default sync reads. */
+export const DEFAULT_WORK_ITEM_WINDOW_DAYS = 90;
+/** Most work items a default sync reads. */
+export const DEFAULT_WORK_ITEM_LIMIT = 1000;
+
 /**
  * Synchronizes work items from an Azure DevOps client to the local JSONL cache.
  */
@@ -116,13 +121,16 @@ export async function syncWorkItems(
 ): Promise<WorkItemSyncResult> {
   const now = input.now ? input.now() : new Date().toISOString();
 
+  // An unbounded project query exceeds Azure DevOps' 20,000-item limit (VS402337) on
+  // large projects, so the default query reads recent work only.
+  const project = input.project.replaceAll("'", "''");
   const wiql =
     input.query ||
-    `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${input.project}' ORDER BY [System.ChangedDate] DESC`;
+    `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project}' AND [System.ChangedDate] >= @Today - ${DEFAULT_WORK_ITEM_WINDOW_DAYS} ORDER BY [System.ChangedDate] DESC`;
 
   const refs = await input.client.queryWorkItems(wiql, {
     project: input.project,
-    top: input.limit,
+    top: input.limit ?? DEFAULT_WORK_ITEM_LIMIT,
   });
   const ids = refs.map((r) => r.id);
 
