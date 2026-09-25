@@ -697,7 +697,17 @@ export async function add(
       branch: await deps.git.resolveDefaultBranch(admin.adminRepoPath),
     };
 
-    // 4. Create worktree mount
+    // 4. A reused pool only knows what existed at its last fetch: a branch, tag or
+    // commit created since then (a new pull request, say) is fetched once here.
+    if (!(await deps.git.hasRevision(admin.adminRepoPath, revision))) {
+      await deps.git.fetchMirror({
+        mirrorPath: mirror.mirrorPath,
+        resolveExtraHeader: async () => input.extraHeader,
+      });
+      await deps.git.fetchAdminRepo(admin.adminRepoPath, mirror.mirrorPath);
+    }
+
+    // 5. Create worktree mount
     ({ commitSha } = await deps.git.addWorktree({
       adminRepoPath: admin.adminRepoPath,
       mountPath,

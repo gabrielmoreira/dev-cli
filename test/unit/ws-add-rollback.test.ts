@@ -30,6 +30,7 @@ function makeDeps(options: {
       ensureMirror: async () => ({ sourceKey: "github.com/org/repo", mirrorPath: "/mirror" }),
       ensureWorkspaceRepo: async () => ({ adminRepoPath: "/admin" }),
       resolveDefaultBranch: async () => "main",
+      hasRevision: async () => true,
       addWorktree: async () => ({ commitSha: "0123456789abcdef" }),
       removeWorktree: async (
         adminRepoPath: string,

@@ -226,4 +226,42 @@ describe("Workspace add local Git integration (Phase 2)", () => {
 
     expect(code).toBe("MOUNT_ALREADY_EXISTS");
   });
+
+  it("fetches a branch pushed after the pool and the admin repository were created", async () => {
+    // The pool and a workspace admin already exist from earlier tests; the branch is newer.
+    const seedDir = await mkdtemp(join(tmpdir(), "dev-cli-seed-late-"));
+    await git.runGit(["clone", bareRemotePath, seedDir]);
+    await git.runGit(["config", "user.name", "Test Agent"], { cwd: seedDir });
+    await git.runGit(["config", "user.email", "agent@example.com"], { cwd: seedDir });
+    for (const branch of ["pr/late", "pr/later"]) {
+      await git.runGit(["checkout", "-b", branch, "origin/main"], { cwd: seedDir });
+      await fs.writeText(join(seedDir, "late.txt"), branch);
+      await git.runGit(["add", "."], { cwd: seedDir });
+      await git.runGit(["commit", "-m", `feat: ${branch}`], { cwd: seedDir });
+      await git.runGit(["push", "-u", "origin", branch], { cwd: seedDir });
+    }
+    await rm(seedDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }).catch(
+      () => {},
+    );
+
+    // A new workspace: stale pool, fresh admin.
+    await ws.init({ root: tempRoot, name: "late-pr" });
+    const fresh = await ws.add({
+      root: tempRoot,
+      workspaceName: "late-pr",
+      source: bareRemotePath,
+      branch: "pr/late",
+    });
+    expect(await fs.readText(join(fresh.mountPath, "late.txt"))).toBe("pr/late");
+
+    // An existing workspace: its admin was created before the branch existed.
+    const existing = await ws.add({
+      root: tempRoot,
+      workspaceName: "payment-task",
+      source: bareRemotePath,
+      branch: "pr/later",
+      path: "later",
+    });
+    expect(await fs.readText(join(existing.mountPath, "late.txt"))).toBe("pr/later");
+  });
 });

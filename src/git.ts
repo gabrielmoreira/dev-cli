@@ -229,7 +229,7 @@ export async function fetchMirror(options: FetchMirrorOptions): Promise<void> {
 export async function fetchAdminRepo(adminRepoPath: string, mirrorPath?: string): Promise<void> {
   const args = ["-C", adminRepoPath, "fetch"];
   if (mirrorPath) {
-    args.push(mirrorPath, "+refs/heads/*:refs/remotes/origin/*");
+    args.push(mirrorPath, "+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*");
   } else {
     args.push("--prune", "origin");
   }
@@ -387,6 +387,26 @@ export async function resolveDefaultBranch(adminRepoPath: string): Promise<strin
   }
 
   return "main";
+}
+
+/** Whether the admin repository can check out the revision without fetching. */
+export async function hasRevision(
+  adminRepoPath: string,
+  revision: MountRevision,
+): Promise<boolean> {
+  const candidates =
+    revision.mode === "lock"
+      ? [`${revision.commit}^{commit}`]
+      : revision.mode === "tag"
+        ? [`refs/tags/${revision.tag}`]
+        : revision.upstream && revision.upstream !== revision.branch
+          ? [`refs/remotes/origin/${revision.upstream}`]
+          : [`refs/heads/${revision.branch}`, `refs/remotes/origin/${revision.branch}`];
+  for (const ref of candidates) {
+    const res = await runGit(["-C", adminRepoPath, "rev-parse", "--verify", "--quiet", ref]);
+    if (res.exitCode === 0) return true;
+  }
+  return false;
 }
 
 export interface AddWorktreeOptions {
