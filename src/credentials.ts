@@ -31,6 +31,8 @@ export const defaultDeps: CredentialDeps = {
   shell,
 };
 
+let azureCliToken: ReturnType<CredentialDeps["shell"]["runCommand"]> | undefined;
+
 export async function resolveAzureDevOpsCredential(
   config: RuntimeConfig,
   deps: CredentialDeps = defaultDeps,
@@ -45,18 +47,21 @@ export async function resolveAzureDevOpsCredential(
     };
   }
 
-  // 2. Azure CLI session fallback
+  // 2. Azure CLI session fallback, asked once per process: a token lasts an
+  // hour, and a sync over many repositories must not start `az` for each one.
   try {
-    const res = await deps.shell.runCommand("az", [
-      "account",
-      "get-access-token",
-      "--resource",
-      "499b84ac-1321-427f-aa17-267ca6975798",
-      "--query",
-      "accessToken",
-      "-o",
-      "tsv",
-    ]);
+    const request = () =>
+      deps.shell.runCommand("az", [
+        "account",
+        "get-access-token",
+        "--resource",
+        "499b84ac-1321-427f-aa17-267ca6975798",
+        "--query",
+        "accessToken",
+        "-o",
+        "tsv",
+      ]);
+    const res = await (deps === defaultDeps ? (azureCliToken ??= request()) : request());
     if (res.exitCode === 0 && res.stdout.trim().length > 0) {
       return {
         kind: "bearer",
