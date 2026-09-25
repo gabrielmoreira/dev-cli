@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { formatCommandHelp, formatHelp, runCli, type AmbientContext } from "../../src/cli.ts";
 
 describe("CLI entrypoint (Phase 0)", () => {
@@ -92,5 +95,28 @@ describe("CLI entrypoint (Phase 0)", () => {
     const exitCode = await proc.exited;
     expect(exitCode).toBe(0);
     expect(stdout).toBe(".env");
+  });
+
+  it("exits 2 with a structured code when sync inventory has no provider", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dev-cli-noprov-"));
+    const errors: string[] = [];
+    const originalLog = console.log;
+    const originalError = console.error;
+    console.log = () => {};
+    console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    try {
+      const ambient = { cwd: root, env: {}, isTTY: false };
+      expect(await runCli({ ...ambient, argv: ["init", "--root", root, "--json"] })).toBe(0);
+      const exitCode = await runCli({
+        ...ambient,
+        argv: ["sync", "inventory", "--root", root, "--json"],
+      });
+      expect(exitCode).toBe(2);
+      expect(JSON.parse(errors.join("\n")).error.code).toBe("PROVIDER_NOT_CONFIGURED");
+    } finally {
+      console.log = originalLog;
+      console.error = originalError;
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
