@@ -148,6 +148,7 @@ export function validateWorkspaceName(name: string): { valid: boolean; error?: s
 export function deriveWorkspaceNameFromRepository(source: string): string {
   const trimmed = source.trim();
   const isLocal =
+    /^[a-z]:[\\/]/i.test(trimmed) ||
     /^file:/i.test(trimmed) ||
     trimmed.startsWith("/") ||
     trimmed.startsWith("./") ||

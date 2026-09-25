@@ -39,6 +39,11 @@ describe("Workspace pure domain rules (Phase 1)", () => {
     expect(deriveWorkspaceNameFromRepository("file:///tmp/oh-my-pi.git")).toBe("local-oh-my-pi");
   });
 
+  it("names Windows drive paths as one local repository, not two owners", () => {
+    expect(deriveWorkspaceNameFromRepository("C:\\work\\sample.git")).toBe("local-sample");
+    expect(deriveWorkspaceNameFromRepository("C:/work/sample.git")).toBe("local-sample");
+  });
+
   it("derives workspace path strictly under $DEV_ROOT/ws/<name>", () => {
     const derived = deriveWorkspacePath("/home/user/dev", "my-task");
     expect(derived.replace(/\\/g, "/")).toBe("/home/user/dev/ws/my-task");
