@@ -903,7 +903,7 @@ describe("smart CLI input", () => {
     expect(exitCode).toBe(0);
     const narration = errors.join("\n");
     expect(narration).toContain("nothing to index");
-    expect(narration).toContain("dev mirror label add <source> index:docs");
+    expect(narration).toContain("dev label add index:docs <repository>");
   });
 
   test("prompts for a repository source before creating a mirror", async () => {

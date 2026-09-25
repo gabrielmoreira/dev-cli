@@ -119,7 +119,7 @@ export async function syncCollections(
   if (labels.length === 0) {
     // An empty state, not a failure: nothing is labeled for indexing yet.
     base.ui.info("No index:* labels in dev.yaml, so there is nothing to index.");
-    base.ui.info("↳ dev mirror label add <source> index:docs");
+    base.ui.info("↳ dev label add index:docs <repository>");
     return 0;
   }
 

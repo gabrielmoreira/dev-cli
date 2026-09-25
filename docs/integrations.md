@@ -35,12 +35,11 @@ The workspace's `ws.md` is the agent's brief. The root `AGENTS.md` written by `d
 
 ## Search labeled repositories with QMD
 
-Install QMD through Mise, then attach an indexing label to each source that should be searchable:
+Install QMD through Mise, then put an indexing label on each repository that should be searchable. An `index:*` label keeps its repositories mirrored, since QMD indexes what is on disk:
 
 ```bash
 mise use -g npm:@tobilu/qmd
-dev mirror add https://github.com/can1357/oh-my-pi
-dev mirror label add oh-my-pi index:docs
+dev label add index:docs https://github.com/can1357/oh-my-pi --sync
 ```
 
 With no positional label, sync reconciles every assigned `index:*` label. An explicit label remains available for targeted automation. The command removes stale collections owned by those labels, adds missing collections, updates the index once, and embeds new chunks unless `--no-embed` is set.
@@ -70,12 +69,46 @@ Everything after `dev qmd x` is passed to QMD unchanged. Run `qmd --help` for th
 
 ## Labels
 
-Labels are declared on sources in `dev.yaml` and attached with `dev mirror label add`. The interactive form selects sources, ref, label, and metadata; the scripted form is positional:
+A label names a set of repositories. Each one carries the label on its default branch or on a branch you choose, and the labels live on the `sources:` entries of `dev.yaml`. `dev label` shows every label and then asks what to do: add, edit fields, rename, or remove. Every step also has a scripted form:
 
 ```bash
-dev mirror label add                 # select sources, ref, label, and metadata
-dev mirror label add oh-my-pi docs   # deterministic scripted form
-dev mirror list --label docs
+dev label                                     # see every label, then pick an action
+dev label add team:checkout checkout-api web  # repositories by URL, path, or inventory name
+dev label add docs wiki --ref internal        # one branch of a repository
+dev label rm team:checkout web
+dev label rename team:checkout team:payments  # also renames label_defs and workset members
+dev label ls --json
 ```
 
-When one URI has multiple declared refs, the interactive flow asks which ref to label; scripts pass `--ref <branch>`. A multi-source change is previewed and confirmed once before `dev.yaml` is updated. The same label can drive `dev pr --label docs` and `dev qmd sync docs`.
+Without arguments, `dev label add` asks for the label, lists the repositories from your provider inventory and from `dev.yaml`, and lets you choose a branch for the ones you select to customize. A repository `dev.yaml` does not declare yet is declared. When a repository is declared on several branches, a terminal asks which one; a script passes `--ref <branch>`.
+
+Some labels keep their repositories mirrored. `index:*` labels do by default, and `label_defs` decides for any other label, by exact name or by a wildcard, the most specific winning:
+
+```yaml
+label_defs:
+  team:*:
+    mirror: true
+  team:ops:*:
+    mirror: false
+```
+
+A missing mirror is created by the next `dev mirror sync` or `dev sync --all`. `dev label add` offers to create it right away in a terminal, and `--sync` does it in a script. Taking a label off a repository never deletes its mirror; the command names the mirrors no label needs anymore.
+
+The same label drives `dev pr --label`, `dev ws init --label`, `dev mirror list --label`, and `dev qmd sync`.
+
+## Put a label in a workset
+
+A workset member names either one repository (`source`) or one label (`label`). A label member stands for every declared source carrying that label, each on its declared branch or pin and at its declared path, so a repository you label later joins the next workspace made from the workset. A repository listed on its own and reached again through a label is mounted once. A label no declared source carries is an error that names `dev label add <label>`.
+
+```yaml
+worksets:
+  checkout-incident:
+    description: Checkout incident triage
+    members:
+      - source: https://github.com/example/checkout-api.git
+        ref: main
+      - label: team:checkout
+        reason: Everything the checkout team owns
+```
+
+`dev workset label add checkout-incident team:checkout` and `dev workset label remove` edit label members from a script; `dev workset manage` offers the same in a terminal. `dev ws init --label team:checkout` starts a workspace from a label alone, named `team-checkout`, and `--label` combines with `--workset` into one plan; several labels are comma-separated.

@@ -11,13 +11,13 @@ export interface IntegrationEvents {
     root: string;
     updated: Array<{ sourceKey: string; revision: string }>;
   };
-  "mirror:label:add:after": {
+  "label:add:after": {
     root: string;
     sourceKey: string;
     label: string;
     meta: Record<string, unknown>;
   };
-  "mirror:label:rm:after": {
+  "label:rm:after": {
     root: string;
     sourceKey: string;
     label: string;

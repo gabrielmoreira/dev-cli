@@ -34,6 +34,7 @@ Developer CLI & Workspace Engine
 | `dev sync`       | Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project |
 | `dev pr`         | Inspect and cache pull requests                                                                                                          |
 | `dev wi`         | Inspect and cache work items                                                                                                             |
+| `dev label`      | Group repositories under labels: see, add, edit, rename, and remove them. Some labels keep their repositories mirrored                   |
 | `dev doctor`     | Inspect runtime environment, dependencies, and git configuration                                                                         |
 | `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                                                                              |
 | `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell                                                                      |
@@ -269,16 +270,17 @@ Manage task-oriented multi-repo workspaces
 
 Initialize a new workspace with ws.md and .local/
 
-**Usage:** `dev ws init [name] [--desc <value>] [--root <value>] [--workset <value>] [--yes] [--json]`
+**Usage:** `dev ws init [name] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--json]`
 
-| Argument            | Type       | Description                                         |
-| ------------------- | ---------- | --------------------------------------------------- |
-| `name`              | positional | Workspace name, repository URI, or pull request URL |
-| `--desc <value>`    | string     | Workspace description                               |
-| `--root <value>`    | string     | Explicit dev root directory                         |
-| `--workset <value>` | string     | Initialize from a configured workset                |
-| `--yes`             | boolean    | Accept the generated mount plan                     |
-| `--json`            | boolean    | Output in structured JSON format                    |
+| Argument            | Type       | Description                                                            |
+| ------------------- | ---------- | ---------------------------------------------------------------------- |
+| `name`              | positional | Workspace name, repository URI, or pull request URL                    |
+| `--desc <value>`    | string     | Workspace description                                                  |
+| `--root <value>`    | string     | Explicit dev root directory                                            |
+| `--workset <value>` | string     | Initialize from a configured workset                                   |
+| `--label <value>`   | string     | Add every repository carrying this label (comma-separated for several) |
+| `--yes`             | boolean    | Accept the generated mount plan                                        |
+| `--json`            | boolean    | Output in structured JSON format                                       |
 
 ## `dev ws add`
 
@@ -511,7 +513,6 @@ Manage canonical reference repositories
 | `dev mirror track`   | Set up a sibling worktree tracking an additional branch     |
 | `dev mirror untrack` | Remove a sibling worktree for a secondary branch            |
 | `dev mirror pick`    | Interactive picker for mirrors and branches                 |
-| `dev mirror label`   | Manage labels on declared sources                           |
 
 ## `dev mirror add`
 
@@ -595,45 +596,6 @@ Interactive picker for mirrors and branches
 | `filter`         | positional | Optional name filter             |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |
-
-## `dev mirror label`
-
-Manage labels on declared sources
-
-**Usage:** `dev mirror label <command>`
-
-| Subcommand             | Description                                    |
-| ---------------------- | ---------------------------------------------- |
-| `dev mirror label add` | Attach a label to one or more declared sources |
-| `dev mirror label rm`  | Remove a label from a declared source          |
-
-## `dev mirror label add`
-
-Attach a label to one or more declared sources
-
-**Usage:** `dev mirror label add [source] [label] [fields] [--ref <value>] [--yes] [--root <value>]`
-
-| Argument         | Type       | Description                                          |
-| ---------------- | ---------- | ---------------------------------------------------- |
-| `source`         | positional | Source URI or inventory name                         |
-| `label`          | positional | Label name                                           |
-| `fields`         | positional | Assignment fields as comma-separated key=value pairs |
-| `--ref <value>`  | string     | Declared branch or pinned ref                        |
-| `--yes`          | boolean    | Apply an interactive plan without confirmation       |
-| `--root <value>` | string     | Explicit dev root directory                          |
-
-## `dev mirror label rm`
-
-Remove a label from a declared source
-
-**Usage:** `dev mirror label rm <source> <label> [--ref <value>] [--root <value>]`
-
-| Argument         | Type       | Description                            |
-| ---------------- | ---------- | -------------------------------------- |
-| `source`         | positional | Source URI or inventory name Required. |
-| `label`          | positional | Label name Required.                   |
-| `--ref <value>`  | string     | Declared branch or pinned ref          |
-| `--root <value>` | string     | Explicit dev root directory            |
 
 ## `dev sync`
 
@@ -833,6 +795,83 @@ View details for a specific work item
 | `--root <value>`     | string     | Explicit dev root directory                             |
 | `--json`             | boolean    | Output in structured JSON format                        |
 
+## `dev label`
+
+Group repositories under labels: see, add, edit, rename, and remove them. Some labels keep their repositories mirrored
+
+**Usage:** `dev label [label] [--root <value>] [--json] <command>`
+
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `label`          | positional | Show only this label             |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
+
+| Subcommand         | Description                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `dev label list`   | List labels and the repositories carrying each                                                               |
+| `dev label add`    | Put a label on repositories, and pick a branch for any of them; a repository not in dev.yaml yet is declared |
+| `dev label rm`     | Take a label off repositories; their mirrors stay on disk                                                    |
+| `dev label rename` | Rename a label on every repository, label definition, and workset using it                                   |
+
+## `dev label list`
+
+List labels and the repositories carrying each
+
+**Usage:** `dev label list [label] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `label`          | positional | Show only this label             |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
+
+## `dev label add`
+
+Put a label on repositories, and pick a branch for any of them; a repository not in dev.yaml yet is declared
+
+**Usage:** `dev label add [label] [sources] [--ref <value>] [--fields <value>] [--sync] [--yes] [--root <value>] [--json]`
+
+| Argument           | Type       | Description                                                             |
+| ------------------ | ---------- | ----------------------------------------------------------------------- |
+| `label`            | positional | Label name                                                              |
+| `sources`          | positional | Repositories: URL, path, or inventory name (several allowed)            |
+| `--ref <value>`    | string     | Branch or pinned ref for every repository given                         |
+| `--fields <value>` | string     | Label fields as key=value pairs, comma-separated                        |
+| `--sync`           | boolean    | Create the mirrors this label asks for now, instead of on the next sync |
+| `--yes`            | boolean    | Apply the plan without confirmation                                     |
+| `--root <value>`   | string     | Explicit dev root directory                                             |
+| `--json`           | boolean    | Output in structured JSON format                                        |
+
+## `dev label rm`
+
+Take a label off repositories; their mirrors stay on disk
+
+**Usage:** `dev label rm [label] [sources] [--ref <value>] [--all] [--yes] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                                     |
+| ---------------- | ---------- | ----------------------------------------------- |
+| `label`          | positional | Label name                                      |
+| `sources`        | positional | Repositories to take it off (several allowed)   |
+| `--ref <value>`  | string     | Declared branch or pinned ref                   |
+| `--all`          | boolean    | Take the label off every repository carrying it |
+| `--yes`          | boolean    | Remove without confirmation                     |
+| `--root <value>` | string     | Explicit dev root directory                     |
+| `--json`         | boolean    | Output in structured JSON format                |
+
+## `dev label rename`
+
+Rename a label on every repository, label definition, and workset using it
+
+**Usage:** `dev label rename [from] [to] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `from`           | positional | Current label name               |
+| `to`             | positional | New label name                   |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
+
 ## `dev doctor`
 
 Inspect runtime environment, dependencies, and git configuration
@@ -930,6 +969,7 @@ Manage reusable repository worksets
 | `dev workset rename` | Rename a configured workset          |
 | `dev workset manage` | Interactively manage a workset       |
 | `dev workset repo`   | Manage repositories in a workset     |
+| `dev workset label`  | Manage labels in a workset           |
 | `dev workset show`   | Show one configured workset          |
 
 ## `dev workset list`
@@ -1042,6 +1082,46 @@ Remove a repository from a workset
 | ---------------- | ---------- | --------------------------------------- |
 | `workset`        | positional | Workset name                            |
 | `member`         | positional | Repository path or source               |
+| `--force`        | boolean    | Remove without interactive confirmation |
+| `--root <value>` | string     | Explicit dev root directory             |
+| `--json`         | boolean    | Output in structured JSON format        |
+
+## `dev workset label`
+
+Manage labels in a workset
+
+**Usage:** `dev workset label <command>`
+
+| Subcommand                 | Description                                        |
+| -------------------------- | -------------------------------------------------- |
+| `dev workset label add`    | Add every repository carrying a label to a workset |
+| `dev workset label remove` | Remove a label from a workset                      |
+
+## `dev workset label add`
+
+Add every repository carrying a label to a workset
+
+**Usage:** `dev workset label add [workset] [label] [--reason <value>] [--yes] [--root <value>] [--json]`
+
+| Argument           | Type       | Description                              |
+| ------------------ | ---------- | ---------------------------------------- |
+| `workset`          | positional | Workset name                             |
+| `label`            | positional | Label on declared sources                |
+| `--reason <value>` | string     | Reason this label belongs in the workset |
+| `--yes`            | boolean    | Add without interactive confirmation     |
+| `--root <value>`   | string     | Explicit dev root directory              |
+| `--json`           | boolean    | Output in structured JSON format         |
+
+## `dev workset label remove`
+
+Remove a label from a workset
+
+**Usage:** `dev workset label remove [workset] [label] [--force] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                             |
+| ---------------- | ---------- | --------------------------------------- |
+| `workset`        | positional | Workset name                            |
+| `label`          | positional | Label in the workset                    |
 | `--force`        | boolean    | Remove without interactive confirmation |
 | `--root <value>` | string     | Explicit dev root directory             |
 | `--json`         | boolean    | Output in structured JSON format        |

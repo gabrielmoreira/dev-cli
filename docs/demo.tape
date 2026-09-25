@@ -259,48 +259,36 @@ Type "q"
 Wait+Screen@20s /demo@devbox dev\/ws\/incident/
 Sleep 1s
 
-# Knowledge setup: keep the OMP docs and the skill catalog as reference checkouts.
-Type "dev mirror add"
-Sleep 500ms
-Enter
-Wait+Screen@20s /Select repository/
-Sleep 1s
-Type "omp"
-Sleep 1s
-Enter
-Wait+Screen@30s /Mirrored /
-Sleep 3s
+# Knowledge setup: one index label keeps the OMP docs and the skill catalog mirrored.
 Type "clear"
 Enter
-Type "dev mirror add"
+Type "dev label add"
 Sleep 500ms
-Enter
-Wait+Screen@20s /Select repository/
-Sleep 1s
-Type "skills"
-Sleep 1s
-Enter
-Wait+Screen@60s /Mirrored /
-Sleep 3s
-Type "clear"
-Enter
-
-# One label turns both reference checkouts into a searchable QMD index.
-Type "dev mirror label add"
-Sleep 500ms
-Enter
-Wait+Screen@20s /Select sources to label/
-Sleep 1s
-Tab
-Down
-Tab
 Enter
 Wait+Screen@20s /Label name/
 Type "index:incident"
 Enter
-Wait+Screen@20s /Apply this label plan/
+Wait+Screen@20s /Select repositories for/
+Sleep 1s
+Type "omp"
+Sleep 1s
+Tab
+Backspace 3
+Type "skills"
+Sleep 1s
+Tab
+Sleep 1s
 Enter
-Wait+Screen@20s /Applied label 'index:incident'/
+Wait+Screen@20s /Select repositories to customize/
+Sleep 1s
+Tab
+Sleep 1s
+Enter
+Wait+Screen@20s /Apply this label/
+Enter
+Wait+Screen@20s /missing mirror/
+Enter
+Wait+Screen@180s /Mirrored skills/
 Sleep 2s
 Type "clear"
 Enter

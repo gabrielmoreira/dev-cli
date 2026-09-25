@@ -175,19 +175,19 @@ A workset is a template. A workspace is an instance of one, with its own worktre
 Architecture in one repository, runbooks in another, the handbook in a Git-backed wiki. Keep each one as a reference checkout, label the ones that belong to the same knowledge base, and let [QMD](https://github.com/tobi/qmd) index them:
 
 ```bash
-dev mirror add                             # pick a repository, or pass a URL
-dev mirror label add                       # pick the sources, then type a label: index:platform-docs
+dev label add index:platform-docs          # pick the repositories; an index:* label keeps them mirrored
 dev qmd sync                               # every index:* label, one collection per repository
 dev qmd x query "how does production authentication work?"
 ```
 
 The answer can live in any of them; you search the set. Your coding agent can search the same index, through `dev qmd x` or through QMD's own CLI and MCP server after one setting ([how](docs/integrations.md#search-labeled-repositories-with-qmd)).
 
-A label is metadata on a repository, and one label serves more than one command:
+A label names a set of repositories, each on its default branch or one you choose, and one label serves more than one command:
 
 ```bash
+dev label                                  # see every label, then add, edit, rename, or remove one
 dev pr --label team:checkout               # pull requests from the checkout repositories
-dev mirror list --label docs
+dev ws init --label team:checkout          # a workspace with every checkout repository
 dev qmd sync index:platform-docs
 ```
 
@@ -208,9 +208,9 @@ The workspace, pull request and work item commands take `--json`, and `dev --hel
 | **Root**      | Your `dev` environment, `~/dev` by default, with its own configuration, workspaces and repositories. You can have several, one per client. |
 | **Workspace** | One task: a folder under `ws/` with a `ws.md` and one mount per repository.                                                                |
 | **Mount**     | A Git worktree inside a workspace, tracking a branch or pinned to a tag or commit.                                                         |
-| **Workset**   | A template for a workspace: which repositories, on which refs, at which paths, and why.                                                    |
+| **Workset**   | A template for a workspace: which repositories or labels, on which refs, at which paths, and why.                                          |
 | **Mirror**    | A reference checkout under `mirrors/`, for repositories you read and index rather than change.                                             |
-| **Label**     | Metadata on a repository, read by `dev pr`, `dev mirror list` and `dev qmd sync`.                                                          |
+| **Label**     | A named set of repositories, read by `dev pr`, `dev ws init`, `dev mirror list` and `dev qmd sync`. Some keep their repositories mirrored. |
 
 ```text
 ~/dev/

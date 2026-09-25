@@ -6,7 +6,6 @@ import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { createPluginBase, emit } from "../plugins/index.ts";
-import { mirrorLabelCommand } from "./mirror-label.ts";
 import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { resolveMirrorSourceInput } from "./mirror-input.ts";
@@ -196,6 +195,17 @@ export function formatMirrorSync(
   return lines;
 }
 
+/** Mirrors created because a label asks for them; nothing when none were missing. */
+export function formatLabelMirrors(result: labels.LabelMirrorsResult | undefined): string[] {
+  if (!result) return [];
+  return [
+    ...result.created.map(
+      (item) => `✓ mirrored ${item.url} @ ${item.branch} for ${item.labels.join(", ")}`,
+    ),
+    ...result.failures.map((item) => `⚠ could not mirror ${item.url}: ${item.reason}`),
+  ];
+}
+
 export const mirrorSyncCommand = defineCommand({
   meta: {
     name: "sync",
@@ -215,8 +225,15 @@ export const mirrorSyncCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const fetching = !args.offline && args.refresh !== false;
     try {
+      // Labels that keep repositories mirrored get their missing mirrors first.
+      const labelMirrors =
+        fetching && !args.source
+          ? await labels.ensureLabelMirrors(config, {
+              resolveExtraHeader: (source) => resolveExtraHeader(config, source),
+            })
+          : undefined;
       if (fetching && !args.json) ui.info("↻ Fetching mirror remotes...");
-      const result = await mirror.sync({
+      const synced = await mirror.sync({
         root: config.root,
         canonicalPrefix: config.canonicalPrefix,
         source: args.source,
@@ -226,11 +243,15 @@ export const mirrorSyncCommand = defineCommand({
         globalHooks: config.hooks,
       });
 
+      const result = { ...synced, labelMirrors };
       ui.result({
         data: result,
         json: args.json,
         text: () => {
-          const lines = formatMirrorSync(result, { changes: true });
+          const lines = [
+            ...formatLabelMirrors(labelMirrors),
+            ...formatMirrorSync(result, { changes: true }),
+          ];
           if (!fetching)
             lines.push("Remotes not fetched (--offline); compared with the last fetch.");
           const stages = result.trace.stages
@@ -465,7 +486,6 @@ export const mirrorCommand = defineCommand({
     track: mirrorTrackCommand,
     untrack: mirrorUntrackCommand,
     pick: mirrorPickCommand,
-    label: mirrorLabelCommand,
   },
   async run({ rawArgs }) {
     if (await hasExplicitSubcommand(mirrorCommand, rawArgs)) return;

@@ -3,6 +3,7 @@ import {
   parseDeclaredSources,
   parseLabelDefs,
   resolveLabelAssignments,
+  labelMirrors,
   resolveLabelMeta,
   type LabelDef,
 } from "../../src/labels.ts";
@@ -111,5 +112,28 @@ describe("labels core", () => {
       const undeclared = resolveLabelAssignments({ labelDefs: {}, sources: [] }, "ghost");
       expect(undeclared.warnings.join(" ")).toContain("no entry in label_defs");
     });
+  });
+});
+
+describe("labels that keep repositories mirrored", () => {
+  const { defs } = parseLabelDefs({
+    "index:*": { mirror: true },
+    "index:private": { mirror: false },
+    "team:*": { mirror: true },
+    "team:ops:*": { mirror: false },
+  });
+
+  it("lets a label's own definition win over any wildcard", () => {
+    expect(labelMirrors(defs, "index:private")).toBe(false);
+  });
+
+  it("uses the most specific wildcard", () => {
+    expect(labelMirrors(defs, "team:checkout")).toBe(true);
+    expect(labelMirrors(defs, "team:ops:oncall")).toBe(false);
+  });
+
+  it("mirrors index:* labels without any definition, and nothing else", () => {
+    expect(labelMirrors({}, "index:docs")).toBe(true);
+    expect(labelMirrors({}, "docs")).toBe(false);
   });
 });

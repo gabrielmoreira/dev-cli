@@ -3,7 +3,13 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
-import { setSourceLabel, upsertSourceDeclaration } from "../../src/labels.ts";
+import {
+  parseDeclaredSources,
+  planLabelTarget,
+  renameLabel,
+  setSourceLabel,
+  upsertSourceDeclaration,
+} from "../../src/labels.ts";
 import { resolveConfig } from "../../src/config.ts";
 
 const YAML_WITH_COMMENTS = `# dev root configuration
@@ -141,5 +147,80 @@ describe("config document round-trip", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("label rename", () => {
+  it("renames a label on sources, its definition, and workset members, keeping comments", () => {
+    const doc = parseDocument(`label_defs:
+  team:pay: {} # owners
+sources:
+  - url: https://github.com/org/api
+    labels:
+      team:pay: {}
+      docs: {}
+worksets:
+  incident:
+    members:
+      - label: team:pay
+      - source: https://github.com/org/web
+`);
+    const renamed = renameLabel(doc, "team:pay", "team:payments");
+    expect(renamed).toEqual({ sources: 1, def: true, worksetMembers: 1 });
+    const text = doc.toString();
+    expect(text).not.toContain("team:pay:");
+    expect(text).toContain("team:payments: {} # owners");
+    expect(text).toContain("label: team:payments");
+    expect(text).toContain("docs: {}");
+  });
+
+  it("refuses a name a source already carries, before changing anything", () => {
+    const doc = parseDocument(`sources:
+  - url: https://github.com/org/api
+    labels:
+      a: {}
+      b: {}
+`);
+    expect(() => renameLabel(doc, "a", "b")).toThrow("already carries label 'b'");
+    expect(doc.toString()).toContain("a: {}");
+  });
+});
+
+describe("label target planning", () => {
+  const declared = parseDeclaredSources(
+    parseDocument(YAML_WITH_MULTIPLE_REFS).toJS().sources,
+  ).sources;
+
+  it("reuses the one declaration of a repository, whatever form its URL takes", () => {
+    const plan = planLabelTarget(
+      parseDeclaredSources([{ url: "https://github.com/org/docs", branch: "main" }]).sources,
+      "https://github.com/org/docs.git",
+    );
+    expect(plan).toEqual({
+      selector: { url: "https://github.com/org/docs", branch: "main" },
+      declared: true,
+    });
+  });
+
+  it("declares an unknown repository without a branch, so it follows the remote default", () => {
+    expect(planLabelTarget(declared, "https://github.com/org/new")).toEqual({
+      selector: { url: "https://github.com/org/new" },
+      declared: false,
+    });
+  });
+
+  it("asks which ref when several are declared and no branch was chosen", () => {
+    const plan = planLabelTarget(declared, "https://github.com/org/wiki");
+    expect("ambiguous" in plan && plan.ambiguous.map((s) => s.branch)).toEqual([
+      "master",
+      "internal",
+    ]);
+  });
+
+  it("declares a new ref of a known repository when a branch is chosen", () => {
+    expect(planLabelTarget(declared, "https://github.com/org/wiki", "release")).toEqual({
+      selector: { url: "https://github.com/org/wiki", branch: "release" },
+      declared: false,
+    });
   });
 });

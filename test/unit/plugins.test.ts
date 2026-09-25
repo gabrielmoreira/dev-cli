@@ -91,7 +91,7 @@ describe("emit", () => {
         name: "boom",
         run: async () => {},
         hooks: {
-          "mirror:label:add:after": () => {
+          "label:add:after": () => {
             throw new Error("hook exploded");
           },
         },
@@ -100,7 +100,7 @@ describe("emit", () => {
         name: "survivor",
         run: async () => {},
         hooks: {
-          "mirror:label:add:after": (_b, data) => {
+          "label:add:after": (_b, data) => {
             calls(data);
           },
         },
@@ -116,7 +116,7 @@ describe("emit", () => {
     }
 
     try {
-      await emit(base, "mirror:label:add:after", {
+      await emit(base, "label:add:after", {
         root: base.root,
         sourceKey: "k",
         label: "x",
@@ -143,7 +143,7 @@ describe("emit", () => {
       }),
     ]);
 
-    await emit(base, "mirror:label:rm:after", { root: base.root, sourceKey: "k", label: "x" });
+    await emit(base, "label:rm:after", { root: base.root, sourceKey: "k", label: "x" });
     expect(ran).toBe(false);
     rmSync(base.root, { recursive: true, force: true });
   });

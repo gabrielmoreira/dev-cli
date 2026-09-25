@@ -20,7 +20,8 @@ import {
   wsUpdateCommand,
 } from "./ws.ts";
 import * as mirror from "../mirror.ts";
-import { formatMirrorSync } from "./mirror.ts";
+import { formatLabelMirrors, formatMirrorSync } from "./mirror.ts";
+import * as labels from "../labels.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
@@ -619,14 +620,19 @@ async function syncAll(
       : null;
 
   progress("Mirrors…");
-  const mirrors = await step(() =>
-    mirror.sync({
+  const mirrors = await step(async () => {
+    // Labels that keep repositories mirrored get their missing mirrors first.
+    const labelMirrors = await labels.ensureLabelMirrors(config, {
+      resolveExtraHeader: (source) => resolveExtraHeader(config, source),
+    });
+    const synced = await mirror.sync({
       root: config.root,
       canonicalPrefix: config.canonicalPrefix,
       refresh: true,
       resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-    }),
-  );
+    });
+    return { ...synced, labelMirrors };
+  });
 
   // Workspaces sync side by side: each fetch waits for its host's slot
   // (host-limit.ts), and each workspace writes only its own worktrees.
@@ -685,7 +691,14 @@ async function syncAll(
 
       out.push("", "Mirrors");
       if (!mirrors.ok) out.push(`  ✗ ${mirrors.error}`);
-      else out.push(...formatMirrorSync(mirrors.result).map((line) => `  ${line}`));
+      else {
+        out.push(
+          ...[
+            ...formatLabelMirrors(mirrors.result.labelMirrors),
+            ...formatMirrorSync(mirrors.result),
+          ].map((line) => `  ${line}`),
+        );
+      }
 
       out.push("", "Workspaces");
       if (workspaces.length === 0) out.push("  ○ none  ↳ dev ws init <name>");

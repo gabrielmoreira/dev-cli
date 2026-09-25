@@ -4,6 +4,7 @@ import { mirrorCommand } from "./mirror.ts";
 import { syncCommand } from "./sync.ts";
 import { prCommand } from "./pr.ts";
 import { wiCommand } from "./wi.ts";
+import { labelCommand } from "./label.ts";
 import { doctorCommand, hardwareCommand } from "./doctor.ts";
 import { shellInitCommand } from "./shell.ts";
 import { initCommand, useCommand, currentCommand, rootCommand, rootsCommand } from "./root.ts";
@@ -329,6 +330,7 @@ export const mainCommand = defineCommand({
     pr: prCommand,
     wi: wiCommand,
     workitem: wiCommand,
+    label: labelCommand,
     doctor: doctorCommand,
     hardware: hardwareCommand,
     "shell-init": shellInitCommand,

@@ -1,4 +1,5 @@
 import type { RuntimeConfig } from "./config.ts";
+import { normalizeSourceKey } from "./git.ts";
 import * as mirror from "./mirror.ts";
 
 /** Semantic error for label resolution failures (validation, unknown label). */
@@ -31,6 +32,8 @@ export interface LabelDef {
   /** Fixed values inherited by every assignment (e.g. qmd_collection). */
   fixed: Record<string, unknown>;
   fields: Record<string, LabelFieldSchema>;
+  /** Keep every repository carrying the label mirrored; unset defers to a wildcard def. */
+  mirror?: boolean;
 }
 
 export interface SourceSelector {
@@ -128,6 +131,9 @@ export function parseLabelDefs(raw: Record<string, Record<string, unknown>> | un
           const schema = parseFieldSchema(fieldName, fieldRaw, warnings);
           if (schema) def.fields[fieldName] = schema;
         }
+      } else if (key === "mirror") {
+        if (typeof value === "boolean") def.mirror = value;
+        else warnings.push(`label_defs.${name}.mirror must be true or false`);
       } else {
         def.fixed[key] = value;
       }
@@ -330,7 +336,7 @@ export async function resolveLabeledSources(
 
 // --- dev.yaml source declaration editing (AST-preserving) ---
 
-import { parseDocument, isMap, isSeq, type YAMLMap } from "yaml";
+import { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml";
 
 function findSourceNode(
   doc: ReturnType<typeof parseDocument>,
@@ -410,4 +416,171 @@ export function setSourceLabel(
     source.set("labels", doc.createNode(currentLabels));
   }
   return { changed: true, found: true };
+}
+
+/** A label def key matches exactly, or as a prefix when it ends in `*` (`index:*`). */
+function defMatches(key: string, label: string): boolean {
+  return key.endsWith("*") ? label.startsWith(key.slice(0, -1)) : key === label;
+}
+
+/**
+ * Whether a label keeps its repositories mirrored. The label's own def decides,
+ * then the longest matching wildcard def; `index:*` mirrors by default, since
+ * QMD can only index what is on disk.
+ */
+export function labelMirrors(defs: Record<string, LabelDef>, label: string): boolean {
+  const own = defs[label]?.mirror;
+  if (own !== undefined) return own;
+  const wildcard = Object.entries(defs)
+    .filter(([key, def]) => key.endsWith("*") && def.mirror !== undefined && defMatches(key, label))
+    .sort(([left], [right]) => right.length - left.length)[0];
+  if (wildcard) return wildcard[1].mirror!;
+  return label.startsWith("index:");
+}
+
+/** Every declared source with at least one label that asks for a mirror. Pure. */
+export function sourcesToMirror(
+  config: Pick<RuntimeConfig, "labelDefs" | "sources">,
+): Array<{ source: SourceDeclaration; labels: string[] }> {
+  const { defs } = parseLabelDefs(config.labelDefs);
+  return parseDeclaredSources(config.sources).sources.flatMap((source) => {
+    const mirroring = Object.keys(source.labels).filter((label) => labelMirrors(defs, label));
+    return mirroring.length > 0 ? [{ source, labels: mirroring }] : [];
+  });
+}
+
+export interface LabelMirrorsResult {
+  created: Array<{ url: string; branch: string; path: string; labels: string[] }>;
+  failures: Array<{ url: string; reason: string }>;
+}
+
+/**
+ * Creates the mirrors labels ask for and that do not exist yet. An existing
+ * checkout is left as it is: bringing it up to date is mirror sync's job.
+ */
+export async function ensureLabelMirrors(
+  config: RuntimeConfig,
+  options: {
+    resolveExtraHeader?: (source: string) => Promise<string | undefined>;
+    /** Called as each missing mirror is created; a clone can take a while. */
+    onCreated?: (item: LabelMirrorsResult["created"][number]) => void;
+  } = {},
+): Promise<LabelMirrorsResult> {
+  const result: LabelMirrorsResult = { created: [], failures: [] };
+  for (const { source, labels } of sourcesToMirror(config)) {
+    try {
+      const ensured = await mirror.ensure({
+        root: config.root,
+        canonicalPrefix: config.canonicalPrefix,
+        source: source.url,
+        branch: source.branch,
+        pin: source.pin,
+        alias: source.path,
+        extraHeader: await options.resolveExtraHeader?.(source.url),
+      });
+      if (ensured.created) {
+        const item = { url: source.url, branch: ensured.branch, path: ensured.path, labels };
+        result.created.push(item);
+        options.onCreated?.(item);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.failures.push({ url: source.url, reason: message.split("\n")[0]! });
+    }
+  }
+  return result;
+}
+
+/** Every label in use, with the sources that carry it, sorted by name. Pure. */
+export function listLabels(
+  config: Pick<RuntimeConfig, "labelDefs" | "sources">,
+): Array<{ label: string; mirror: boolean; sources: SourceDeclaration[] }> {
+  const { defs } = parseLabelDefs(config.labelDefs);
+  const byLabel = new Map<string, SourceDeclaration[]>();
+  for (const source of parseDeclaredSources(config.sources).sources) {
+    for (const label of Object.keys(source.labels)) {
+      byLabel.set(label, [...(byLabel.get(label) ?? []), source]);
+    }
+  }
+  return [...byLabel.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([label, sources]) => ({ label, mirror: labelMirrors(defs, label), sources }));
+}
+
+/**
+ * Renames a label everywhere dev.yaml names it: on sources, as a label def key,
+ * and as a workset member. Mutates the caller's document; persistence belongs to
+ * config.writeConfig(). Refuses a target name already in use.
+ */
+export function renameLabel(
+  doc: ReturnType<typeof parseDocument>,
+  from: string,
+  to: string,
+): { sources: number; def: boolean; worksetMembers: number } {
+  const renamed = { sources: 0, def: false, worksetMembers: 0 };
+  const sources = doc.get("sources");
+  if (isSeq(sources)) {
+    for (const item of sources.items) {
+      const itemLabels = isMap(item) ? item.get("labels") : undefined;
+      if (!isMap(itemLabels) || !itemLabels.has(from)) continue;
+      if (itemLabels.has(to)) {
+        throw new LabelError("LABEL_VALIDATION", `A source already carries label '${to}'.`);
+      }
+      renameMapKey(itemLabels, from, to);
+      renamed.sources += 1;
+    }
+  }
+  const defs = doc.get("label_defs");
+  if (isMap(defs) && defs.has(from)) {
+    if (defs.has(to)) throw new LabelError("LABEL_VALIDATION", `label_defs already has '${to}'.`);
+    renameMapKey(defs, from, to);
+    renamed.def = true;
+  }
+  const worksets = doc.get("worksets");
+  if (isMap(worksets)) {
+    for (const pair of worksets.items) {
+      const members = isMap(pair.value) ? pair.value.get("members") : undefined;
+      if (!isSeq(members)) continue;
+      for (const member of members.items) {
+        if (isMap(member) && member.get("label") === from) {
+          member.set("label", to);
+          renamed.worksetMembers += 1;
+        }
+      }
+    }
+  }
+  return renamed;
+}
+
+/** Renames a key in place, keeping its position, value, and comments. */
+function renameMapKey(map: YAMLMap, from: string, to: string): void {
+  const pair = map.items.find((candidate) => String(candidate.key) === from)!;
+  pair.key = isScalar(pair.key) ? Object.assign(pair.key, { value: to }) : to;
+}
+
+/**
+ * Where a label lands for a repository and an optional branch: the declaration
+ * that already exists, or a new one. With no branch and several declared refs,
+ * the caller must choose. Pure.
+ */
+export function planLabelTarget(
+  sources: SourceDeclaration[],
+  url: string,
+  branch?: string,
+): { selector: SourceSelector; declared: boolean } | { ambiguous: SourceDeclaration[] } {
+  const key = normalizeSourceKey(url);
+  const declared = sources.filter((source) => normalizeSourceKey(source.url) === key);
+  if (branch) {
+    const match = declared.find((source) => source.branch === branch || source.pin === branch);
+    return match
+      ? { selector: selectorOf(match), declared: true }
+      : { selector: { url: declared[0]?.url ?? url, branch }, declared: false };
+  }
+  if (declared.length === 0) return { selector: { url }, declared: false };
+  if (declared.length === 1) return { selector: selectorOf(declared[0]!), declared: true };
+  return { ambiguous: declared };
+}
+
+export function selectorOf(source: SourceDeclaration): SourceSelector {
+  return { url: source.url, branch: source.branch, pin: source.pin, path: source.path };
 }

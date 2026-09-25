@@ -104,12 +104,13 @@ How to read this file: each bullet is a rule in bold followed by the reason or t
 
 **Not wanted:** a new name for every internal distinction, two concepts that read alike, or a fact that lives in two files.
 
-- **The public vocabulary is root, workspace, mount, mirror, workset, and label.** A workset is a template for a workspace; a label is metadata on a repository; a mirror is a reference checkout you read and index; a mount is a worktree inside a workspace. Anything else stays internal until it earns a name.
+- **The public vocabulary is root, workspace, mount, mirror, workset, and label.** A workset is a template for a workspace, with an objective; a label names a set of repositories, each on a branch; a mirror is a reference checkout you read and index; a mount is a worktree inside a workspace. Anything else stays internal until it earns a name.
 - **A concept earns its name by doing a job no existing concept does, and it is introduced with one sentence of contrast against its nearest neighbor.** Scope and quickset were discussed and deferred for exactly this reason.
 - **A name must not collide with the mental model already in place.** `workset` was rejected for a query context because it competes with workspace and `ws`.
 - **Identity is source plus ref plus path, not the URL alone.** The same repository can be mounted twice on different branches, and a repository name is not unique across Azure DevOps organizations and projects.
 - **Configuration lives with the entity whose behavior it controls.** `~/.dev.toml` is a registry of roots and nothing else; `dev.yaml` holds the behavior of one root (providers, sources, labels, worksets, plugins, hooks); `ws.md` holds one workspace, frontmatter owned by `dev` and body owned by people and agents; `.dev/` is rebuildable; tool versions belong to Mise; authentication belongs to `gh`, `az`, and the Git credential helper.
-- **Labels are free text with an optional schema.** `team:*`, `docs`, and `index:*` are conventions; `label_defs` in `dev.yaml` can type their fields, and `index:*` is the only prefix a command reads.
+- **Labels are free text with an optional schema.** `team:*`, `docs`, and `index:*` are conventions; `label_defs` in `dev.yaml` can type their fields and set `mirror`, by exact name or wildcard. `index:*` is the only prefix a command reads, and it keeps its repositories mirrored by default.
+- **A label is intent; a mirror is a copy on disk.** A label that asks for mirrors gets them on the next sync, never by surprise, and taking the label off never deletes one. A mirror is not a label, and a workset is not replaced by one: a workset carries an objective and may point to labels.
 
 ## Safety, credentials, and trust
 
