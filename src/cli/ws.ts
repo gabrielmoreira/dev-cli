@@ -976,7 +976,9 @@ export const wsUnlockCommand = defineCommand({
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
-    const branch = args.branch || args.branchFlag;
+    // With --all there is no mount, so a lone positional names the branch.
+    const mountValue = args.all && !args.branch ? undefined : args.mount;
+    const branch = args.branch || args.branchFlag || (args.all ? args.mount : undefined);
 
     const workspace = await resolveWorkspaceInput({
       value: args.ws,
@@ -986,7 +988,7 @@ export const wsUnlockCommand = defineCommand({
       usage: "dev ws unlock [mount] [branch] [--all] [--ws <name>]",
     });
     const mountPath = await resolveWorkspaceMountScope({
-      value: args.mount,
+      value: mountValue,
       all: args.all,
       workspace: workspace.value,
       root: config.root,
