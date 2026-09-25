@@ -126,6 +126,8 @@ export interface PullRequestRecord {
   updatedAt: string;
   isDraft: boolean;
   repository: string;
+  /** Provider project; the cache file is per repository name, shared across projects. */
+  project?: string;
   tenant: string;
   syncedAt: string;
 }

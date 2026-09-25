@@ -295,7 +295,7 @@ export const prListCommand = defineCommand({
         allPrs.push(...result.prs);
         if (result.truncated) {
           errors.push(
-            `${result.repo} has more than ${pr.PULL_REQUEST_LIMIT} ${statusFilter} pull requests; showing the newest ${pr.PULL_REQUEST_LIMIT}.`,
+            `${result.repo}: the provider returned its limit of ${pr.PULL_REQUEST_LIMIT} pull requests; older ones are not shown.`,
           );
         }
       }
@@ -333,7 +333,7 @@ export const prListCommand = defineCommand({
               organization: provider.organization,
               token: credential.token,
             });
-            const records = await pr.refreshProjectPullRequests({
+            const { records, truncatedProjects } = await pr.refreshProjectPullRequests({
               root: config.root,
               tenant,
               projects,
@@ -341,6 +341,11 @@ export const prListCommand = defineCommand({
               status: statusFilter,
               client,
             });
+            for (const project of truncatedProjects) {
+              errors.push(
+                `[${provider.id}] ${project}: the provider returned its limit of ${pr.PULL_REQUEST_LIMIT} pull requests; older ones are not shown.`,
+              );
+            }
             if (isDefaultMineQuery) {
               await cache.writePullRequestSelection({
                 root: config.root,
@@ -376,7 +381,7 @@ export const prListCommand = defineCommand({
       json: args.json,
       text: () => {
         let out = "";
-        for (const error of errors) out += `  Warning: ${error}\n`;
+        for (const error of errors) out += `  ⚠ ${error}\n`;
         if (shown.length === 0) {
           out += "No pull requests found.";
         } else {

@@ -263,6 +263,64 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
     expect(result.truncated).toBe(false);
   });
 
+  test("an open-only sync keeps the open pull requests of a same-named repository in another project", async () => {
+    const active = (pullRequestId: number, project: string) => ({
+      pullRequestId,
+      status: "active",
+      title: `PR ${pullRequestId}`,
+      creationDate: "2026-09-14T20:00:00Z",
+      url: `https://dev.azure.com/org/${project}/_apis/git/pullRequests/${pullRequestId}`,
+      repository: { id: `${project}-docs`, name: "docs", project: { id: project, name: project } },
+    });
+    const byProject: Record<string, ReturnType<typeof active>[]> = {
+      A: [active(1, "A")],
+      B: [active(2, "B")],
+    };
+    const client = {
+      listPullRequests: async (_repo: string, options?: { project?: string }) =>
+        byProject[options!.project!],
+    } as unknown as Pick<AzureDevOpsClient, "listPullRequests" | "getPullRequest">;
+    const input = { root: tempRoot, tenant: "t", repo: "docs", status: "open" as const, client };
+
+    await syncPullRequests({ ...input, project: "B" });
+    await syncPullRequests({ ...input, project: "A" });
+    byProject.A = [];
+    await syncPullRequests({ ...input, project: "A" });
+
+    const cached = await readPullRequests({ root: tempRoot, tenant: "t", repo: "docs" });
+    expect(cached.map((pr) => pr.id)).toEqual([2]);
+  });
+
+  test("a project query that hits the provider limit names the project", async () => {
+    const client: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
+      getCurrentUser: async () => ({ id: "me", displayName: "Me" }),
+      listProjectPullRequests: async (project, options) =>
+        project === "Big"
+          ? Array.from({ length: options!.limit! }, (_, index) => ({
+              pullRequestId: index + 1,
+              sourceRefName: "refs/heads/f",
+              targetRefName: "refs/heads/main",
+              status: "active",
+              title: `PR ${index + 1}`,
+              creationDate: "2026-09-14T20:00:00Z",
+              url: `https://dev.azure.com/org/Big/_apis/git/pullRequests/${index + 1}`,
+              repository: { id: "r", name: "repo" },
+            }))
+          : [],
+    };
+
+    const { truncatedProjects } = await refreshProjectPullRequests({
+      root: tempRoot,
+      tenant: "t",
+      projects: ["Big", "Small"],
+      mine: false,
+      status: "open",
+      client,
+    });
+
+    expect(truncatedProjects).toEqual(["Big"]);
+  });
+
   test("refreshes distinct projects for pull requests the user wrote or reviews, once each", async () => {
     const calls: Array<{ project: string; creatorId?: string; reviewerId?: string }> = [];
     const fakeClient: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
@@ -286,7 +344,7 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
       },
     };
 
-    const records = await refreshProjectPullRequests({
+    const { records } = await refreshProjectPullRequests({
       root: tempRoot,
       tenant: "dev.azure.com/org",
       projects: ["Payments", "Identity", "Payments"],
@@ -327,7 +385,7 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
       },
     };
 
-    const records = await refreshProjectPullRequests({
+    const { records } = await refreshProjectPullRequests({
       root: tempRoot,
       tenant: "dev.azure.com/org",
       projects: ["P"],

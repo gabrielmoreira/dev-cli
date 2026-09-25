@@ -131,6 +131,7 @@ export function normalizeAdoPullRequest(
     updatedAt: raw.creationDate,
     isDraft: Boolean(raw.isDraft),
     repository: repoName,
+    project: raw.repository?.project?.name,
     tenant,
     syncedAt,
   };
@@ -198,11 +199,16 @@ export async function syncPullRequests(
   }
 
   // A pull request cached as open that an open-only query no longer returns was
-  // completed or abandoned since; it stays out of every open listing.
+  // completed or abandoned since; it stays out of every open listing. Only this
+  // project's records: a same-named repository in another project shares the file.
   const complete = rawPrs.length < PULL_REQUEST_LIMIT;
+  const inQuery = (p: PullRequestRecord) =>
+    !input.project || (p.project ?? input.project).toLowerCase() === input.project.toLowerCase();
   const kept =
     adoStatus === "active" && complete
-      ? existing.filter((p) => p.status !== "open" || incoming.some((i) => i.id === p.id))
+      ? existing.filter(
+          (p) => p.status !== "open" || !inQuery(p) || incoming.some((i) => i.id === p.id),
+        )
       : existing;
   const merged = mergePullRequestRecords(kept, incoming);
   const cachePath = await deps.cache.writePullRequests({
@@ -235,7 +241,11 @@ export async function refreshProjectPullRequests(
     now?: () => string;
   },
   deps: PrDeps = defaultDeps,
-): Promise<PullRequestRecord[]> {
+): Promise<{
+  records: PullRequestRecord[];
+  /** Projects where a query hit the provider limit, so older pull requests are missing. */
+  truncatedProjects: string[];
+}> {
   const projects = [...new Set(input.projects.filter(Boolean))];
   // "Mine" is what I wrote or what waits for my review: two provider queries.
   const userId = input.mine ? (await input.client.getCurrentUser()).id : undefined;
@@ -261,6 +271,13 @@ export async function refreshProjectPullRequests(
       return [normalizeAdoPullRequest(raw, input.tenant, repository, syncedAt)];
     }),
   );
+  const truncatedProjects = [
+    ...new Set(
+      batches.flatMap((batch, index) =>
+        batch.length >= limit ? [projects[Math.floor(index / filters.length)]!] : [],
+      ),
+    ),
+  ];
 
   const byRepository = new Map<string, PullRequestRecord[]>();
   for (const record of records) {
@@ -283,7 +300,7 @@ export async function refreshProjectPullRequests(
   }
 
   records.sort((a, b) => b.id - a.id);
-  return filterByStatus(records, input.status);
+  return { records: filterByStatus(records, input.status), truncatedProjects };
 }
 
 /**
