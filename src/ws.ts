@@ -309,8 +309,7 @@ async function healWorkspaceAdmins(params: {
           trackBranch,
         });
       }
-    } catch (err) {
-      console.error("[heal]", err);
+    } catch {
       // Best effort: leave the broken state for the actual operation to
       // report a precise domain error.
     }
@@ -1825,7 +1824,10 @@ export async function remove(
     manifest: currentManifest,
     body,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
-  const { mount, index: mountIndex } = findMountOrThrow(currentManifest, input.mountPath);
+  // Removing what is not mounted already holds: the result says so instead of failing.
+  const mountIndex = currentManifest.mounts.findIndex((m) => m.path === input.mountPath);
+  if (mountIndex < 0) return { path: input.mountPath, removed: false };
+  const mount = currentManifest.mounts[mountIndex];
   const worktreePath = join(workspacePath, assertSafeMountPath(mount.path));
 
   if (deps.fs.exists(worktreePath)) {

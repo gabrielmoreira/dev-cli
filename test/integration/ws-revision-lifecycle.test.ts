@@ -157,5 +157,14 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
 
     manifestData = await Bun.file(manifestPath).text();
     expect(manifestData).not.toContain("core-repo");
+
+    // 9. Removing it again reports that nothing is mounted, and changes nothing
+    const again = await ws.remove({
+      root: tempRoot,
+      workspaceName: "rev-ws",
+      mountPath: "core-repo",
+    });
+    expect(again).toEqual({ path: "core-repo", removed: false });
+    expect(await Bun.file(manifestPath).text()).toBe(manifestData);
   });
 });

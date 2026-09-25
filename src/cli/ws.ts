@@ -1141,7 +1141,10 @@ export const wsRemoveCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => `Removed mount '${result.path}' from workspace '${workspace.value}'.`,
+        text: () =>
+          result.removed
+            ? `Removed mount '${result.path}' from workspace '${workspace.value}'.`
+            : `○ '${result.path}' is not mounted in workspace '${workspace.value}'.`,
       });
       return 0;
     } catch (error) {
