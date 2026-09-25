@@ -305,8 +305,7 @@ async function healWorkspaceAdmins(params: {
           trackBranch,
         });
       }
-    } catch (err) {
-      console.error("[heal]", err);
+    } catch {
       // Best effort: leave the broken state for the actual operation to
       // report a precise domain error.
     }

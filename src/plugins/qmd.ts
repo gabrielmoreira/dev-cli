@@ -134,7 +134,7 @@ export async function syncCollections(
       }
       throw error;
     }
-    for (const warning of resolved.warnings) base.ui.warn(`Warning: ${warning}`);
+    for (const warning of resolved.warnings) base.ui.warn(`⚠ ${warning}`);
 
     const desired = new Map<string, string>();
     for (const source of resolved.sources) {

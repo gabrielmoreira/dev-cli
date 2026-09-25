@@ -330,7 +330,7 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 
 Switch mount to track a branch tip
 
-**Usage:** `dev ws track [mount] [branch] [--branchFlag <value>] [--ws <value>] [--manifestOnly] [--root <value>] [--json]`
+**Usage:** `dev ws track [mount] [branch] [--branchFlag <value>] [--ws <value>] [--manifest-only] [--root <value>] [--json]`
 
 | Argument               | Type       | Description                                 |
 | ---------------------- | ---------- | ------------------------------------------- |
@@ -338,7 +338,7 @@ Switch mount to track a branch tip
 | `branch`               | positional | Branch to track                             |
 | `--branchFlag <value>` | string     | Branch to track                             |
 | `--ws <value>`         | string     | Target workspace name                       |
-| `--manifestOnly`       | boolean    | Update ws.md without changing disk worktree |
+| `--manifest-only`      | boolean    | Update ws.md without changing disk worktree |
 | `--root <value>`       | string     | Explicit dev root directory                 |
 | `--json`               | boolean    | Output in structured JSON format            |
 

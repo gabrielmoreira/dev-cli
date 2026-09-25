@@ -189,7 +189,7 @@ export const mirrorLabelAddCommand = defineCommand({
     if (validation.errors.length > 0) {
       return reportError(validation.errors.join("; "));
     }
-    for (const warning of validation.warnings) ui.warn(`Warning: ${warning}`);
+    for (const warning of validation.warnings) ui.warn(`⚠ ${warning}`);
 
     const guided = !args.source || !args.label;
     if (guided) {

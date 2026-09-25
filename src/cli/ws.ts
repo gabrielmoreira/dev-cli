@@ -831,7 +831,10 @@ export const wsTrackCommand = defineCommand({
     branch: { type: "positional", description: "Branch to track", required: false },
     branchFlag: { type: "string", description: "Branch to track" },
     ws: { type: "string", description: "Target workspace name" },
-    manifestOnly: { type: "boolean", description: "Update ws.md without changing disk worktree" },
+    "manifest-only": {
+      type: "boolean",
+      description: "Update ws.md without changing disk worktree",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -870,7 +873,7 @@ export const wsTrackCommand = defineCommand({
         workspaceName: workspace.value,
         mountPath: mount.value,
         branch: branch.value,
-        manifestOnly: args.manifestOnly,
+        manifestOnly: args["manifest-only"],
       });
 
       ui.result({
