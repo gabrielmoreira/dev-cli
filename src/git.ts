@@ -785,10 +785,14 @@ export async function installCanonicalCommitGuard(adminRepoPath: string): Promis
 }
 
 export async function repairLegacyCanonicalPermissions(worktreePath: string): Promise<boolean> {
+  // An older version stripped write from files and directories; an earlier repair
+  // restored files only, leaving directories where git cannot replace a file.
   const gitEntryMode = await fs.mode(join(worktreePath, ".git"));
-  if (gitEntryMode === undefined || (gitEntryMode & 0o200) !== 0) return false;
+  const rootMode = await fs.mode(worktreePath);
+  if (gitEntryMode === undefined || rootMode === undefined) return false;
+  if ((gitEntryMode & 0o200) !== 0 && (rootMode & 0o200) !== 0) return false;
 
-  await fs.makeFilesOwnerWritable(worktreePath);
+  await fs.makeOwnerWritable(worktreePath);
   const tracked = await runGit(["-C", worktreePath, "ls-files", "--stage", "-z"]);
   if (tracked.exitCode !== 0) {
     throw new Error(`Failed to restore canonical file modes: ${tracked.stderr || tracked.stdout}`);

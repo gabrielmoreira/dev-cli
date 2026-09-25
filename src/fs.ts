@@ -68,16 +68,15 @@ export async function mode(path: string): Promise<number | undefined> {
   }
 }
 
-export async function makeFilesOwnerWritable(targetPath: string): Promise<void> {
+/** Restores owner write on a path and, for a directory, on every file and directory in it. */
+export async function makeOwnerWritable(targetPath: string): Promise<void> {
   const target = await stat(targetPath);
-  if (!target.isDirectory()) {
-    await chmod(targetPath, target.mode | 0o200);
-    return;
-  }
+  await chmod(targetPath, target.mode | 0o200);
+  if (!target.isDirectory()) return;
 
   const entries = await readdir(targetPath, { withFileTypes: true, recursive: true });
   for (const entry of entries) {
-    if (!entry.isFile()) continue;
+    if (!entry.isFile() && !entry.isDirectory()) continue;
     const fullPath = join(entry.parentPath || targetPath, entry.name);
     const entryStat = await stat(fullPath);
     await chmod(fullPath, entryStat.mode | 0o200);

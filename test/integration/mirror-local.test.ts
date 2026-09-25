@@ -94,6 +94,29 @@ describe("Canonical repository local integration (Phase 8)", () => {
     await git.runGit(["restore", "file.txt"], { cwd: addRes.path });
   });
 
+  // An older version made mirrors read-only, and an earlier repair restored files
+  // only: git then cannot replace a file in a directory it cannot write.
+  it.skipIf(process.platform === "win32")(
+    "restores write access to directories a legacy read-only mirror kept",
+    async () => {
+      const { path } = await mirror.ensure({
+        root: tempRoot,
+        source: bareRemotePath,
+        branch: "main",
+      });
+      const nested = join(path, "legacy-dir");
+      await fs.ensureDir(nested);
+      await chmod(nested, 0o555);
+      await chmod(path, 0o555);
+
+      await git.installCanonicalCommitGuardForWorktree(path);
+
+      expect((await stat(path)).mode & 0o200).not.toBe(0);
+      expect((await stat(nested)).mode & 0o200).not.toBe(0);
+      await rm(nested, { recursive: true });
+    },
+  );
+
   it("quarantines repeated dirty states in distinct named stashes", async () => {
     const quarantineRoot = join(tempRoot, "quarantine");
     const added = await mirror.ensure({
