@@ -77,7 +77,8 @@ describe("Canonical repository local integration (Phase 8)", () => {
 
     const scriptMode = (await stat(join(addRes.path, "script.sh"))).mode;
     expect(scriptMode & 0o200).not.toBe(0);
-    expect(scriptMode & 0o100).not.toBe(0);
+    // NTFS has no POSIX execute bit to preserve; Linux CI proves this one.
+    if (process.platform !== "win32") expect(scriptMode & 0o100).not.toBe(0);
     expect("readOnly" in addRes).toBe(false);
 
     await fs.writeText(join(addRes.path, "file.txt"), "accidental mirror edit");
@@ -222,7 +223,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
     const scriptMode = (await stat(join(added.path, "script.sh"))).mode;
     expect(fileMode & 0o200).not.toBe(0);
     expect(scriptMode & 0o200).not.toBe(0);
-    expect(scriptMode & 0o100).not.toBe(0);
+    if (process.platform !== "win32") expect(scriptMode & 0o100).not.toBe(0);
   });
 
   it("lists canonical repositories with branch and status", async () => {

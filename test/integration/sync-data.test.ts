@@ -18,7 +18,7 @@ describe("Combined Offline Data Sync Integration (Phase 14)", () => {
   });
 
   afterAll(async () => {
-    await rm(tempRoot, { recursive: true, force: true });
+    if (tempRoot) await rm(tempRoot, { recursive: true, force: true });
   });
 
   test("synchronizes inventory, work items, and PRs, then proves offline availability", async () => {
