@@ -12,7 +12,13 @@ interface TestConfig {
     string,
     {
       description?: string;
-      members: Array<{ source: string; ref?: string; path?: string; reason?: string }>;
+      members: Array<{
+        source?: string;
+        label?: string;
+        ref?: string;
+        path?: string;
+        reason?: string;
+      }>;
     }
   >;
 }
@@ -701,5 +707,74 @@ worksets:
     expect(await fs.readText(join(root, "dev.yaml"))).toBe(initial);
     select.mockRestore();
     confirm.mockRestore();
+  });
+
+  describe("label members", () => {
+    const labeled = `version: 1
+sources:
+  - url: https://github.com/example/mobile-app.git
+    labels:
+      team:mobile: {}
+  - url: https://github.com/example/mobile-docs.git
+    labels:
+      team:mobile: {}
+worksets:
+  incident:
+    members:
+      - source: https://github.com/example/checkout-api.git
+`;
+
+    test("adds a label member, shows its repositories, and removes it", async () => {
+      await fs.writeText(join(root, "dev.yaml"), labeled);
+      const run = (argv: string[]) =>
+        runCli({ argv: [...argv, "--root", root], cwd: root, env: {}, isTTY: false });
+
+      expect(
+        await run([
+          "workset",
+          "label",
+          "add",
+          "incident",
+          "team:mobile",
+          "--reason",
+          "App",
+          "--json",
+        ]),
+      ).toBe(0);
+      let config = yaml.parse(await fs.readText(join(root, "dev.yaml"))) as TestConfig;
+      expect(config.worksets?.incident?.members).toEqual([
+        { source: "https://github.com/example/checkout-api.git" },
+        { label: "team:mobile", reason: "App" },
+      ]);
+
+      logs = [];
+      expect(await run(["workset", "show", "incident"])).toBe(0);
+      expect(logs.join("\n")).toContain("label team:mobile (2 repositories) — App");
+
+      expect(await run(["workset", "label", "remove", "incident", "team:mobile", "--force"])).toBe(
+        0,
+      );
+      config = yaml.parse(await fs.readText(join(root, "dev.yaml"))) as TestConfig;
+      expect(config.worksets?.incident?.members).toEqual([
+        { source: "https://github.com/example/checkout-api.git" },
+      ]);
+    });
+
+    test("refuses a label that no declared source carries", async () => {
+      await fs.writeText(join(root, "dev.yaml"), labeled);
+
+      const code = await runCli({
+        argv: ["workset", "label", "add", "incident", "team:web", "--json", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      });
+
+      expect(code).not.toBe(0);
+      const output = logs.join("\n");
+      expect(output).toContain('"code": "LABEL_NOT_FOUND"');
+      expect(output).toContain("dev label add team:web");
+      expect(await fs.readText(join(root, "dev.yaml"))).toBe(labeled);
+    });
   });
 });

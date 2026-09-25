@@ -260,4 +260,166 @@ worksets:
     text.mockRestore();
     confirm.mockRestore();
   });
+
+  describe("labels", () => {
+    async function initJson(argv: string[]): Promise<number> {
+      return await runCli({
+        argv: ["ws", "init", ...argv, "--root", root, "--json"],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      });
+    }
+
+    async function mountsOf(name: string): Promise<Array<[string, unknown]>> {
+      const parsed = await manifest.readWorkspace(join(root, "ws", name, "ws.md"));
+      return parsed.manifest.mounts.map((mount) => [mount.path, mount.revision]);
+    }
+
+    test("expands a label member to every source carrying it", async () => {
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `version: 1
+sources:
+  - url: ${appRemote}
+    path: app
+    labels:
+      docs: {}
+  - url: ${wikiRemote}
+    branch: internal
+    labels:
+      docs: {}
+worksets:
+  reading:
+    members:
+      - label: docs
+`,
+      );
+
+      expect(await initJson(["reading-room", "--workset", "reading"])).toBe(0);
+      expect(await mountsOf("reading-room")).toEqual([
+        ["app", { mode: "track", branch: "main" }],
+        ["wiki-docs", { mode: "track", branch: "internal" }],
+      ]);
+    });
+
+    test("mounts a label source once when a repository member already lists it", async () => {
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `version: 1
+sources:
+  - url: ${appRemote}
+    branch: main
+    labels:
+      team: {}
+  - url: ${wikiRemote}
+    branch: master
+    labels:
+      team: {}
+worksets:
+  squad:
+    members:
+      - source: ${appRemote}
+        ref: main
+      - label: team
+`,
+      );
+
+      expect(await initJson(["squad-room", "--workset", "squad"])).toBe(0);
+      expect(await mountsOf("squad-room")).toEqual([
+        ["mobile-app", { mode: "track", branch: "main" }],
+        ["wiki-docs", { mode: "track", branch: "master" }],
+      ]);
+    });
+
+    test("reports a label no declared source carries as a structured error", async () => {
+      logs = [];
+      expect(await initJson(["--label", "team:web"])).not.toBe(0);
+      const output = logs.join("\n");
+      expect(output).toContain('"code": "LABEL_NOT_FOUND"');
+      expect(output).toContain("dev label add team:web");
+      expect(await Bun.file(join(root, "ws", "team-web", "ws.md")).exists()).toBe(false);
+    });
+
+    test("merges --workset and --label into one plan named after the workset", async () => {
+      const toolsRemote = await createRemote(root, "tools");
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `${await Bun.file(join(root, "dev.yaml")).text()}sources:
+  - url: ${appRemote}
+    branch: main
+    labels:
+      team:mobile: {}
+  - url: ${toolsRemote}
+    labels:
+      team:mobile: {}
+`,
+      );
+
+      expect(await initJson(["--workset", "app", "--label", "team:mobile"])).toBe(0);
+      expect(await mountsOf("app")).toEqual([
+        ["mobile-app", { mode: "track", branch: "main" }],
+        ["wiki-docs", { mode: "track", branch: "master" }],
+        ["wiki-docs-internal", { mode: "track", branch: "internal" }],
+        ["tools", { mode: "track", branch: "main" }],
+      ]);
+    });
+
+    test("names a workspace from a single label", async () => {
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `version: 1
+sources:
+  - url: ${appRemote}
+    labels:
+      team:mobile: {}
+`,
+      );
+
+      expect(await initJson(["--label", "team:mobile"])).toBe(0);
+      expect(await mountsOf("team-mobile")).toEqual([
+        ["mobile-app", { mode: "track", branch: "main" }],
+      ]);
+    });
+
+    test("starts from labels picked in the interactive menu", async () => {
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `version: 1
+sources:
+  - url: ${wikiRemote}
+    branch: internal
+    labels:
+      docs: {}
+`,
+      );
+      const select = spyOn(ui, "select").mockResolvedValueOnce("label");
+      const multiSelect = spyOn(ui, "multiSelect")
+        .mockResolvedValueOnce(["docs"])
+        .mockResolvedValueOnce(["defaults"]);
+      const text = spyOn(ui, "text").mockResolvedValueOnce("docs").mockResolvedValueOnce("");
+      const confirm = spyOn(ui, "confirm").mockResolvedValueOnce(true);
+
+      const code = await runCli({
+        argv: ["ws", "init", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: true,
+        stdinIsTTY: true,
+      });
+
+      expect(code).toBe(0);
+      expect(multiSelect.mock.calls[0]?.[1]).toEqual([
+        { label: "docs (1 repository)", value: "docs" },
+      ]);
+      expect(await mountsOf("docs")).toEqual([
+        ["wiki-docs", { mode: "track", branch: "internal" }],
+      ]);
+
+      select.mockRestore();
+      multiSelect.mockRestore();
+      text.mockRestore();
+      confirm.mockRestore();
+    });
+  });
 });

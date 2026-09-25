@@ -8,6 +8,8 @@ import * as manifest from "../manifest.ts";
 import { isExplicitSource, resolveInputSource } from "../inventory.ts";
 import type { RuntimeConfig } from "../config.ts";
 import * as cache from "../cache.ts";
+import type { InventoryRecord } from "../cache.ts";
+import { WorksetError, declaredLabels, labelSources } from "../workset.ts";
 import { resolveJumpTarget } from "../nav.ts";
 import {
   CredentialError,
@@ -120,6 +122,10 @@ export const wsInitCommand = defineCommand({
     desc: { type: "string", description: "Workspace description" },
     root: { type: "string", description: "Explicit dev root directory" },
     workset: { type: "string", description: "Initialize from a configured workset" },
+    label: {
+      type: "string",
+      description: "Add every repository carrying this label (comma-separated for several)",
+    },
     yes: { type: "boolean", description: "Accept the generated mount plan" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -152,22 +158,38 @@ export const wsInitCommand = defineCommand({
         suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
       }
       rawName = undefined;
-    } else if (args.workset) {
-      const resolved = await resolveWorksetMounts(config, args.workset);
-      if ("error" in resolved) {
-        return reportError(resolved.error, args.json);
+    } else if (args.workset || args.label) {
+      const labels = (args.label ?? "")
+        .split(",")
+        .map((label) => label.trim())
+        .filter(Boolean);
+      try {
+        const resolved = args.workset
+          ? await resolveWorksetMounts(config, args.workset, inventory)
+          : undefined;
+        mounts = dedupeMounts(
+          [
+            ...(resolved?.mounts ?? []),
+            ...labels.flatMap((label) => resolveLabelMounts(config, label, inventory)),
+          ],
+          inventory,
+        );
+        suggestedDescription = resolved?.description;
+      } catch (error) {
+        return reportError(error, args.json);
       }
-      mounts = resolved.mounts;
-      suggestedName = args.workset;
-      suggestedDescription = resolved.description;
+      suggestedName =
+        args.workset ?? (labels.length === 1 ? labels[0]!.replaceAll(":", "-") : undefined);
       reviewPlan = canPrompt(ambient);
     } else if (!rawName && canPrompt(ambient)) {
+      const labelCounts = declaredLabels(config);
       const choices = [
         { label: "Blank workspace", value: "blank" },
         { label: "Select repositories", value: "repositories" },
         ...(Object.keys(config.worksets).length > 0
           ? [{ label: "Workset", value: "workset" }]
           : []),
+        ...(labelCounts.size > 0 ? [{ label: "Label", value: "label" }] : []),
       ];
       const mode = await ui.select("How do you want to start?", choices);
       if (mode === "repositories") {
@@ -199,13 +221,28 @@ export const wsInitCommand = defineCommand({
             value: name,
           })),
         );
-        const resolved = await resolveWorksetMounts(config, worksetName);
-        if ("error" in resolved) {
-          return reportError(resolved.error, args.json);
+        try {
+          const resolved = await resolveWorksetMounts(config, worksetName, inventory);
+          mounts = dedupeMounts(resolved.mounts, inventory);
+          suggestedDescription = resolved.description;
+        } catch (error) {
+          return reportError(error, args.json);
         }
-        mounts = resolved.mounts;
         suggestedName = worksetName;
-        suggestedDescription = resolved.description;
+        reviewPlan = true;
+      } else if (mode === "label") {
+        const labels = await ui.multiSelect(
+          "Select labels",
+          [...labelCounts].map(([label, count]) => ({
+            label: `${label} (${count} ${count === 1 ? "repository" : "repositories"})`,
+            value: label,
+          })),
+        );
+        mounts = dedupeMounts(
+          labels.flatMap((label) => resolveLabelMounts(config, label, inventory)),
+          inventory,
+        );
+        if (labels.length === 1) suggestedName = labels[0]!.replaceAll(":", "-");
         reviewPlan = true;
       }
     }
@@ -217,7 +254,8 @@ export const wsInitCommand = defineCommand({
       required: {
         command: "ws init",
         field: "name",
-        usage: "dev ws init <name|repository-uri|pull-request-url> [--workset <name>]",
+        usage:
+          "dev ws init <name|repository-uri|pull-request-url> [--workset <name>] [--label <label>]",
         description: "Workspace name",
       },
       ambient,
@@ -346,14 +384,19 @@ function duplicateMountPath(path: string, branch: string): string {
 async function resolveWorksetMounts(
   config: RuntimeConfig,
   name: string,
-): Promise<{ mounts: PlannedMount[]; description?: string } | { error: string }> {
-  const workset = config.worksets[name];
-  if (!workset) return { error: `Unknown workset '${name}'.` };
+  inventory: InventoryRecord[],
+): Promise<{ mounts: PlannedMount[]; description?: string }> {
+  const definition = config.worksets[name];
+  if (!definition) throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
   const mounts: PlannedMount[] = [];
-  for (const member of workset.members) {
+  for (const member of definition.members) {
+    if (member.label !== undefined) {
+      mounts.push(...resolveLabelMounts(config, member.label, inventory, member.reason));
+      continue;
+    }
     const resolved = await resolveInputSource(config.root, member.source);
     if (!resolved.sourceUrl) {
-      return { error: resolved.error ?? `Could not resolve workset source '${member.source}'.` };
+      throw new Error(resolved.error ?? `Could not resolve workset source '${member.source}'.`);
     }
     mounts.push({
       source: resolved.sourceUrl,
@@ -362,7 +405,37 @@ async function resolveWorksetMounts(
       reason: member.reason,
     });
   }
-  return { mounts, description: workset.description };
+  return { mounts, description: definition.description };
+}
+
+function resolveLabelMounts(
+  config: RuntimeConfig,
+  label: string,
+  inventory: InventoryRecord[],
+  reason = `label ${label}`,
+): PlannedMount[] {
+  return labelSources(config, label).map((source) => ({
+    source: source.url,
+    branch:
+      source.branch ??
+      source.pin ??
+      inventory.find((record) => record.url === source.url)?.default_branch,
+    path: source.path ?? git.deriveDefaultMountPath(source.url),
+    reason,
+  }));
+}
+
+/** Keeps the first mount of each source, branch and path: a label may repeat a listed repository. */
+function dedupeMounts(mounts: PlannedMount[], inventory: InventoryRecord[]): PlannedMount[] {
+  const seen = new Set<string>();
+  return mounts.filter((mount) => {
+    const branch =
+      mount.branch ?? inventory.find((record) => record.url === mount.source)?.default_branch;
+    const key = JSON.stringify([git.normalizeSourceKey(mount.source), branch ?? null, mount.path]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function validateMountPlan(mounts: PlannedMount[]): void {

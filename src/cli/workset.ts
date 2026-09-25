@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import * as git from "../git.ts";
 import * as workset from "../workset.ts";
-import type { WorksetDefinition } from "../config.ts";
+import type { RuntimeConfig, WorksetDefinition, WorksetMember } from "../config.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
@@ -84,7 +84,7 @@ export const worksetCreateCommand = defineCommand({
       };
       const draft = { description: optionalText(description), members: [member] };
       if (canPrompt(ambient) && !args.yes) {
-        ui.log(renderWorkset(name.value, draft));
+        ui.log(renderWorkset(config, name.value, draft));
         if (!(await ui.confirm("Create this workset?", true))) return 0;
       }
       const { definition, created } = workset.createWorkset(config, name.value, draft);
@@ -156,17 +156,27 @@ function optionalText(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-function renderWorkset(name: string, definition: WorksetDefinition): string {
+function renderMember(config: RuntimeConfig, member: WorksetMember): string {
+  const reason = member.reason ? ` — ${member.reason}` : "";
+  if (member.label !== undefined) {
+    const count = workset.declaredLabels(config).get(member.label) ?? 0;
+    return `label ${member.label} (${count} ${count === 1 ? "repository" : "repositories"})${reason}`;
+  }
+  const ref = member.ref ? ` @ ${member.ref}` : "";
+  const path = member.path ? ` → ${member.path}` : "";
+  return `${member.source}${ref}${path}${reason}`;
+}
+
+function renderWorkset(config: RuntimeConfig, name: string, definition: WorksetDefinition): string {
   const lines = [
     `${name}${definition.description ? ` — ${definition.description}` : ""}`,
-    ...definition.members.map((member) => {
-      const ref = member.ref ? ` @ ${member.ref}` : "";
-      const path = member.path ? ` → ${member.path}` : "";
-      const reason = member.reason ? ` — ${member.reason}` : "";
-      return `  ${member.source}${ref}${path}${reason}`;
-    }),
+    ...definition.members.map((member) => `  ${renderMember(config, member)}`),
   ];
   return lines.join("\n");
+}
+
+function repositoryChoice(member: WorksetMember & { source: string }): string {
+  return `${member.path ?? git.deriveDefaultMountPath(member.source)} — ${member.source}`;
 }
 
 export const worksetManageCommand = defineCommand({
@@ -224,14 +234,21 @@ export const worksetManageCommand = defineCommand({
         };
 
     while (true) {
+      const labelCounts = workset.declaredLabels(config);
+      const hasRepository = draft.members.some((member) => member.source !== undefined);
+      const hasLabel = draft.members.some((member) => member.label !== undefined);
       const action = await ui.select("Manage workset", [
         { label: "Rename workset", value: "rename" },
         { label: "Edit description", value: "description" },
         { label: "Add repository", value: "add" },
+        ...(labelCounts.size > 0 ? [{ label: "Add label", value: "add-label" }] : []),
+        ...(hasRepository ? [{ label: "Edit repository", value: "edit" }] : []),
         ...(draft.members.length > 0
           ? [
-              { label: "Edit repository", value: "edit" },
-              { label: "Remove repository", value: "remove" },
+              {
+                label: `Remove ${hasLabel ? "repository or label" : "repository"}`,
+                value: "remove",
+              },
               { label: "Review changes", value: "review" },
               { label: "Save and exit", value: "save" },
             ]
@@ -285,26 +302,47 @@ export const worksetManageCommand = defineCommand({
         });
         continue;
       }
+      if (action === "add-label") {
+        const label = await ui.select(
+          "Select label to add",
+          [...labelCounts].map(([label, count]) => ({
+            label: `${label} (${count} ${count === 1 ? "repository" : "repositories"})`,
+            value: label,
+          })),
+        );
+        draft.members.push({ label, reason: optionalText(await ui.text("Reason (optional)")) });
+        continue;
+      }
       if (action === "review") {
-        ui.log(renderWorkset(name, draft));
+        ui.log(renderWorkset(config, name, draft));
         continue;
       }
 
-      if (action === "edit" || action === "remove") {
+      if (action === "remove") {
         const selected = await ui.select(
-          action === "edit" ? "Select repository to edit" : "Select repository to remove",
+          "Select member to remove",
           draft.members.map((member, index) => ({
-            label: `${member.path ?? git.deriveDefaultMountPath(member.source)} — ${member.source}`,
+            label:
+              member.source !== undefined ? repositoryChoice(member) : renderMember(config, member),
             value: String(index),
           })),
         );
+        draft.members.splice(Number(selected), 1);
+        continue;
+      }
+
+      if (action === "edit") {
+        const selected = await ui.select(
+          "Select repository to edit",
+          draft.members.flatMap((member, index) =>
+            member.source !== undefined
+              ? [{ label: repositoryChoice(member), value: String(index) }]
+              : [],
+          ),
+        );
         const index = Number(selected);
         const member = draft.members[index];
-        if (!member) continue;
-        if (action === "remove") {
-          draft.members.splice(index, 1);
-          continue;
-        }
+        if (member?.source === undefined) continue;
         draft.members[index] = {
           ...member,
           ref: optionalText(await ui.text("Ref (optional)", member.ref)),
@@ -319,7 +357,7 @@ export const worksetManageCommand = defineCommand({
         continue;
       }
 
-      ui.log(renderWorkset(name, draft));
+      ui.log(renderWorkset(config, name, draft));
       if (!(await ui.confirm("Save this workset?", true))) continue;
       try {
         const definition = workset.saveWorksetDraft(config, originalName, name, draft);
@@ -405,7 +443,7 @@ export const worksetRepoAddCommand = defineCommand({
               : undefined,
       };
       if (canPrompt(ambient) && !args.yes) {
-        ui.log(renderWorkset(selectedWorkset.value, { members: [member] }));
+        ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
         if (!(await ui.confirm("Add this repository?", true))) return 0;
       }
       const { definition, added } = workset.addWorksetMember(config, selectedWorkset.value, member);
@@ -459,11 +497,12 @@ export const worksetRepoEditCommand = defineCommand({
           `Unknown workset '${selectedWorkset.value}'.`,
         );
       }
+      const repositories = currentWorkset.members.filter((member) => member.source !== undefined);
       const selectedMember = await resolveChoiceInput({
         value: args.member,
         choices: async () =>
-          currentWorkset.members.map((member) => ({
-            label: `${member.path ?? git.deriveDefaultMountPath(member.source)} — ${member.source}`,
+          repositories.map((member) => ({
+            label: repositoryChoice(member),
             value: member.path ?? member.source,
           })),
         message: "Select repository to edit",
@@ -476,8 +515,8 @@ export const worksetRepoEditCommand = defineCommand({
         ambient,
       });
       const currentMember =
-        currentWorkset.members.find((member) => member.path === selectedMember.value) ??
-        currentWorkset.members.find((member) => member.source === selectedMember.value);
+        repositories.find((member) => member.path === selectedMember.value) ??
+        repositories.find((member) => member.source === selectedMember.value);
       const ref =
         args.ref !== undefined
           ? args.ref
@@ -558,10 +597,11 @@ export const worksetRepoRemoveCommand = defineCommand({
       const selectedMember = await resolveChoiceInput({
         value: args.member,
         choices: async () =>
-          currentWorkset.members.map((member) => ({
-            label: `${member.path ?? git.deriveDefaultMountPath(member.source)} — ${member.source}`,
-            value: member.path ?? member.source,
-          })),
+          currentWorkset.members.flatMap((member) =>
+            member.source !== undefined
+              ? [{ label: repositoryChoice(member), value: member.path ?? member.source }]
+              : [],
+          ),
         message: "Select repository to remove",
         required: {
           command: "workset repo remove",
@@ -606,6 +646,158 @@ export const worksetRepoCommand = defineCommand({
     add: worksetRepoAddCommand,
     edit: worksetRepoEditCommand,
     remove: worksetRepoRemoveCommand,
+  },
+});
+
+export const worksetLabelAddCommand = defineCommand({
+  meta: { name: "add", description: "Add every repository carrying a label to a workset" },
+  args: {
+    workset: { type: "positional", description: "Workset name", required: false },
+    label: { type: "positional", description: "Label on declared sources", required: false },
+    reason: { type: "string", description: "Reason this label belongs in the workset" },
+    yes: { type: "boolean", description: "Add without interactive confirmation" },
+    root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Output in structured JSON format" },
+  },
+  async run({ args }) {
+    const config = getActiveConfig(args.root);
+    const ambient = getAmbient();
+    try {
+      const selectedWorkset = await resolveChoiceInput({
+        value: args.workset,
+        choices: async () =>
+          Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
+        message: "Select workset",
+        required: {
+          command: "workset label add",
+          field: "workset",
+          usage: "dev workset label add [workset] [label]",
+          description: "Workset name",
+        },
+        ambient,
+      });
+      const label = await resolveChoiceInput({
+        value: args.label,
+        choices: async () =>
+          [...workset.declaredLabels(config)].map(([label, count]) => ({
+            label: `${label} (${count} ${count === 1 ? "repository" : "repositories"})`,
+            value: label,
+          })),
+        message: "Select label to add",
+        required: {
+          command: "workset label add",
+          field: "label",
+          usage: "dev workset label add [workset] [label]",
+          description: "Label",
+        },
+        ambient,
+      });
+      const member = {
+        label: label.value,
+        reason:
+          args.reason !== undefined
+            ? args.reason
+            : canPrompt(ambient)
+              ? optionalText(await ui.text("Reason (optional)"))
+              : undefined,
+      };
+      if (canPrompt(ambient) && !args.yes) {
+        ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
+        if (!(await ui.confirm("Add this label?", true))) return 0;
+      }
+      const { definition, added } = workset.addWorksetMember(config, selectedWorkset.value, member);
+      ui.result({
+        data: { name: selectedWorkset.value, added, ...definition },
+        json: args.json,
+        text: added
+          ? `✓ Added label ${member.label} to workset '${selectedWorkset.value}'`
+          : `○ Label ${member.label} is already in workset '${selectedWorkset.value}'`,
+      });
+      return 0;
+    } catch (error) {
+      return reportError(error, args.json);
+    }
+  },
+});
+
+export const worksetLabelRemoveCommand = defineCommand({
+  meta: { name: "remove", description: "Remove a label from a workset" },
+  args: {
+    workset: { type: "positional", description: "Workset name", required: false },
+    label: { type: "positional", description: "Label in the workset", required: false },
+    force: { type: "boolean", description: "Remove without interactive confirmation" },
+    root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Output in structured JSON format" },
+  },
+  async run({ args }) {
+    const config = getActiveConfig(args.root);
+    const ambient = getAmbient();
+    try {
+      const selectedWorkset = await resolveChoiceInput({
+        value: args.workset,
+        choices: async () =>
+          Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
+        message: "Select workset",
+        required: {
+          command: "workset label remove",
+          field: "workset",
+          usage: "dev workset label remove [workset] [label] --force",
+          description: "Workset name",
+        },
+        ambient,
+      });
+      const currentWorkset = config.worksets[selectedWorkset.value];
+      if (!currentWorkset) {
+        throw new workset.WorksetError(
+          "WORKSET_NOT_FOUND",
+          `Unknown workset '${selectedWorkset.value}'.`,
+        );
+      }
+      const label = await resolveChoiceInput({
+        value: args.label,
+        choices: async () =>
+          currentWorkset.members.flatMap((member) =>
+            member.label !== undefined ? [{ label: member.label, value: member.label }] : [],
+          ),
+        message: "Select label to remove",
+        required: {
+          command: "workset label remove",
+          field: "label",
+          usage: "dev workset label remove [workset] [label] --force",
+          description: "Label",
+        },
+        ambient,
+      });
+      const confirmed = await resolveConfirmation({
+        confirmed: args.force,
+        message: `Remove label '${label.value}' from workset '${selectedWorkset.value}'?`,
+        required: {
+          command: "workset label remove",
+          field: "confirmation",
+          usage: "dev workset label remove [workset] [label] --force",
+          description: "Explicit confirmation (--force)",
+        },
+        ambient,
+      });
+      if (!confirmed) return 0;
+      const definition = workset.removeWorksetLabel(config, selectedWorkset.value, label.value);
+      ui.result({
+        data: { name: selectedWorkset.value, ...definition },
+        json: args.json,
+        text: `Removed label ${label.value} from workset '${selectedWorkset.value}'.`,
+      });
+      return 0;
+    } catch (error) {
+      return reportError(error, args.json);
+    }
+  },
+});
+
+export const worksetLabelCommand = defineCommand({
+  meta: { name: "label", description: "Manage labels in a workset" },
+  subCommands: {
+    add: worksetLabelAddCommand,
+    remove: worksetLabelRemoveCommand,
   },
 });
 
@@ -658,18 +850,7 @@ export const worksetShowCommand = defineCommand({
     ui.result({
       data,
       json: args.json,
-      text: () => {
-        const lines = [
-          `${args.name}${workset.description ? ` — ${workset.description}` : ""}`,
-          ...workset.members.map((member) => {
-            const ref = member.ref ? ` @ ${member.ref}` : "";
-            const path = member.path ? ` → ${member.path}` : "";
-            const reason = member.reason ? ` — ${member.reason}` : "";
-            return `  ${member.source}${ref}${path}${reason}`;
-          }),
-        ];
-        return lines.join("\n");
-      },
+      text: () => renderWorkset(config, args.name, workset),
     });
     return 0;
   },
@@ -683,6 +864,7 @@ export const worksetCommand = defineCommand({
     rename: worksetRenameCommand,
     manage: worksetManageCommand,
     repo: worksetRepoCommand,
+    label: worksetLabelCommand,
     show: worksetShowCommand,
   },
   async run({ rawArgs }) {
