@@ -89,7 +89,8 @@ jobs:
           git checkout --force -B demo-refresh origin/main
           cp "$demo_outputs/dev-cli-demo.gif" docs/assets/dev-cli-demo.gif
           cp "$demo_outputs/dev-cli-demo.mp4" docs/assets/dev-cli-demo.mp4
-          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
+          sed -E -i "s@(docs/assets/dev-cli-demo\.gif\?v=)[^)]+@\1${RELEASE_TAG}@" README.md
+          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4 README.md
           if git diff --cached --quiet; then
             echo 'Rendered demo is unchanged.'
             exit 0

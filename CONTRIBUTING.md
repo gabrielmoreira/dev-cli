@@ -164,4 +164,4 @@ To regenerate it, add `OPENROUTER_API_KEY=...` to the ignored `.env` file, then 
 mise run demo
 ```
 
-The README references the GIF with a `?v=` query string. Bump it when the image changes, or GitHub's image cache keeps serving the old frame.
+The README references the GIF with a `?v=` query string, or GitHub's image cache keeps serving the old frame. The release workflow sets it to the release tag when it commits a refreshed demo; bump it by hand only when you commit a GIF yourself.
