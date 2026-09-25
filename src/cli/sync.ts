@@ -20,6 +20,7 @@ import {
   wsUpdateCommand,
 } from "./ws.ts";
 import * as mirror from "../mirror.ts";
+import { formatMirrorSync } from "./mirror.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
@@ -590,6 +591,9 @@ export const syncCommand = defineCommand({
   },
 });
 
+/** Workspaces synced at once; network still waits for each host's slot. */
+const WORKSPACE_CONCURRENCY = 4;
+
 /**
  * Everything that can be brought from remotes, in order: provider data, mirrors, then
  * each workspace. Each step reads or fetches only; nothing is pushed and no hook runs,
@@ -624,27 +628,30 @@ async function syncAll(
     }),
   );
 
-  // ponytail: one workspace at a time, each fetching its own sources; a source shared by
-  // several workspaces is fetched once per workspace. Fetch the pool once if this is slow.
+  // Workspaces sync side by side: each fetch waits for its host's slot
+  // (host-limit.ts), and each workspace writes only its own worktrees.
   const workspaceNames = await ws.list({
     root: config.root,
     workspacePrefix: config.workspacePrefix,
   });
-  const workspaces: Array<{ name: string } & SyncAllStep<ws.WorkspaceUpdateResult>> = [];
-  for (const [index, { name }] of workspaceNames.entries()) {
-    progress(`Workspace ${name} (${index + 1}/${workspaceNames.length})…`);
-    const outcome = await step(() =>
-      ws.update({
-        root: config.root,
-        workspacePrefix: config.workspacePrefix,
-        workspaceName: name,
-        refresh: true,
-        resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-        skipHooks: true,
-      }),
-    );
-    workspaces.push({ name, ...outcome });
-  }
+  if (workspaceNames.length > 0) progress(`Workspaces (${workspaceNames.length})…`);
+  let finished = 0;
+  const workspaces: Array<{ name: string } & SyncAllStep<ws.WorkspaceUpdateResult>> =
+    await mirror.mapWithConcurrency(workspaceNames, WORKSPACE_CONCURRENCY, async ({ name }) => {
+      const outcome = await step(() =>
+        ws.update({
+          root: config.root,
+          workspacePrefix: config.workspacePrefix,
+          workspaceName: name,
+          refresh: true,
+          resolveExtraHeader: (source) => resolveExtraHeader(config, source),
+          skipHooks: true,
+        }),
+      );
+      finished += 1;
+      progress(`  ${outcome.ok ? "✓" : "✗"} ${name} (${finished}/${workspaceNames.length})`);
+      return { name, ...outcome };
+    });
   warnHealFailures(workspaces.flatMap((item) => (item.ok ? [item.result] : [])));
 
   const failures = [
@@ -677,23 +684,8 @@ async function syncAll(
       else out.push(formatProviderSync(providers.result).replace(/^/gm, "  "));
 
       out.push("", "Mirrors");
-      if (!mirrors.ok) {
-        out.push(`  ✗ ${mirrors.error}`);
-      } else {
-        const { updated, skipped, stashed } = mirrors.result;
-        out.push(
-          updated.length + skipped.length === 0
-            ? "  ○ none"
-            : `  ${skipped.length > 0 ? "⚠" : "✓"} ${updated.length} updated, ${skipped.length} skipped`,
-        );
-        for (const item of skipped) out.push(`    ${item.path} (${item.branch}): ${item.reason}`);
-        for (const stash of stashed) {
-          out.push(
-            `  ⚠ local edits in ${stash.path} (${stash.branch}) were stashed as ${stash.stashName}`,
-          );
-          out.push(`    ↳ git -C "${stash.path}" stash apply ${stash.stashSha}`);
-        }
-      }
+      if (!mirrors.ok) out.push(`  ✗ ${mirrors.error}`);
+      else out.push(...formatMirrorSync(mirrors.result).map((line) => `  ${line}`));
 
       out.push("", "Workspaces");
       if (workspaces.length === 0) out.push("  ○ none  ↳ dev ws init <name>");

@@ -435,6 +435,8 @@ export interface MirrorSyncResult {
   updated: MirrorSyncItemResult[];
   skipped: MirrorSyncItemResult[];
   stashed: MirrorStashResult[];
+  /** Repositories whose fetch failed: their checkouts were compared with stale refs. */
+  refreshFailures: Array<{ path: string; reason: string }>;
   hookWarning?: string;
   /** Where the time went: stage durations + the slowest items. */
   trace: SyncTrace;
@@ -456,6 +458,16 @@ export interface SyncTrace {
   totalMs: number;
   stages: SyncStageTiming[];
   slowestItems: SyncItemTiming[];
+}
+
+/** The line of a git error that names the problem, without the clone chatter. */
+function firstLine(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lines = message
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.find((line) => /^(fatal|error):/.test(line)) ?? lines[0] ?? message;
 }
 
 /** Runs fn over items with bounded concurrency while preserving input order. */
@@ -499,6 +511,8 @@ export async function sync(
   const stageMs = new Map<string, number>();
   const totalStart = Date.now();
   let stageStart = totalStart;
+  // A fetch that failed leaves its mirror looking up to date: the result says so.
+  const refreshFailures: Array<{ path: string; reason: string }> = [];
   // If refresh is requested, refresh mirrors from remote
   if (input.refresh && !input.offline) {
     const poolPaths = targetSourceKey
@@ -508,14 +522,19 @@ export async function sync(
       : (await deps.fs.findFiles(gitPoolDir({ root: input.root }), (name) => name === "HEAD"))
           .map((head) => dirname(head))
           .filter((path) => path.endsWith(".git"));
-    for (const mirrorPath of poolPaths) {
-      try {
-        await deps.git.fetchMirror({
-          mirrorPath,
-          resolveExtraHeader: input.resolveExtraHeader,
-        });
-      } catch {}
-    }
+    // Each fetch waits for its host's slot (host-limit.ts), so all can start at once.
+    await Promise.all(
+      poolPaths.map(async (mirrorPath) => {
+        try {
+          await deps.git.fetchMirror({
+            mirrorPath,
+            resolveExtraHeader: input.resolveExtraHeader,
+          });
+        } catch (error) {
+          refreshFailures.push({ path: mirrorPath, reason: firstLine(error) });
+        }
+      }),
+    );
     // Propagate pool refs into the canonical admin repos so their
     // origin/<branch> targets are fresh for fast-forward. Fetch from the
     // pool path (recorded in the admin's alternates by --reference), never
@@ -529,27 +548,37 @@ export async function sync(
       : (await deps.fs.listDirs(instancesDir))
           .filter((name) => name.endsWith(".git"))
           .map((name) => join(instancesDir, name));
-    for (const adminRepoPath of adminRepoPaths) {
-      if (!adminRepoPath.endsWith(".git")) continue;
+    // Local fetches from the pool: bounded by CPU, not by a host.
+    await mapWithConcurrency(adminRepoPaths, cpus().length, async (adminRepoPath) => {
+      if (!adminRepoPath.endsWith(".git")) return;
+      // An admin without alternates does not borrow from the pool: nothing to propagate.
+      const alternatesPath = join(adminRepoPath, "objects", "info", "alternates");
+      if (!deps.fs.exists(alternatesPath)) return;
       try {
-        const alternates = await deps.fs.readText(
-          join(adminRepoPath, "objects", "info", "alternates"),
-        );
+        const alternates = await deps.fs.readText(alternatesPath);
         const poolObjects = alternates.split(/\r?\n/)[0]?.trim();
-        if (!poolObjects) continue;
+        if (!poolObjects) return;
         const poolPath = dirname(poolObjects);
-        if (!deps.fs.exists(poolPath)) continue;
+        if (!deps.fs.exists(poolPath)) return;
         await deps.git.fetchAdminRepo(adminRepoPath, poolPath);
-      } catch {}
-    }
+      } catch (error) {
+        refreshFailures.push({ path: adminRepoPath, reason: firstLine(error) });
+      }
+    });
     stageMs.set("refresh", Date.now() - stageStart);
   }
 
+  stageStart = Date.now();
   const stashed: MirrorStashResult[] = [];
   const stashFailures = new Map<string, { branch: string; reason: string }>();
-  for (const wtPath of worktreePaths) {
-    await deps.git.installCanonicalCommitGuardForWorktree(wtPath);
-    const observed = await deps.git.inspectWorktree(wtPath);
+  // Guards and stashes write to an admin two checkouts may share: one at a time.
+  // Inspecting is read-only, so it runs in parallel.
+  for (const wtPath of worktreePaths) await deps.git.installCanonicalCommitGuardForWorktree(wtPath);
+  const inspected = await mapWithConcurrency(worktreePaths, cpus().length, async (wtPath) => ({
+    wtPath,
+    observed: await deps.git.inspectWorktree(wtPath),
+  }));
+  for (const { wtPath, observed } of inspected) {
     if (!observed.isDirty) continue;
 
     const branch = observed.currentRevision.branch || "main";
@@ -667,6 +696,7 @@ export async function sync(
     updated,
     stashed,
     skipped,
+    refreshFailures,
     hookWarning,
     trace: { totalMs: Date.now() - totalStart, stages, slowestItems },
   };

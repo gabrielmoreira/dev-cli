@@ -24,6 +24,7 @@ Developer CLI & Workspace Engine
 | `dev list`       | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
 | `dev use`        | Switch active dev root environment or update global default                                                                              |
 | `dev go`         | Select a workspace and print its path for shell navigation                                                                               |
+| `dev start`      | Start or focus OMP in HerdR for a dev workspace                                                                                          |
 | `dev current`    | Display currently resolved dev root path and discovery source                                                                            |
 | `dev roots`      | List registered dev root environments from ~/.dev.toml                                                                                   |
 | `dev root`       | Register, select, and unregister dev roots                                                                                               |
@@ -88,6 +89,19 @@ Select a workspace and print its path for shell navigation
 | `--candidates`   | boolean    | Print matching workspace candidates for shell integration |
 | `--root <value>` | string     | Explicit dev root directory                               |
 | `--json`         | boolean    | Output in structured JSON format                          |
+
+## `dev start`
+
+Start or focus OMP in HerdR for a dev workspace
+
+**Usage:** `dev start [name] [--root <value>] [--session <value>] [--json]`
+
+| Argument            | Type       | Description                            |
+| ------------------- | ---------- | -------------------------------------- |
+| `name`              | positional | Optional workspace name or fuzzy query |
+| `--root <value>`    | string     | Explicit dev root directory            |
+| `--session <value>` | string     | HerdR session to target                |
+| `--json`            | boolean    | Output in structured JSON format       |
 
 ## `dev current`
 
@@ -531,13 +545,13 @@ Preserve local edits, then synchronize one or all mirrors
 
 **Usage:** `dev mirror sync [source] [--refresh] [--offline] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                     |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `source`         | positional | Specific mirror source URL                      |
-| `--refresh`      | boolean    | Fetch latest upstream refs before comparing     |
-| `--offline`      | boolean    | Read strictly from local mirror without network |
-| `--root <value>` | string     | Explicit dev root directory                     |
-| `--json`         | boolean    | Output in structured JSON format                |
+| Argument         | Type       | Description                                                |
+| ---------------- | ---------- | ---------------------------------------------------------- |
+| `source`         | positional | Specific mirror source URL                                 |
+| `--refresh`      | boolean    | Fetch remotes before comparing (default, unless --offline) |
+| `--offline`      | boolean    | Read strictly from local mirror without network            |
+| `--root <value>` | string     | Explicit dev root directory                                |
+| `--json`         | boolean    | Output in structured JSON format                           |
 
 ## `dev mirror track`
 

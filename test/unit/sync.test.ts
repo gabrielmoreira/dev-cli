@@ -103,6 +103,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
             updated: [],
             skipped: [],
             stashed: [],
+            refreshFailures: [],
             trace: { totalMs: 0, stages: [], slowestItems: [] },
           } as MirrorSyncResult;
         },

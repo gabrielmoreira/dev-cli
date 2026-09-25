@@ -206,7 +206,21 @@ export interface FetchMirrorOptions {
   resolveExtraHeader?: (source: string) => Promise<string | undefined>;
 }
 
-export async function fetchMirror(options: FetchMirrorOptions): Promise<void> {
+// Two workspaces of one source sync side by side: the second joins the fetch
+// already running instead of racing it for the pool's ref locks.
+const mirrorFetchesInFlight = new Map<string, Promise<void>>();
+
+export function fetchMirror(options: FetchMirrorOptions): Promise<void> {
+  const running = mirrorFetchesInFlight.get(options.mirrorPath);
+  if (running) return running;
+  const fetch = fetchMirrorNow(options).finally(() =>
+    mirrorFetchesInFlight.delete(options.mirrorPath),
+  );
+  mirrorFetchesInFlight.set(options.mirrorPath, fetch);
+  return fetch;
+}
+
+async function fetchMirrorNow(options: FetchMirrorOptions): Promise<void> {
   const origin = await runGit(["-C", options.mirrorPath, "remote", "get-url", "origin"]);
   const source = origin.exitCode === 0 ? origin.stdout.trim() : undefined;
   const extraHeader = source ? await options.resolveExtraHeader?.(source) : undefined;

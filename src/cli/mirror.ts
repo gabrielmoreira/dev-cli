@@ -131,6 +131,71 @@ export const mirrorListCommand = defineCommand({
   },
 });
 
+/** Why a mirror was left alone, in words. */
+function describeMirrorSkip(reason: string | undefined): string {
+  if (reason === "DIVERGED") return "local and remote history diverged";
+  if (reason === "AHEAD_COMMITS") return "local commits the remote does not have";
+  if (reason === "DIRTY_WORKTREE") return "uncommitted changes";
+  if (reason?.startsWith("STASH_FAILED: "))
+    return `could not stash local edits: ${decisiveLine(reason.slice(14))}`;
+  if (reason?.startsWith("FAST_FORWARD_FAILED: "))
+    return `fast-forward failed: ${decisiveLine(reason.slice(21))}`;
+  return reason ?? "unknown reason";
+}
+
+/** Git's stderr in one line: the last fatal or error line, else the first; --json keeps it all. */
+function decisiveLine(text: string): string {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.findLast((line) => /^(fatal|error):/.test(line)) ?? lines[0] ?? text;
+}
+
+/**
+ * A mirror sync in lines: counts first, then only what needs a look. A mirror
+ * already at its remote is up to date, not skipped.
+ */
+export function formatMirrorSync(
+  result: mirror.MirrorSyncResult,
+  options: { changes?: boolean } = {},
+): string[] {
+  const upToDate = result.skipped.filter((item) => item.reason === "UP_TO_DATE");
+  const skipped = result.skipped.filter((item) => item.reason !== "UP_TO_DATE");
+  const total = result.updated.length + result.skipped.length;
+  const problems = skipped.length + result.refreshFailures.length;
+  const counts = [
+    result.updated.length > 0 ? `${result.updated.length} updated` : "",
+    upToDate.length > 0 ? `${upToDate.length} up to date` : "",
+    skipped.length > 0 ? `${skipped.length} skipped` : "",
+  ].filter(Boolean);
+  const lines = [
+    total === 0
+      ? "○ no mirrors  ↳ dev mirror add <source>"
+      : `${problems > 0 ? "⚠" : result.updated.length > 0 ? "✓" : "○"} ${counts.join(", ")}`,
+  ];
+  for (const item of result.updated) {
+    lines.push(
+      `  ✓ ${item.path} (${item.branch}): fast-forwarded ${item.behindCount ?? 0} commits`,
+    );
+  }
+  for (const item of skipped) {
+    lines.push(`  ⚠ ${item.path} (${item.branch}): ${describeMirrorSkip(item.reason)}`);
+  }
+  for (const failure of result.refreshFailures) {
+    lines.push(`  ⚠ could not fetch ${failure.path}: ${failure.reason}`);
+  }
+  for (const stash of result.stashed) {
+    lines.push(
+      `  ⚠ local edits in ${stash.path} (${stash.branch}) were stashed as ${stash.stashName}`,
+    );
+    if (options.changes) for (const change of stash.changes) lines.push(`      ${change}`);
+    lines.push(`    ↳ git -C "${stash.path}" stash apply ${stash.stashSha}`);
+  }
+  if (result.hookWarning) lines.push(`  ⚠ ${result.hookWarning}`);
+  return lines;
+}
+
 export const mirrorSyncCommand = defineCommand({
   meta: {
     name: "sync",
@@ -138,19 +203,24 @@ export const mirrorSyncCommand = defineCommand({
   },
   args: {
     source: { type: "positional", description: "Specific mirror source URL", required: false },
-    refresh: { type: "boolean", description: "Fetch latest upstream refs before comparing" },
+    refresh: {
+      type: "boolean",
+      description: "Fetch remotes before comparing (default, unless --offline)",
+    },
     offline: { type: "boolean", description: "Read strictly from local mirror without network" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
+    const fetching = !args.offline && args.refresh !== false;
     try {
+      if (fetching && !args.json) ui.info("↻ Fetching mirror remotes...");
       const result = await mirror.sync({
         root: config.root,
         canonicalPrefix: config.canonicalPrefix,
         source: args.source,
-        refresh: args.refresh,
+        refresh: fetching,
         offline: args.offline,
         resolveExtraHeader: (source) => resolveExtraHeader(config, source),
         globalHooks: config.hooks,
@@ -160,39 +230,14 @@ export const mirrorSyncCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          let out = `Mirror sync complete:\n`;
-          if (result.stashed.length > 0) {
-            out += `Preserved local mirror changes before sync:\n`;
-            for (const stash of result.stashed) {
-              out += `  ${stash.path} (${stash.branch})\n`;
-              out += `    stash:   ${stash.stashName}\n`;
-              out += `    SHA:     ${stash.stashSha}\n`;
-              out += `    recover: git -C "${stash.path}" stash apply ${stash.stashSha}\n`;
-              out += `    changes:\n`;
-              for (const change of stash.changes) {
-                out += `      ${change}\n`;
-              }
-            }
-            out += `\n`;
-          }
-
-          for (const u of result.updated) {
-            out += `  ✓ updated: ${u.path} (${u.branch}) [fast-forwarded ${u.behindCount || 0} commits]\n`;
-          }
-          for (const s of result.skipped) {
-            out += `  ↷ skipped: ${s.path} (${s.branch}) - ${s.reason}\n`;
-          }
-          out += `\nTiming: ${result.trace.totalMs}ms total`;
-          for (const t of result.trace.stages) {
-            out += `\n  ${t.name}: ${t.ms}ms`;
-          }
-          if (result.trace.slowestItems.some((t) => t.ms > 0)) {
-            out += `\n  slowest checkouts:`;
-            for (const t of result.trace.slowestItems) {
-              out += `\n    ${t.ms}ms ${t.path} (${t.branch}) [${t.status}]`;
-            }
-          }
-          return out.trimEnd();
+          const lines = formatMirrorSync(result, { changes: true });
+          if (!fetching)
+            lines.push("Remotes not fetched (--offline); compared with the last fetch.");
+          const stages = result.trace.stages
+            .map((stage) => `${stage.name} ${(stage.ms / 1000).toFixed(1)}s`)
+            .join(", ");
+          lines.push("", `Done in ${(result.trace.totalMs / 1000).toFixed(1)}s (${stages}).`);
+          return lines.join("\n");
         },
       });
       await emit(createPluginBase(config.root, config), "mirror:sync:after", {
