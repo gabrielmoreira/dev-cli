@@ -89,11 +89,12 @@ jobs:
           git checkout --force -B demo-refresh origin/main
           cp "$demo_outputs/dev-cli-demo.gif" docs/assets/dev-cli-demo.gif
           cp "$demo_outputs/dev-cli-demo.mp4" docs/assets/dev-cli-demo.mp4
-          sed -E -i "s@(docs/assets/dev-cli-demo\.gif\?v=)[^)]+@\1${RELEASE_TAG}@" README.md
-          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4 README.md
+          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
           if git diff --cached --quiet; then
             echo 'Rendered demo is unchanged.'
             exit 0
           fi
+          sed -E -i "s@(docs/assets/dev-cli-demo\.gif\?v=)[^)]+@\1${RELEASE_TAG}@" README.md
+          git add README.md
           git commit --message "docs: refresh terminal demo for ${RELEASE_TAG} [skip ci]"
           git push origin HEAD:main
