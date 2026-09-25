@@ -67,6 +67,34 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
     expect(record.syncedAt).toBe("2026-09-14T21:00:00Z");
   });
 
+  test("a pull request links to its browser page, not the REST resource", () => {
+    const listed: AdoPullRequest = {
+      pullRequestId: 7,
+      status: "active",
+      title: "t",
+      sourceRefName: "refs/heads/f",
+      targetRefName: "refs/heads/main",
+      creationDate: "2026-09-14T20:00:00Z",
+      url: "https://dev.azure.com/my-org/0f1e/_apis/git/repositories/9a8b/pullRequests/7",
+      repository: { id: "9a8b", name: "alpha service", project: { id: "0f1e", name: "Pay Ments" } },
+    };
+    expect(normalizeAdoPullRequest(listed, "t", "r").url).toBe(
+      "https://dev.azure.com/my-org/Pay%20Ments/_git/alpha%20service/pullrequest/7",
+    );
+
+    const read = {
+      ...listed,
+      repository: { id: "9a8b", name: "a", webUrl: "https://dev.azure.com/my-org/P/_git/a" },
+    };
+    expect(normalizeAdoPullRequest(read, "t", "r").url).toBe(
+      "https://dev.azure.com/my-org/P/_git/a/pullrequest/7",
+    );
+
+    // Without a project to name, the REST URL is still a working link for scripts.
+    const bare = { ...listed, repository: { id: "9a8b", name: "a" } };
+    expect(normalizeAdoPullRequest(bare, "t", "r").url).toBe(listed.url);
+  });
+
   test("mergePullRequestRecords updates existing records and appends new", () => {
     const existing: PullRequestRecord[] = [
       {

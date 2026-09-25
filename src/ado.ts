@@ -99,6 +99,7 @@ export interface AdoPullRequestRepository {
   url?: string;
   remoteUrl?: string;
   webUrl?: string;
+  project?: { id: string; name: string };
 }
 
 export interface AdoPullRequest {

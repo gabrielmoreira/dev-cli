@@ -91,6 +91,21 @@ export function mapCanonicalToAdoStatus(
 export const PULL_REQUEST_LIMIT = 2000;
 
 /**
+ * The browser URL of a pull request. The REST `url` does not open in a browser;
+ * a single-PR read carries the repository's web URL, and a listing carries the
+ * project name, which replaces the project id in the REST URL's base.
+ */
+function pullRequestWebUrl(raw: AdoPullRequest): string {
+  const repository = raw.repository;
+  if (repository?.webUrl) return `${repository.webUrl}/pullrequest/${raw.pullRequestId}`;
+  const base = raw.url.split("/_apis/")[0];
+  const project = repository?.project;
+  if (!repository?.name || !project || !base.endsWith(`/${project.id}`)) return raw.url;
+  const organization = base.slice(0, -project.id.length - 1);
+  return `${organization}/${encodeURIComponent(project.name)}/_git/${encodeURIComponent(repository.name)}/pullrequest/${raw.pullRequestId}`;
+}
+
+/**
  * Normalizes an Azure DevOps PR into a canonical PullRequestRecord.
  */
 export function normalizeAdoPullRequest(
@@ -111,7 +126,7 @@ export function normalizeAdoPullRequest(
     sourceBranch,
     targetBranch,
     author,
-    url: raw.url,
+    url: pullRequestWebUrl(raw),
     createdAt: raw.creationDate,
     updatedAt: raw.creationDate,
     isDraft: Boolean(raw.isDraft),
