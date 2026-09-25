@@ -73,6 +73,39 @@ export function warnHealFailures(results: Array<{ healWarnings: string[] }>): vo
   }
 }
 
+/** Why a mount was left alone, in words, and the command that would move it on. */
+export function describeSkipReason(
+  reason: ws.UpdateSkipReason | undefined,
+  workspaceName: string,
+): { why: string; hint?: string } {
+  switch (reason) {
+    case "dirty_worktree":
+      return {
+        why: "uncommitted changes",
+        hint: `dev ws sync ${workspaceName} --autostash`,
+      };
+    case "ahead_commits":
+      return { why: "local commits the remote does not have" };
+    case "diverged_history":
+      return {
+        why: "local and remote history diverged",
+        hint: `dev ws sync ${workspaceName} --rebase`,
+      };
+    case "not_a_worktree":
+      return { why: "the path holds files that are not this checkout; left untouched" };
+    case "no_local_mirror":
+      return { why: "no local mirror to check out from offline", hint: "run it without --offline" };
+    case "readonly":
+      return { why: "read-only mount" };
+    case "not_tracking_branch":
+      return { why: "pinned to a commit or tag, so there is nothing to fast-forward" };
+    case "rebase_conflict":
+      return { why: "rebase hit a conflict and was rolled back; resolve it by hand" };
+    default:
+      return { why: "skipped" };
+  }
+}
+
 export const wsInitCommand = defineCommand({
   meta: {
     name: "init",
@@ -189,9 +222,13 @@ export const wsInitCommand = defineCommand({
       },
       ambient,
     });
+    // Init reuses an existing workspace as it is, so a typed description would be dropped.
+    const exists = fs.exists(
+      join(ws.deriveWorkspacePath(config.root, name.value, config.workspacePrefix), "ws.md"),
+    );
     const description =
       args.desc ??
-      (canPrompt(ambient)
+      (canPrompt(ambient) && !exists
         ? (await ui.text("Workspace description (optional)", suggestedDescription))?.trim()
         : suggestedDescription);
 
@@ -723,6 +760,25 @@ export const wsStatusCommand = defineCommand({
   },
 });
 
+/** What a workspace sync takes; `dev sync` forwards them unchanged inside a workspace. */
+export const workspaceSyncOptions = {
+  refresh: {
+    type: "boolean",
+    description: "Fetch remotes before fast-forwarding (default, unless --offline)",
+  },
+  autostash: {
+    type: "boolean",
+    description: "Stash uncommitted changes, fast-forward, then pop the stash",
+  },
+  rebase: {
+    type: "boolean",
+    description: "Rebase diverged mounts onto the remote branch (aborts on conflict)",
+  },
+  "dry-run": { type: "boolean", description: "Print the plan and change nothing" },
+  consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
+  force: { type: "boolean", description: "Alias for --consent" },
+} as const;
+
 export const wsUpdateCommand = defineCommand({
   meta: {
     name: "update",
@@ -732,19 +788,8 @@ export const wsUpdateCommand = defineCommand({
   args: {
     target: { type: "positional", description: "Workspace name or path to ws.md", required: false },
     ws: { type: "string", description: "Target workspace name" },
-    refresh: { type: "boolean", description: "Fetch latest remote refs before fast-forwarding" },
+    ...workspaceSyncOptions,
     offline: { type: "boolean", description: "Read strictly from local mirror without network" },
-    autostash: {
-      type: "boolean",
-      description: "Stash uncommitted changes, fast-forward, then pop the stash",
-    },
-    rebase: {
-      type: "boolean",
-      description: "Rebase diverged mounts onto the remote branch (aborts on conflict)",
-    },
-    "dry-run": { type: "boolean", description: "Print the plan and change nothing" },
-    consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
-    force: { type: "boolean", description: "Alias for --consent" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -764,6 +809,8 @@ export const wsUpdateCommand = defineCommand({
               usage: "dev ws sync [workspace | path/to/ws.md] [--ws <name>]",
             })
           ).value;
+      const fetching = !args.offline && args.refresh !== false;
+      if (fetching && !args.json) ui.info(`↻ Fetching remotes for ${workspaceName}...`);
       const result = await ws.update({
         root: config.root,
         workspacePrefix: config.workspacePrefix,
@@ -785,7 +832,7 @@ export const wsUpdateCommand = defineCommand({
         json: args.json,
         text: () => {
           if (result.dryRun) {
-            let plan = `Plan for ${result.workspaceName} (dry run, nothing changed):\n`;
+            let plan = `Plan for ${result.workspaceName} (dry run, nothing changed${fetching ? "" : "; offline, compared with the last fetch"}):\n`;
             for (const mount of result.mounts) {
               const at = mount.revision ? ws.describeRevision(mount.revision) : "";
               const line =
@@ -799,7 +846,7 @@ export const wsUpdateCommand = defineCommand({
                         ? "would rebase onto remote"
                         : mount.action === "up_to_date"
                           ? "up to date"
-                          : `would skip [${mount.reason}]`;
+                          : `would skip: ${describeSkipReason(mount.reason, result.workspaceName).why}`;
               plan += `  → ${mount.path}: ${line}\n`;
             }
             return plan.trimEnd();
@@ -807,8 +854,10 @@ export const wsUpdateCommand = defineCommand({
           let out = `Workspace: ${result.workspaceName}\n`;
           out += `Path:      ${result.workspacePath}\n`;
           out += `Summary:   ${result.summary.updated} updated, ${result.summary.upToDate} up to date, ${result.summary.skipped} skipped (${result.summary.total} total)\n`;
+          if (!fetching)
+            out += "Remotes:   not fetched (--offline); compared with the last fetch\n";
           if (result.hookWarning) {
-            out += `Warning:   ${result.hookWarning}\n`;
+            out += `Hook:      ⚠ ${result.hookWarning}\n`;
           }
           out += "\n";
           for (const mount of result.mounts) {
@@ -824,10 +873,12 @@ export const wsUpdateCommand = defineCommand({
             } else if (mount.action === "up_to_date") {
               out += `  ○ ${mount.path}: up to date (${mount.newCommit?.slice(0, 8)})\n`;
             } else {
-              out += `  ⚠ ${mount.path}: skipped [${mount.reason}]\n`;
+              const skip = describeSkipReason(mount.reason, result.workspaceName);
+              out += `  ⚠ ${mount.path}: skipped, ${skip.why}\n`;
+              if (skip.hint) out += `    ↳ ${skip.hint}\n`;
             }
             if (mount.warning) {
-              out += `    warning: ${mount.warning}\n`;
+              out += `    ⚠ ${mount.warning}\n`;
             }
           }
           return out.trimEnd();

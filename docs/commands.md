@@ -310,19 +310,19 @@ Inspect Desired vs Observed workspace status
 
 Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones
 
-**Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--offline] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--root <value>] [--json]`
+**Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                                                        |
 | ---------------- | ---------- | ------------------------------------------------------------------ |
 | `target`         | positional | Workspace name or path to ws.md                                    |
 | `--ws <value>`   | string     | Target workspace name                                              |
-| `--refresh`      | boolean    | Fetch latest remote refs before fast-forwarding                    |
-| `--offline`      | boolean    | Read strictly from local mirror without network                    |
+| `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)   |
 | `--autostash`    | boolean    | Stash uncommitted changes, fast-forward, then pop the stash        |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict) |
 | `--dry-run`      | boolean    | Print the plan and change nothing                                  |
 | `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                      |
 | `--force`        | boolean    | Alias for --consent                                                |
+| `--offline`      | boolean    | Read strictly from local mirror without network                    |
 | `--root <value>` | string     | Explicit dev root directory                                        |
 | `--json`         | boolean    | Output in structured JSON format                                   |
 
@@ -625,13 +625,23 @@ Remove a label from a declared source
 
 Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project
 
-**Usage:** `dev sync [--root <value>] [--json] [--ws <value>] <command>`
+**Usage:** `dev sync [--all] [--provider <value>] [--project <value>] [--offline] [--root <value>] [--json] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] <command>`
 
-| Argument         | Type    | Description                               |
-| ---------------- | ------- | ----------------------------------------- |
-| `--root <value>` | string  | Explicit dev root directory               |
-| `--json`         | boolean | Output in structured JSON format          |
-| `--ws <value>`   | string  | Target workspace name for contextual sync |
+| Argument             | Type    | Description                                                                                                                       |
+| -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--all`              | boolean | Sync everything, in or out of a workspace: provider data, mirrors, and every workspace. Reads from remotes only and runs no hooks |
+| `--provider <value>` | string  | Limit provider data to one provider id                                                                                            |
+| `--project <value>`  | string  | Azure DevOps project for provider data                                                                                            |
+| `--offline`          | boolean | Read the local caches only, without network access                                                                                |
+| `--root <value>`     | string  | Explicit dev root directory                                                                                                       |
+| `--json`             | boolean | Output in structured JSON format                                                                                                  |
+| `--ws <value>`       | string  | Target workspace name for contextual sync                                                                                         |
+| `--refresh`          | boolean | Fetch remotes before fast-forwarding (default, unless --offline)                                                                  |
+| `--autostash`        | boolean | Stash uncommitted changes, fast-forward, then pop the stash                                                                       |
+| `--rebase`           | boolean | Rebase diverged mounts onto the remote branch (aborts on conflict)                                                                |
+| `--dry-run`          | boolean | Print the plan and change nothing                                                                                                 |
+| `--consent`          | boolean | Grant explicit consent to run lifecycle hooks                                                                                     |
+| `--force`            | boolean | Alias for --consent                                                                                                               |
 
 | Subcommand           | Description                                                           |
 | -------------------- | --------------------------------------------------------------------- |

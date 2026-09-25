@@ -228,7 +228,7 @@ export const wiListCommand = defineCommand({
       text: () => {
         let out = "";
         if (errors.length > 0) {
-          for (const e of errors) out += `  Warning: ${e}\n`;
+          for (const e of errors) out += `  ⚠ ${e}\n`;
         }
         if (shown.length === 0) {
           out += "No work items found.";

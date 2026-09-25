@@ -148,12 +148,14 @@ checkout-incident/
 └── ws.md
 ```
 
-Tomorrow, `dev status` compares what `ws.md` declares with what is on disk and reports each mount as clean, dirty, ahead, behind, diverged or missing. `dev sync` brings the workspace back in line: it checks out a mount that is missing, puts a clean mount that drifted to another branch back on the declared one, and fast-forwards the clean ones. A mount with uncommitted changes, local commits or a diverged history is skipped and named, not touched.
+Tomorrow, `dev status` compares what `ws.md` declares with what is on disk and reports each mount as clean, dirty, ahead, behind, diverged or missing. `dev sync` fetches the remotes and brings the workspace back in line: it checks out a mount that is missing, puts a clean mount that drifted to another branch back on the declared one, and fast-forwards the clean ones. A mount with uncommitted changes, local commits or a diverged history is skipped and named, not touched. Add `--offline` to compare with the last fetch instead.
 
 ```bash
 dev status
 dev sync
 ```
+
+To catch up on everything at once, `dev sync --all` refreshes the provider caches, the mirrors, and every workspace. It only reads from remotes: it pushes nothing and runs no hook.
 
 Switch between tasks with `dev ls` and `dev go`, or `dev go checkout` when you know part of the name.
 

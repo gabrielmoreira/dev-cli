@@ -167,7 +167,7 @@ export const mirrorSyncCommand = defineCommand({
               out += `  ${stash.path} (${stash.branch})\n`;
               out += `    stash:   ${stash.stashName}\n`;
               out += `    SHA:     ${stash.stashSha}\n`;
-              out += `    recover: git -C ${JSON.stringify(stash.path)} stash apply ${stash.stashSha}\n`;
+              out += `    recover: git -C "${stash.path}" stash apply ${stash.stashSha}\n`;
               out += `    changes:\n`;
               for (const change of stash.changes) {
                 out += `      ${change}\n`;
