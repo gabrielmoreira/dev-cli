@@ -278,4 +278,40 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
       await readPullRequests({ root: tempRoot, tenant: "dev.azure.com/org", repo: "payments-api" }),
     ).toHaveLength(1);
   });
+
+  test("closed asks the provider for every status and keeps only completed and abandoned", async () => {
+    const statuses: Array<string | undefined> = [];
+    const raw = (pullRequestId: number, status: string): AdoPullRequest => ({
+      pullRequestId,
+      status,
+      title: `PR ${pullRequestId}`,
+      sourceRefName: "refs/heads/feature",
+      targetRefName: "refs/heads/main",
+      creationDate: "2026-09-16T00:00:00Z",
+      url: `https://dev.azure.com/org/P/_apis/git/repositories/r/pullRequests/${pullRequestId}`,
+      repository: { id: "r", name: "repo" },
+    });
+    const client: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
+      getCurrentUser: async () => ({ id: "me", displayName: "Me" }),
+      listProjectPullRequests: async (_project, options) => {
+        statuses.push(options?.status);
+        return [raw(3, "active"), raw(2, "completed"), raw(1, "abandoned")];
+      },
+    };
+
+    const records = await refreshProjectPullRequests({
+      root: tempRoot,
+      tenant: "dev.azure.com/org",
+      projects: ["P"],
+      mine: false,
+      status: "closed",
+      client,
+    });
+
+    expect(statuses).toEqual(["all"]);
+    expect(records.map((record) => [record.id, record.status])).toEqual([
+      [2, "completed"],
+      [1, "abandoned"],
+    ]);
+  });
 });

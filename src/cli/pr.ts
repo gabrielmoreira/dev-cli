@@ -52,7 +52,8 @@ export const prListCommand = defineCommand({
     all: { type: "boolean", description: "Show all pull requests instead of only mine" },
     status: {
       type: "string",
-      description: "Status to list: open (default), completed, abandoned, or all",
+      description:
+        "Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all",
     },
     provider: { type: "string", description: "Limit to a specific provider id" },
     offline: {
@@ -74,8 +75,13 @@ export const prListCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
     });
-    const statusFilter =
-      (args.status as "open" | "completed" | "abandoned" | "all" | undefined) ?? "open";
+    const statusFilter = args.status ?? "open";
+    if (!pr.isPullRequestStatusFilter(statusFilter)) {
+      return reportError(
+        `Unknown --status '${statusFilter}'. Use one of: ${pr.PULL_REQUEST_STATUS_FILTERS.join(", ")}.`,
+        args.json,
+      );
+    }
     const limit = args.limit ? parseInt(args.limit, 10) : Infinity;
     const providers = config.providers.filter(
       (provider): provider is Extract<ProviderConfig, { type: "azure_devops" }> =>
@@ -236,7 +242,7 @@ export const prListCommand = defineCommand({
           : await cache.loadAllCachedPullRequests(config.root);
       const filtered = all.filter(
         (item) =>
-          (statusFilter === "all" || item.status === statusFilter) &&
+          pr.matchesStatus(item, statusFilter) &&
           (targetRepositories.size === 0 || targetRepositories.has(item.repository)) &&
           ((!args.provider && providers.length === 0) || allowedTenants.has(item.tenant)),
       );
@@ -509,7 +515,7 @@ export const prCheckoutCommand = defineCommand({
     }
     if (!selected || !Number.isSafeInteger(pullRequestId)) {
       return reportError(
-        `Pull request '${args.reference ?? ""}' could not be resolved.`,
+        `Pull request '${args.reference ?? ""}' could not be resolved.${repository ? "" : " Pass its URL, or --repo <name>."}`,
         args.json,
       );
     }
@@ -597,7 +603,7 @@ export const prViewCommand = defineCommand({
     description: "View details for a specific pull request",
   },
   args: {
-    id: { type: "positional", description: "Pull request ID", required: false },
+    id: { type: "positional", description: "Pull request URL or ID", required: false },
     repo: { type: "string", description: "Target repository name" },
     provider: { type: "string", description: "Limit to a specific provider id" },
     project: { type: "string", description: "Filter by Azure DevOps project" },
@@ -611,7 +617,8 @@ export const prViewCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     let selected: cache.PullRequestRecord | undefined;
-    let idStr = args.id;
+    const urlReference = args.id ? parseAzureDevOpsPullRequestUrl(args.id) : undefined;
+    let idStr = urlReference ? String(urlReference.pullRequestId) : args.id;
     if (!idStr) {
       // The picker offers open pull requests; a closed one is viewed by its id or URL.
       const candidates = (await cache.loadAllCachedPullRequests(config.root)).filter(
@@ -640,23 +647,25 @@ export const prViewCommand = defineCommand({
       return reportError(`Invalid pull request ID '${idStr}'.`, args.json);
     }
 
-    // Find the first ADO provider (or the specified one)
-    const providers = args.provider
-      ? config.providers.filter((p) => p.id === args.provider)
-      : config.providers.filter((p) => p.type === "azure_devops");
+    // A URL names its organization, project, and repository, so a closed pull request
+    // that no listing shows is still read live.
+    const providers = config.providers.filter(
+      (p): p is Extract<ProviderConfig, { type: "azure_devops" }> =>
+        p.type === "azure_devops" &&
+        (!args.provider || p.id === args.provider) &&
+        (!urlReference || p.organization.toLowerCase() === urlReference.organization.toLowerCase()),
+    );
+    const adoProvider = providers[0];
+    const organization = adoProvider?.organization ?? urlReference?.organization;
+    const repository = args.repo || urlReference?.repository || selected?.repository;
 
-    const adoProvider = providers[0] as
-      | Extract<ProviderConfig, { type: "azure_devops" }>
-      | undefined;
-
-    const tenant =
-      selected?.tenant || (adoProvider ? adoTenant(adoProvider.organization) : undefined);
+    const tenant = selected?.tenant || (organization ? adoTenant(organization) : undefined);
 
     let client;
-    if (!args.offline && adoProvider) {
+    if (!args.offline && organization) {
       try {
         const cred = await resolveAzureDevOpsCredential(config);
-        client = createAzureDevOps({ organization: adoProvider.organization, token: cred.token });
+        client = createAzureDevOps({ organization, token: cred.token });
       } catch {
         // offline fallback
       }
@@ -666,14 +675,15 @@ export const prViewCommand = defineCommand({
       root: config.root,
       id,
       tenant,
-      repo: args.repo || selected?.repository,
+      repo: repository,
       offline: args.offline || !client,
       client,
-      project: args.project || adoProvider?.project,
+      project: args.project || urlReference?.project || adoProvider?.project,
     });
 
     if (!item) {
-      return reportError(`Pull request #${id} not found.`, args.json);
+      const hint = repository ? "" : " Pass its URL, or --repo <name>.";
+      return reportError(`Pull request #${id} not found.${hint}`, args.json);
     }
 
     ui.result({

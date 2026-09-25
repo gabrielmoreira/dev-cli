@@ -108,6 +108,11 @@ describe("CLI entrypoint (Phase 0)", () => {
     const errors: string[] = [];
     const originalLog = console.log;
     const originalError = console.error;
+    // `dev init` registers the root in $HOME/.dev.toml, never the developer's registry.
+    const originalHome = process.env.HOME;
+    const originalProfile = process.env.USERPROFILE;
+    process.env.HOME = root;
+    process.env.USERPROFILE = root;
     console.log = () => {};
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
     try {
@@ -122,6 +127,10 @@ describe("CLI entrypoint (Phase 0)", () => {
     } finally {
       console.log = originalLog;
       console.error = originalError;
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+      if (originalProfile === undefined) delete process.env.USERPROFILE;
+      else process.env.USERPROFILE = originalProfile;
       await rm(root, { recursive: true, force: true });
     }
   });

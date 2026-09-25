@@ -672,55 +672,53 @@ Synchronize inventory, work items, and pull requests in one operation
 
 Inspect and cache pull requests
 
-**Usage:** `dev pr [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--refresh] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json] <command>`
+**Usage:** `dev pr [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json] <command>`
 
-| Argument              | Type       | Description                                             |
-| --------------------- | ---------- | ------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                  |
-| `--repo <value>`      | string     | Target repository name                                  |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory          |
-| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label          |
-| `--mine`              | boolean    | Show pull requests assigned to me (default)             |
-| `--all`               | boolean    | Show all pull requests instead of only mine             |
-| `--status <value>`    | string     | Filter by status (open, completed, abandoned, all)      |
-| `--provider <value>`  | string     | Limit to a specific provider id                         |
-| `--offline`           | boolean    | Read strictly from local cache with zero network access |
-| `--refresh`           | boolean    | Force fresh synchronization from remote provider        |
-| `--project <value>`   | string     | Filter by Azure DevOps project                          |
-| `--ws <value>`        | string     | Use repositories from a workspace                       |
-| `--limit <value>`     | string     | Maximum number of results to show (default: 50)         |
-| `--root <value>`      | string     | Explicit dev root directory                             |
-| `--json`              | boolean    | Output in structured JSON format                        |
+| Argument              | Type       | Description                                                                                    |
+| --------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `repoPositional`      | positional | Target repository name                                                                         |
+| `--repo <value>`      | string     | Target repository name                                                                         |
+| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                 |
+| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                 |
+| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                     |
+| `--all`               | boolean    | Show all pull requests instead of only mine                                                    |
+| `--status <value>`    | string     | Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all |
+| `--provider <value>`  | string     | Limit to a specific provider id                                                                |
+| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
+| `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
+| `--ws <value>`        | string     | Use repositories from a workspace                                                              |
+| `--limit <value>`     | string     | Show at most this many pull requests (default: all)                                            |
+| `--root <value>`      | string     | Explicit dev root directory                                                                    |
+| `--json`              | boolean    | Output in structured JSON format                                                               |
 
-| Subcommand        | Description                                                         |
-| ----------------- | ------------------------------------------------------------------- |
-| `dev pr list`     | List pull requests across all configured providers (cached or live) |
-| `dev pr checkout` | Create a workspace from a pull request                              |
-| `dev pr view`     | View details for a specific pull request                            |
+| Subcommand        | Description                                             |
+| ----------------- | ------------------------------------------------------- |
+| `dev pr list`     | List open pull requests across all configured providers |
+| `dev pr checkout` | Create a workspace from a pull request                  |
+| `dev pr view`     | View details for a specific pull request                |
 
 ## `dev pr list`
 
-List pull requests across all configured providers (cached or live)
+List open pull requests across all configured providers
 
-**Usage:** `dev pr list [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--refresh] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json]`
+**Usage:** `dev pr list [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json]`
 
-| Argument              | Type       | Description                                             |
-| --------------------- | ---------- | ------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                  |
-| `--repo <value>`      | string     | Target repository name                                  |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory          |
-| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label          |
-| `--mine`              | boolean    | Show pull requests assigned to me (default)             |
-| `--all`               | boolean    | Show all pull requests instead of only mine             |
-| `--status <value>`    | string     | Filter by status (open, completed, abandoned, all)      |
-| `--provider <value>`  | string     | Limit to a specific provider id                         |
-| `--offline`           | boolean    | Read strictly from local cache with zero network access |
-| `--refresh`           | boolean    | Force fresh synchronization from remote provider        |
-| `--project <value>`   | string     | Filter by Azure DevOps project                          |
-| `--ws <value>`        | string     | Use repositories from a workspace                       |
-| `--limit <value>`     | string     | Maximum number of results to show (default: 50)         |
-| `--root <value>`      | string     | Explicit dev root directory                             |
-| `--json`              | boolean    | Output in structured JSON format                        |
+| Argument              | Type       | Description                                                                                    |
+| --------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `repoPositional`      | positional | Target repository name                                                                         |
+| `--repo <value>`      | string     | Target repository name                                                                         |
+| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                 |
+| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                 |
+| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                     |
+| `--all`               | boolean    | Show all pull requests instead of only mine                                                    |
+| `--status <value>`    | string     | Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all |
+| `--provider <value>`  | string     | Limit to a specific provider id                                                                |
+| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
+| `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
+| `--ws <value>`        | string     | Use repositories from a workspace                                                              |
+| `--limit <value>`     | string     | Show at most this many pull requests (default: all)                                            |
+| `--root <value>`      | string     | Explicit dev root directory                                                                    |
+| `--json`              | boolean    | Output in structured JSON format                                                               |
 
 ## `dev pr checkout`
 
@@ -747,7 +745,7 @@ View details for a specific pull request
 
 | Argument             | Type       | Description                                             |
 | -------------------- | ---------- | ------------------------------------------------------- |
-| `id`                 | positional | Pull request ID                                         |
+| `id`                 | positional | Pull request URL or ID                                  |
 | `--repo <value>`     | string     | Target repository name                                  |
 | `--provider <value>` | string     | Limit to a specific provider id                         |
 | `--project <value>`  | string     | Filter by Azure DevOps project                          |

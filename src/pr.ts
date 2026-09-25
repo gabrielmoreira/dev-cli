@@ -11,7 +11,7 @@ export interface SyncPullRequestsInput {
   repositoryIdOrName?: string;
   client: Pick<AzureDevOpsClient, "listPullRequests" | "getPullRequest">;
   project?: string;
-  status?: "open" | "completed" | "abandoned" | "all";
+  status?: PullRequestStatusFilter;
   now?: () => string;
 }
 
@@ -51,11 +51,32 @@ export function mapAdoPrStatus(status: string): "open" | "completed" | "abandone
   return "open";
 }
 
+/** Which pull requests a listing asks for; `closed` is completed and abandoned together. */
+export const PULL_REQUEST_STATUS_FILTERS = [
+  "open",
+  "completed",
+  "abandoned",
+  "closed",
+  "all",
+] as const;
+export type PullRequestStatusFilter = (typeof PULL_REQUEST_STATUS_FILTERS)[number];
+
+export function isPullRequestStatusFilter(value: string): value is PullRequestStatusFilter {
+  return (PULL_REQUEST_STATUS_FILTERS as readonly string[]).includes(value);
+}
+
+export function matchesStatus(record: PullRequestRecord, filter: PullRequestStatusFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "closed") return record.status !== "open";
+  return record.status === filter;
+}
+
 /**
- * Maps canonical status union to Azure DevOps query status.
+ * Maps canonical status filter to Azure DevOps query status. The provider has no
+ * "closed" query, so it reads every status and the caller filters.
  */
 export function mapCanonicalToAdoStatus(
-  status?: "open" | "completed" | "abandoned" | "all",
+  status?: PullRequestStatusFilter,
 ): "active" | "completed" | "abandoned" | "all" {
   if (status === "open") return "active";
   if (status === "completed") return "completed";
@@ -183,7 +204,7 @@ export async function syncPullRequests(
     total: merged.length,
     updated,
     added,
-    prs: incoming,
+    prs: filterByStatus(incoming, input.status),
     truncated: !complete,
   };
 }
@@ -194,7 +215,7 @@ export async function refreshProjectPullRequests(
     tenant: string;
     projects: string[];
     mine: boolean;
-    status?: "open" | "completed" | "abandoned" | "all";
+    status?: PullRequestStatusFilter;
     client: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests">;
     now?: () => string;
   },
@@ -247,7 +268,7 @@ export async function refreshProjectPullRequests(
   }
 
   records.sort((a, b) => b.id - a.id);
-  return records;
+  return filterByStatus(records, input.status);
 }
 
 /**
@@ -258,7 +279,7 @@ export async function listPullRequests(
     root: string;
     tenant?: string;
     repo?: string;
-    status?: "open" | "completed" | "abandoned" | "all";
+    status?: PullRequestStatusFilter;
     offline?: boolean;
     refresh?: boolean;
     client?: Pick<AzureDevOpsClient, "listPullRequests" | "getPullRequest">;
@@ -291,11 +312,14 @@ export async function listPullRequests(
     records = await deps.cache.loadAllCachedPullRequests(input.root);
   }
 
-  if (input.status && input.status !== "all") {
-    records = records.filter((r) => r.status === input.status);
-  }
+  return filterByStatus(records, input.status);
+}
 
-  return records;
+function filterByStatus(
+  records: PullRequestRecord[],
+  status: PullRequestStatusFilter | undefined,
+): PullRequestRecord[] {
+  return status ? records.filter((record) => matchesStatus(record, status)) : records;
 }
 
 /**
