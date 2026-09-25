@@ -24,6 +24,7 @@ export interface AdoRepository {
   defaultBranch?: string;
   description?: string;
   size?: number;
+  isDisabled?: boolean;
   project?: {
     id: string;
     name: string;
@@ -44,6 +45,15 @@ export class AzureDevOpsError extends Error {
     this.code = code;
     this.status = status;
   }
+}
+
+/** Azure DevOps wraps errors in JSON; its `message` field is the part a person can act on. */
+function readableErrorBody(body: string): string {
+  try {
+    const message = (JSON.parse(body) as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  } catch {}
+  return body;
 }
 
 export type FetchFn = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -253,7 +263,9 @@ export function createAzureDevOps(options: CreateAzureDevOpsOptions): AzureDevOp
       } catch {}
 
       // Redact token from any error output
-      const sanitizedBody = bodyText.replace(new RegExp(token, "g"), "[REDACTED]");
+      const sanitizedBody = readableErrorBody(
+        bodyText.replace(new RegExp(token, "g"), "[REDACTED]"),
+      );
 
       if (status === 401 || status === 403) {
         throw new AzureDevOpsError(

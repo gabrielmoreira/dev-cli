@@ -350,7 +350,7 @@ export const syncDataCommand = defineCommand({
       json: args.json,
       text: () => {
         let out = `Data synchronization complete for ${tenant} (${result.timestamp}):\n`;
-        out += `  Repositories:  ${result.inventory.total} (added ${result.inventory.added}, updated ${result.inventory.updated})\n`;
+        out += `  Repositories:  ${result.inventory.total} (added ${result.inventory.added}, updated ${result.inventory.updated}, removed ${result.inventory.removed})\n`;
         if (result.workItems) {
           out += `  Work Items:    ${result.workItems.total} (added ${result.workItems.added}, updated ${result.workItems.updated})\n`;
         }
@@ -358,6 +358,9 @@ export const syncDataCommand = defineCommand({
         const prAdded = result.pullRequests.reduce((acc, pr) => acc + pr.added, 0);
         const prUpdated = result.pullRequests.reduce((acc, pr) => acc + pr.updated, 0);
         out += `  Pull Requests: ${prTotal} across ${result.pullRequests.length} repositories (added ${prAdded}, updated ${prUpdated})\n`;
+        if (result.skippedDisabled.length > 0) {
+          out += `  ○ ${result.skippedDisabled.length} repositories are disabled in Azure DevOps; their pull requests were skipped\n`;
+        }
         if (result.canonicalRepos) {
           out += `  Canonical:     ${result.canonicalRepos.updated.length} updated, ${result.canonicalRepos.skipped.length} skipped\n`;
         }

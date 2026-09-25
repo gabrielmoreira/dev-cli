@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { normalizeAdoRepository, mergeInventoryRecords, syncInventory } from "../../src/inventory";
+import {
+  normalizeAdoRepository,
+  mergeInventoryRecords,
+  pruneMissingRecords,
+  syncInventory,
+} from "../../src/inventory";
 import type { AdoRepository, AzureDevOpsClient } from "../../src/ado";
 import type { InventoryRecord } from "../../src/cache";
 
@@ -146,6 +151,7 @@ describe("Inventory Orchestration and Normalization", () => {
         root: "/fake/root",
         tenant: "dev.azure.com/my-org",
         client: fakeClient,
+        project: "p",
         now: () => "2026-09-14T21:00:00Z",
       },
       { cache: fakeCache as any },
@@ -157,5 +163,36 @@ describe("Inventory Orchestration and Normalization", () => {
     expect(result.updated).toBe(0);
     expect(writtenTenant).toBe("dev.azure.com/my-org");
     expect(writtenRecords).toHaveLength(2);
+    expect(result.removed).toBe(0);
+    expect(result.fetched.map((r) => r.name)).toEqual(["alpha-service"]);
+  });
+
+  test("pruneMissingRecords drops only in-scope records the provider stopped returning", () => {
+    const record = (id: string, project?: string): InventoryRecord => ({
+      id,
+      name: id,
+      url: `https://dev.azure.com/org/${project}/_git/${id}`,
+      default_branch: "main",
+      description: "",
+      last_changed: "",
+      syncedAt: "",
+      project,
+    });
+    const existing = [record("kept", "p"), record("deleted", "p"), record("elsewhere", "q")];
+    const incoming = [record("kept", "p")];
+
+    expect(pruneMissingRecords(existing, incoming, "P").map((r) => r.id)).toEqual([
+      "kept",
+      "elsewhere",
+    ]);
+    expect(pruneMissingRecords(existing, incoming).map((r) => r.id)).toEqual(["kept"]);
+  });
+
+  test("normalizeAdoRepository keeps the disabled flag and clears it when re-enabled", () => {
+    const raw: AdoRepository = { id: "1", name: "old", url: "u", isDisabled: true };
+    const disabled = normalizeAdoRepository(raw);
+    expect(disabled.disabled).toBe(true);
+    const enabled = normalizeAdoRepository({ ...raw, isDisabled: false });
+    expect(mergeInventoryRecords([disabled], [enabled])[0].disabled).toBeUndefined();
   });
 });

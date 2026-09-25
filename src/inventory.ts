@@ -17,7 +17,12 @@ export interface InventorySyncResult {
   total: number;
   updated: number;
   added: number;
+  /** Every record in the cache after the merge. */
   repositories: InventoryRecord[];
+  /** The records the provider returned in this run, within the requested scope. */
+  fetched: InventoryRecord[];
+  /** Cached records in scope that the provider no longer returns. */
+  removed: number;
 }
 
 export interface InventoryDeps {
@@ -58,6 +63,8 @@ export function normalizeAdoRepository(
     last_changed: lastChanged,
     syncedAt,
     project: repo.project?.name,
+    // Always written, so a repository enabled again overwrites the old flag on merge.
+    disabled: repo.isDisabled === true ? true : undefined,
   };
 }
 
@@ -127,7 +134,9 @@ export async function syncInventory(
     }
   }
 
-  const mergedRecords = mergeInventoryRecords(existingRecords, incomingRecords);
+  // A repository deleted on the provider would otherwise stay in the cache forever.
+  const kept = pruneMissingRecords(existingRecords, incomingRecords, input.project);
+  const mergedRecords = mergeInventoryRecords(kept, incomingRecords);
 
   const cachePath = await deps.cache.writeInventory({
     root: input.root,
@@ -141,13 +150,35 @@ export async function syncInventory(
     total: mergedRecords.length,
     updated,
     added,
+    removed: existingRecords.length - kept.length,
     repositories: mergedRecords,
+    fetched: incomingRecords,
   };
+}
+
+/**
+ * Drops cached records the provider no longer returns. Only records inside the
+ * fetched scope are judged: a project-scoped fetch says nothing about other projects.
+ */
+export function pruneMissingRecords(
+  existing: InventoryRecord[],
+  incoming: InventoryRecord[],
+  project?: string,
+): InventoryRecord[] {
+  const ids = new Set(incoming.map((r) => r.id));
+  const urls = new Set(incoming.map((r) => r.url));
+  const scope = project?.toLowerCase();
+  return existing.filter((record) => {
+    const inScope = !scope || record.project?.toLowerCase() === scope;
+    return !inScope || ids.has(record.id) || urls.has(record.url);
+  });
 }
 
 /** Checks whether user input is an explicit repository URI or local path. */
 export function isExplicitSource(str: string): boolean {
   const source = str.trim();
+  // `ado:<org>:<project>:<repo>` looks like a URI scheme but selects from the inventory.
+  if (/^ado:/i.test(source)) return false;
   return (
     /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(source) ||
     /^[^@\s]+@[^:\s]+:.+/.test(source) ||
@@ -253,6 +284,8 @@ export interface ResolveSelectionResult {
   sourceUrl?: string;
   record?: InventoryRecord;
   matches: InventoryRecord[];
+  /** Disabled repositories whose name equals the query; reported, never selected. */
+  disabledMatches?: InventoryRecord[];
 }
 
 /**
@@ -274,11 +307,16 @@ export async function resolveRepositorySource(
     return { sourceUrl: q, matches: [] };
   }
 
-  const cached = await deps.loadCached(input.root);
+  // A disabled repository cannot be cloned, so it is never offered or picked.
+  const all = await deps.loadCached(input.root);
+  const cached = all.filter((record) => !record.disabled);
   const adoSelector = parseAdoRepositorySelector(q);
   const matches = adoSelector
     ? cached.filter((record) => matchesAdoRepositorySelector(record, adoSelector))
     : filterInventory(cached, q);
+  const disabledMatches = q
+    ? all.filter((record) => record.disabled && record.name.toLowerCase() === q.toLowerCase())
+    : [];
 
   if (adoSelector && matches.length === 1) {
     return {
@@ -309,6 +347,7 @@ export async function resolveRepositorySource(
     sourceUrl: undefined,
     record: undefined,
     matches,
+    disabledMatches,
   };
 }
 
@@ -327,6 +366,12 @@ export async function resolveInputSource(
   }
 
   if (result.matches.length === 0) {
+    const disabled = result.disabledMatches?.[0];
+    if (disabled) {
+      return {
+        error: `Repository '${disabled.name}'${disabled.project ? ` in project '${disabled.project}'` : ""} is disabled in Azure DevOps and cannot be cloned.`,
+      };
+    }
     if (query) {
       return {
         error: `No repository matching '${query}' found in local inventory. Run 'dev sync inventory' to refresh available repositories.`,

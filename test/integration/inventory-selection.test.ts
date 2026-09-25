@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { resolveRepositorySource } from "../../src/inventory";
+import { resolveInputSource, resolveRepositorySource } from "../../src/inventory";
 import { writeInventory, type InventoryRecord } from "../../src/cache";
 
 describe("Inventory Source Resolution Integration (Phase 11)", () => {
@@ -197,5 +197,30 @@ describe("Inventory Source Resolution Integration (Phase 11)", () => {
 
     expect(res.sourceUrl).toBeUndefined();
     expect(res.matches).toHaveLength(0);
+  });
+
+  test("never selects a disabled repository and names it when asked for", async () => {
+    const base = {
+      default_branch: "main",
+      description: "",
+      last_changed: "",
+      syncedAt: "",
+      project: "example-project",
+    };
+    await writeInventory({
+      root: tempRoot,
+      tenant: "dev.azure.com/example-org",
+      records: [
+        { ...base, id: "1", name: "legacy-app", url: "https://x/_git/legacy-app", disabled: true },
+        { ...base, id: "2", name: "legacy-api", url: "https://x/_git/legacy-api" },
+      ],
+    });
+
+    const picker = await resolveRepositorySource({ root: tempRoot });
+    expect(picker.matches.map((r) => r.name)).toEqual(["legacy-api"]);
+
+    const named = await resolveInputSource(tempRoot, "legacy-app");
+    expect(named.sourceUrl).toBeUndefined();
+    expect(named.error).toContain("disabled in Azure DevOps");
   });
 });

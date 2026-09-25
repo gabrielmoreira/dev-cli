@@ -16,6 +16,8 @@ export interface InventoryRecord {
   last_changed: string;
   syncedAt: string;
   project?: string;
+  /** The provider reports the repository as disabled: it cannot be cloned or queried. */
+  disabled?: boolean;
 }
 
 export interface WriteInventoryOptions {

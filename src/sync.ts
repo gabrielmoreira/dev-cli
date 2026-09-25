@@ -24,6 +24,8 @@ export interface SyncDataResult {
   inventory: InventorySyncResult;
   workItems?: WorkItemSyncResult;
   pullRequests: PrSyncResult[];
+  /** Repositories the provider reports as disabled; their pull requests cannot be read. */
+  skippedDisabled: string[];
   canonicalRepos?: MirrorSyncResult;
   errors?: string[];
   timestamp: string;
@@ -74,9 +76,7 @@ export async function syncData(
 
   // 2. Synchronize work items (if project is scoped or discovered)
   let wiResult: WorkItemSyncResult | undefined;
-  const targetProject =
-    input.project ||
-    (invResult.repositories[0]?.project ? invResult.repositories[0].project : undefined);
+  const targetProject = input.project || invResult.fetched[0]?.project;
   if (targetProject) {
     try {
       wiResult = await deps.workitem.syncWorkItems({
@@ -91,17 +91,20 @@ export async function syncData(
     }
   }
 
-  // 3. Synchronize pull requests for target repositories
+  // 3. Synchronize pull requests for the repositories this run fetched. The merged
+  // cache also holds other projects, which the project-scoped PR API cannot see.
   const pullRequests: PrSyncResult[] = [];
+  const skippedDisabled: string[] = [];
   let targetRepos: string[] = [];
 
   if (input.repos && input.repos.length > 0) {
     targetRepos = input.repos;
   } else {
-    // Sync PRs for repositories in inventory (scoped to target project if specified)
-    targetRepos = invResult.repositories
-      .filter((r) => !targetProject || !r.project || r.project === targetProject)
-      .map((r) => r.name);
+    for (const record of invResult.fetched) {
+      if (targetProject && record.project && record.project !== targetProject) continue;
+      if (record.disabled) skippedDisabled.push(record.name);
+      else targetRepos.push(record.name);
+    }
   }
 
   for (const repoName of targetRepos) {
@@ -143,6 +146,7 @@ export async function syncData(
     inventory: invResult,
     workItems: wiResult,
     pullRequests,
+    skippedDisabled,
     canonicalRepos,
     errors: errors.length > 0 ? errors : undefined,
     timestamp,

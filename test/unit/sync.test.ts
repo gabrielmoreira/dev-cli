@@ -5,9 +5,17 @@ import { join } from "node:path";
 import type { AzureDevOpsClient } from "../../src/ado";
 import { syncData, type SyncDataDeps } from "../../src/sync";
 import type { InventorySyncResult } from "../../src/inventory";
+import type { InventoryRecord } from "../../src/cache";
 import type { WorkItemSyncResult } from "../../src/workitem";
 import type { PrSyncResult } from "../../src/pr";
 import type { MirrorSyncResult } from "../../src/mirror";
+
+/** The provider returned exactly the cached records. */
+function withFetched(
+  result: Omit<InventorySyncResult, "fetched" | "removed">,
+): InventorySyncResult {
+  return { ...result, removed: 0, fetched: result.repositories };
+}
 
 describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
   let tempRoot: string;
@@ -29,7 +37,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
         syncInventory: async (input) => {
           executionOrder.push("inventory");
           expect(input.tenant).toBe("dev.azure.com/example-org");
-          return {
+          return withFetched({
             tenant: input.tenant,
             cachePath: join(input.root, ".dev/cache/inventory/repos.jsonl"),
             total: 2,
@@ -55,7 +63,7 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
                 syncedAt: "2026-09-15T12:00:00Z",
               },
             ],
-          } as InventorySyncResult;
+          });
         },
       },
       workitem: {
@@ -132,42 +140,43 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
 
     const mockDeps: SyncDataDeps = {
       inventory: {
-        syncInventory: async (input) => ({
-          tenant: input.tenant,
-          cachePath: "path",
-          total: 3,
-          added: 0,
-          updated: 0,
-          repositories: [
-            {
-              id: "1",
-              name: "repo-1",
-              url: "url1",
-              default_branch: "main",
-              description: "",
-              last_changed: "",
-              syncedAt: "",
-            },
-            {
-              id: "2",
-              name: "repo-2",
-              url: "url2",
-              default_branch: "main",
-              description: "",
-              last_changed: "",
-              syncedAt: "",
-            },
-            {
-              id: "3",
-              name: "repo-3",
-              url: "url3",
-              default_branch: "main",
-              description: "",
-              last_changed: "",
-              syncedAt: "",
-            },
-          ],
-        }),
+        syncInventory: async (input) =>
+          withFetched({
+            tenant: input.tenant,
+            cachePath: "path",
+            total: 3,
+            added: 0,
+            updated: 0,
+            repositories: [
+              {
+                id: "1",
+                name: "repo-1",
+                url: "url1",
+                default_branch: "main",
+                description: "",
+                last_changed: "",
+                syncedAt: "",
+              },
+              {
+                id: "2",
+                name: "repo-2",
+                url: "url2",
+                default_branch: "main",
+                description: "",
+                last_changed: "",
+                syncedAt: "",
+              },
+              {
+                id: "3",
+                name: "repo-3",
+                url: "url3",
+                default_branch: "main",
+                description: "",
+                last_changed: "",
+                syncedAt: "",
+              },
+            ],
+          }),
       },
       workitem: {
         syncWorkItems: async () => ({
@@ -215,33 +224,34 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
 
     const mockDeps: SyncDataDeps = {
       inventory: {
-        syncInventory: async (input) => ({
-          tenant: input.tenant,
-          cachePath: "path",
-          total: 2,
-          added: 0,
-          updated: 0,
-          repositories: [
-            {
-              id: "1",
-              name: "failing-repo",
-              url: "u1",
-              default_branch: "main",
-              description: "",
-              last_changed: "",
-              syncedAt: "",
-            },
-            {
-              id: "2",
-              name: "working-repo",
-              url: "u2",
-              default_branch: "main",
-              description: "",
-              last_changed: "",
-              syncedAt: "",
-            },
-          ],
-        }),
+        syncInventory: async (input) =>
+          withFetched({
+            tenant: input.tenant,
+            cachePath: "path",
+            total: 2,
+            added: 0,
+            updated: 0,
+            repositories: [
+              {
+                id: "1",
+                name: "failing-repo",
+                url: "u1",
+                default_branch: "main",
+                description: "",
+                last_changed: "",
+                syncedAt: "",
+              },
+              {
+                id: "2",
+                name: "working-repo",
+                url: "u2",
+                default_branch: "main",
+                description: "",
+                last_changed: "",
+                syncedAt: "",
+              },
+            ],
+          }),
       },
       workitem: {
         syncWorkItems: async () => ({
@@ -287,5 +297,67 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
     expect(result.errors).toBeDefined();
     expect(result.errors?.length).toBe(1);
     expect(result.errors?.[0]).toContain("failing-repo");
+  });
+
+  test("syncData reads pull requests only for enabled repositories this run fetched", async () => {
+    const record = (id: string, extra: Partial<InventoryRecord> = {}): InventoryRecord => ({
+      id,
+      name: id,
+      url: id,
+      default_branch: "main",
+      description: "",
+      last_changed: "",
+      syncedAt: "",
+      project: "example-project",
+      ...extra,
+    });
+    const synced: string[] = [];
+    const mockDeps: SyncDataDeps = {
+      inventory: {
+        syncInventory: async (input) => ({
+          tenant: input.tenant,
+          cachePath: "path",
+          total: 3,
+          added: 0,
+          updated: 2,
+          removed: 0,
+          // other-project-repo stays in the cache but this run did not fetch it.
+          repositories: [record("active"), record("gone", { disabled: true }), record("other")],
+          fetched: [record("active"), record("gone", { disabled: true })],
+        }),
+      },
+      workitem: {
+        syncWorkItems: async () => {
+          throw new Error("not under test");
+        },
+      },
+      pr: {
+        syncPullRequests: async (input) => {
+          synced.push(input.repo);
+          return {
+            tenant: input.tenant,
+            repo: input.repo,
+            cachePath: "",
+            total: 0,
+            added: 0,
+            updated: 0,
+            prs: [],
+          };
+        },
+      },
+    };
+
+    const result = await syncData(
+      {
+        root: tempRoot,
+        tenant: "dev.azure.com/example-org",
+        project: "example-project",
+        client: {} as AzureDevOpsClient,
+      },
+      mockDeps,
+    );
+
+    expect(synced).toEqual(["active"]);
+    expect(result.skippedDisabled).toEqual(["gone"]);
   });
 });

@@ -15,6 +15,7 @@ export interface GitHubRawRepository {
   description?: string | null;
   pushed_at?: string | null;
   updated_at?: string | null;
+  disabled?: boolean;
   owner?: {
     login: string;
   };
@@ -160,6 +161,7 @@ export function normalizeGitHubRepository(
     last_changed,
     syncedAt,
     project: raw.owner?.login,
+    disabled: raw.disabled === true ? true : undefined,
   };
 }
 
@@ -211,24 +213,13 @@ export async function syncGitHubInventory(input: {
   const cachePath = cache.resolveInventoryCachePath(input.root, tenant);
   const existing = await cache.readInventory({ root: input.root, tenant });
 
-  // Merge records
-  const map = new Map<string, InventoryRecord>();
-  for (const r of existing) {
-    map.set(r.name, r);
-  }
-  let added = 0;
-  let updated = 0;
+  // The listing covers the whole owner, so a repository it no longer returns is gone.
+  const existingNames = new Set(existing.map((r) => r.name));
+  const fetchedNames = new Set(normalized.map((r) => r.name));
+  const added = normalized.filter((r) => !existingNames.has(r.name)).length;
+  const removed = existing.filter((r) => !fetchedNames.has(r.name)).length;
 
-  for (const r of normalized) {
-    if (map.has(r.name)) {
-      updated++;
-    } else {
-      added++;
-    }
-    map.set(r.name, r);
-  }
-
-  const merged = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  const merged = [...normalized].sort((a, b) => a.name.localeCompare(b.name));
   await cache.writeInventory({
     root: input.root,
     tenant,
@@ -240,8 +231,10 @@ export async function syncGitHubInventory(input: {
     cachePath,
     total: merged.length,
     added,
-    updated,
+    updated: normalized.length - added,
+    removed,
     repositories: merged,
+    fetched: normalized,
   };
 }
 
