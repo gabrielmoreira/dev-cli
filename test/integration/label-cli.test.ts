@@ -133,6 +133,66 @@ describe("dev label CLI", () => {
     expect(config.sources[3].labels).toEqual({ docs: {} });
   });
 
+  test("removes a label by repository name when the repository is only in dev.yaml", async () => {
+    await Bun.write(
+      join(root, "dev.yaml"),
+      `version: 1
+label_defs:
+  team:docs: {}
+sources:
+  - url: ${SOURCE}
+    branch: master
+    labels:
+      team:docs: {}
+`,
+    );
+
+    const code = await run(["label", "rm", "team:docs", "docs"]);
+
+    expect(code).toBe(0);
+    const config = await readConfig();
+    expect(config.sources[0].labels).toBeUndefined();
+  });
+
+  test("adds a label to a declared repository by name without an inventory", async () => {
+    await Bun.write(
+      join(root, "dev.yaml"),
+      `version: 1
+label_defs:
+  team:docs: {}
+sources:
+  - url: ${OTHER}
+    branch: main
+`,
+    );
+
+    const code = await run(["label", "add", "team:docs", "api"]);
+
+    expect(code).toBe(0);
+    const config = await readConfig();
+    expect(config.sources[0].labels).toEqual({ "team:docs": {} });
+  });
+
+  test("refuses an ambiguous name shared by two declared repositories outside a terminal", async () => {
+    await Bun.write(
+      join(root, "dev.yaml"),
+      `version: 1
+label_defs:
+  team:docs: {}
+sources:
+  - url: https://github.com/acme/docs
+    branch: master
+  - url: https://github.com/other/docs
+    branch: main
+`,
+    );
+
+    const code = await run(["label", "add", "team:docs", "docs"]);
+
+    expect(code).toBe(1);
+    expect(errors.join(" ")).toContain("pass a full URL");
+  });
+
   test("renames a label and reports where it changed", async () => {
     await run(["label", "add", "team:docs", OTHER]);
 

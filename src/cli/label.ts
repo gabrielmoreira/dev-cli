@@ -99,12 +99,27 @@ async function chooseRepositories(config: RuntimeConfig, label: string): Promise
   return await ui.multiSelect(`Select repositories for '${label}'`, [...options.values()]);
 }
 
-async function resolveUrl(root: string, value: string): Promise<string> {
-  const resolved = await resolveInputSource(root, value);
-  if (!resolved.sourceUrl) {
-    throw new Error(resolved.error ?? `Could not resolve repository '${value}'.`);
+async function resolveUrl(config: RuntimeConfig, value: string): Promise<string> {
+  const query = value.trim();
+  const resolved = await resolveInputSource(config.root, query);
+  if (resolved.sourceUrl) {
+    return git.stripCredentialsFromUrl(resolved.sourceUrl);
   }
-  return git.stripCredentialsFromUrl(resolved.sourceUrl);
+  // A repository declared in dev.yaml is a valid target even when the local
+  // inventory has not indexed it yet (fresh root): fall back to declared names.
+  const declared = labels.parseDeclaredSources(config.sources).sources;
+  const matches = declared.filter(
+    (source) => git.deriveDefaultMountPath(source.url).toLowerCase() === query.toLowerCase(),
+  );
+  if (matches.length === 1) {
+    return git.stripCredentialsFromUrl(matches[0]!.url);
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Ambiguous repository '${query}'. ${matches.length} repositories declared in dev.yaml share that name; pass a full URL.`,
+    );
+  }
+  throw new Error(resolved.error ?? `Could not resolve repository '${query}'.`);
 }
 
 interface PlannedTarget {
@@ -236,7 +251,7 @@ export const labelAddCommand = defineCommand({
     label: { type: "positional", description: "Label name", required: false },
     sources: {
       type: "positional",
-      description: "Repositories: URL, path, or inventory name (several allowed)",
+      description: "Repositories: URL, path, or name (several allowed)",
       required: false,
     },
     ref: { type: "string", description: "Branch or pinned ref for every repository given" },
@@ -267,7 +282,7 @@ export const labelAddCommand = defineCommand({
 
       const urls =
         given.length > 0
-          ? await Promise.all(given.map((value) => resolveUrl(config.root, value)))
+          ? await Promise.all(given.map((value) => resolveUrl(config, value)))
           : await chooseRepositories(config, label);
       const guided = interactive && given.length === 0;
       const targets = await planTargets({
@@ -370,7 +385,7 @@ export const labelRmCommand = defineCommand({
       if (args.all) chosen = carrying;
       else if (given.length > 0) {
         const keys = new Set(
-          (await Promise.all(given.map((value) => resolveUrl(config.root, value)))).map(
+          (await Promise.all(given.map((value) => resolveUrl(config, value)))).map(
             git.normalizeSourceKey,
           ),
         );

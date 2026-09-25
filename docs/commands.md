@@ -835,7 +835,7 @@ Put a label on repositories, and pick a branch for any of them; a repository not
 | Argument           | Type       | Description                                                             |
 | ------------------ | ---------- | ----------------------------------------------------------------------- |
 | `label`            | positional | Label name                                                              |
-| `sources`          | positional | Repositories: URL, path, or inventory name (several allowed)            |
+| `sources`          | positional | Repositories: URL, path, or name (several allowed)                      |
 | `--ref <value>`    | string     | Branch or pinned ref for every repository given                         |
 | `--fields <value>` | string     | Label fields as key=value pairs, comma-separated                        |
 | `--sync`           | boolean    | Create the mirrors this label asks for now, instead of on the next sync |

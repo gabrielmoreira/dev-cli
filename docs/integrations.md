@@ -73,7 +73,7 @@ A label names a set of repositories. Each one carries the label on its default b
 
 ```bash
 dev label                                     # see every label, then pick an action
-dev label add team:checkout checkout-api web  # repositories by URL, path, or inventory name
+dev label add team:checkout checkout-api web  # repositories by URL, path, or name
 dev label add docs wiki --ref internal        # one branch of a repository
 dev label rm team:checkout web
 dev label rename team:checkout team:payments  # also renames label_defs and workset members
