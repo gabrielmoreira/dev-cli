@@ -20,7 +20,7 @@ describe("subcommand help (UX)", () => {
 
   it("suggests the command a mistyped or misplaced word most likely meant", async () => {
     expect(await suggestCommand(["ws", "strat"])).toBe("dev ws start");
-    expect(await suggestCommand(["start"])).toBe("dev ws start");
+    expect(await suggestCommand(["lock"])).toBe("dev ws lock");
     expect(await suggestCommand(["zq"])).toBeUndefined();
   });
 

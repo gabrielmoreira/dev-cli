@@ -1,5 +1,5 @@
 import { defineCommand, renderUsage, runCommand, type ArgDef, type CommandDef } from "citty";
-import { wsCommand, wsGoCommand, wsListCommand } from "./ws.ts";
+import { wsCommand, wsGoCommand, wsListCommand, wsStartCommand } from "./ws.ts";
 import { mirrorCommand } from "./mirror.ts";
 import { syncCommand } from "./sync.ts";
 import { prCommand } from "./pr.ts";
@@ -169,7 +169,7 @@ function editDistance(a: string, b: string): number {
 /**
  * The command the user probably meant when a word is not a command: a
  * sibling one or two edits away (`dev ws strat`), or a command elsewhere with
- * exactly that name (`dev start` -> `dev ws start`).
+ * exactly that name (`dev lock` -> `dev ws lock`).
  */
 export async function suggestCommand(words: string[]): Promise<string | undefined> {
   let command = mainCommand as unknown as InspectableCommand;
@@ -318,6 +318,7 @@ export const mainCommand = defineCommand({
     ls: wsListCommand,
     use: useCommand,
     go: wsGoCommand,
+    start: wsStartCommand,
     current: currentCommand,
     roots: rootsCommand,
     root: rootCommand,

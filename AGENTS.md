@@ -96,7 +96,7 @@ How to read this file: each bullet is a rule in bold followed by the reason or t
 - **Print the context the user would otherwise have to remember.** Results name the root, workspace, source, branch, path, and version in play. `DEV_CWD` carries the caller's directory through the Mise task so `dev` acts where it was invoked, not where the task is defined.
 - **Performance is part of the interface.** Do not print thousands of inventory lines, fetch every branch, or resolve a credential per repository. Network concurrency is bounded per normalized host and reentrant, and a strategy changes only after a measurement.
 - **`dev sync` means fresh.** A stale cache is an explicit option, never the default, because performance must not change what a command means.
-- **Shortcuts stay consistent with their long forms.** `dev status`, `dev sync`, `dev ls`, and `dev go` are aliases of workspace commands; the shell wrapper only turns a printed path into a `cd`, because a subprocess cannot change its parent's directory.
+- **Shortcuts stay consistent with their long forms.** `dev status`, `dev sync`, `dev ls`, `dev go`, and `dev start` are aliases of workspace commands; the shell wrapper only turns a printed path into a `cd`, because a subprocess cannot change its parent's directory.
 
 ## Concepts and configuration
 
