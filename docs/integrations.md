@@ -27,7 +27,7 @@ Then open OMP in a workspace:
 dev ws start gh-can1357-oh-my-pi
 ```
 
-`dev` uses the workspace directory as the pane working directory. It reuses an existing ready OMP, starts OMP in an available matching pane, or creates a named HerdR workspace and agent when neither exists. The command works from a HerdR pane or a normal terminal. If no server is running, it starts one and waits for readiness; an interactive external call attaches the HerdR client after the requested workspace is focused. `--json` performs the same server orchestration without taking over the calling terminal.
+`dev` uses the workspace directory as the pane working directory. It reuses an existing ready OMP, starts OMP in an available matching pane, or creates a named HerdR workspace and agent when neither exists. The command works from a HerdR pane or a normal terminal. If no server is running, it starts one and waits for readiness; an interactive call from a normal terminal then hands that terminal to the HerdR client, attached to the chosen session, and returns when you close it. `--json` performs the same server orchestration without taking over the calling terminal.
 
 A partial name is enough when it identifies one workspace (`dev ws start adob`). When several workspaces match in an interactive terminal, `dev` asks which one to start. Inside a workspace, `dev ws start` with no argument targets that workspace.
 

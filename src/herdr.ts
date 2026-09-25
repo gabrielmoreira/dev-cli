@@ -18,7 +18,6 @@ export interface StartHerdrWorkspaceInput {
   workspace: string;
   path: string;
   insideHerdr: boolean;
-  openClient?: boolean;
   session?: string;
 }
 
@@ -41,7 +40,6 @@ export interface HerdrDeps {
   run(args: string[]): Promise<shell.ShellExecResult>;
   canonicalize(path: string): Promise<string>;
   startServer(): void;
-  openClient(): void;
   wait(milliseconds: number): Promise<void>;
   interactions?: {
     chooseSession?(sessions: HerdrSession[]): Promise<string>;
@@ -78,18 +76,24 @@ export const defaultDeps: HerdrDeps = {
     });
     process.unref();
   },
-  openClient: () => {
-    const process = Bun.spawn(["herdr"], {
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    });
-    process.unref();
-  },
   wait: async (milliseconds) => {
     await Bun.sleep(milliseconds);
   },
 };
+
+/**
+ * Hands the terminal to the HerdR client and waits until it closes. The
+ * client must stay in the foreground: a background one cannot read the
+ * terminal once dev exits, and fails to start.
+ */
+export async function openClient(session?: string): Promise<number> {
+  const client = Bun.spawn(session ? ["herdr", "--session", session] : ["herdr"], {
+    stdin: "inherit",
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  return await client.exited;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -399,7 +403,6 @@ export async function startWorkspace(
     ["workspace_info", "workspace_focused"],
     deps,
   );
-  if (input.openClient && !input.insideHerdr) deps.openClient();
   return {
     workspace: input.workspace,
     path: input.path,

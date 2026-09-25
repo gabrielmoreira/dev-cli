@@ -58,7 +58,6 @@ function fakeDeps(options: {
     },
     canonicalize: async (path) => path,
     startServer: () => {},
-    openClient: () => {},
     wait: async () => {},
     interactions: options.chooseSession ? { chooseSession: options.chooseSession } : undefined,
   };

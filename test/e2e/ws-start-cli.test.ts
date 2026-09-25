@@ -3,7 +3,6 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import * as ws from "../../src/ws.ts";
-import * as herdr from "../../src/herdr.ts";
 
 const fakeHerdr = `#!/usr/bin/env bun
 import { appendFile, readFile } from "node:fs/promises";
@@ -304,52 +303,5 @@ describe("dev ws start CLI", () => {
       ["status", "server"],
       ["pane", "list"],
     ]);
-  });
-
-  it("opens the HerdR client after the requested workspace is ready and focused", async () => {
-    const events: string[] = [];
-    const reply = (result: Record<string, unknown>) => ({
-      stdout: JSON.stringify({ id: "test", result }),
-      stderr: "",
-      exitCode: 0,
-    });
-
-    await herdr.startWorkspace(
-      {
-        workspace: "payment-fix",
-        path: workspacePath,
-        insideHerdr: false,
-        openClient: true,
-      },
-      {
-        canonicalize: async (path) => path,
-        startServer: () => events.push("server:start"),
-        openClient: () => events.push("client:open"),
-        wait: async () => {},
-        run: async (args) => {
-          events.push(args.join(" "));
-          if (args[0] === "status") return { stdout: "status: running", stderr: "", exitCode: 0 };
-          if (args[0] === "pane") return reply({ type: "pane_list", panes: [] });
-          if (args[0] === "agent" && args[1] === "list") {
-            return reply({ type: "agent_list", agents: [] });
-          }
-          if (args[0] === "workspace" && args[1] === "create") {
-            return reply({
-              type: "workspace_created",
-              workspace: { workspace_id: "w7" },
-              tab: { tab_id: "w7:t1" },
-              root_pane: { pane_id: "w7:p1", workspace_id: "w7", cwd: workspacePath },
-            });
-          }
-          if (args[0] === "agent" && args[1] === "start") {
-            return reply({ type: "agent_started", agent: { pane_id: "w7:p1" } });
-          }
-          return reply({ type: "workspace_focused", workspace_id: "w7" });
-        },
-      },
-    );
-
-    expect(events.at(-2)).toBe("workspace focus w7");
-    expect(events.at(-1)).toBe("client:open");
   });
 });

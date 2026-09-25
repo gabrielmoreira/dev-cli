@@ -1604,7 +1604,6 @@ export const wsStartCommand = defineCommand({
           path: workspacePath,
           insideHerdr: ambient.env.HERDR_ENV === "1",
           session: args.session,
-          openClient: ambient.env.HERDR_ENV !== "1" && interactive,
         },
         interactive
           ? {
@@ -1625,6 +1624,11 @@ export const wsStartCommand = defineCommand({
         text: () =>
           `${result.reused ? "Focused" : "Started"} OMP '${result.agentName}' for workspace '${result.workspace}' in HerdR${result.session ? ` session '${result.session}'` : ""}.`,
       });
+      // Outside HerdR, hand this terminal to its client; dev returns when it closes.
+      if (interactive && !args.json && ambient.env.HERDR_ENV !== "1") {
+        ui.info("↳ Opening HerdR in this terminal…");
+        await herdr.openClient(result.session);
+      }
       return 0;
     } catch (error) {
       return reportError(error, args.json);
