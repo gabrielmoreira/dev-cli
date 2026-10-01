@@ -217,6 +217,7 @@ export async function loadWorkspaceContext(
   workspaceName: string,
   deps: WorkspaceDeps = defaultDeps,
   workspacePrefix?: string,
+  dryRun = false,
 ): Promise<{
   workspacePath: string;
   manifestPath: string;
@@ -254,13 +255,15 @@ export async function loadWorkspaceContext(
   const { manifest: currentManifest, body } = await deps.manifest.readWorkspace(manifestPath);
   assertSafeManifestMountPaths(currentManifest);
 
-  const healWarnings = await healWorkspaceAdmins({
-    root,
-    workspacePath,
-    workspaceName,
-    manifest: currentManifest,
-    deps,
-  });
+  const healWarnings = dryRun
+    ? []
+    : await healWorkspaceAdmins({
+        root,
+        workspacePath,
+        workspaceName,
+        manifest: currentManifest,
+        deps,
+      });
 
   return {
     workspacePath,
@@ -1026,6 +1029,7 @@ export interface WorkspaceStatusInput {
   workspaceName: string;
   refresh?: boolean;
   offline?: boolean;
+  dryRun?: boolean;
   resolveExtraHeader?: (source: string) => Promise<string | undefined>;
 }
 
@@ -1045,7 +1049,13 @@ export async function status(
     manifestPath,
     manifest: currentManifest,
     healWarnings,
-  } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
+  } = await loadWorkspaceContext(
+    input.root,
+    input.workspaceName,
+    deps,
+    input.workspacePrefix,
+    input.dryRun,
+  );
 
   // If refresh requested and not offline, fetch from remotes
   if (input.refresh && !input.offline) {
@@ -1461,6 +1471,7 @@ export async function update(
       workspaceName: input.workspaceName,
       refresh: input.refresh ?? !input.offline,
       offline: input.offline,
+      dryRun: input.dryRun,
       resolveExtraHeader: input.resolveExtraHeader,
     },
     deps,
