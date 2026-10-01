@@ -133,6 +133,134 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
     expect(Number.isFinite(Date.parse(jumpRecent["nav-target"]))).toBe(true);
   });
 
+  it.each([false, true])(
+    "rejects a missing jump target without printing a path or changing recency (json=%s)",
+    async (json) => {
+      const root = await mkdtemp(join(tmpdir(), "dev-cli-e2e-missing-jump-"));
+      try {
+        const recentPath = join(root, ".dev", "state", "recent.json");
+        const history = JSON.stringify({ existing: "2026-01-01T00:00:00.000Z" });
+        await fs.writeTextAtomic(recentPath, history);
+        const proc = Bun.spawn(
+          [
+            process.execPath,
+            cliPath,
+            "ws",
+            "jump",
+            "missing",
+            "--root",
+            root,
+            ...(json ? ["--json"] : []),
+          ],
+          {
+            env: {
+              ...process.env,
+              HOME: root,
+              USERPROFILE: root,
+              DEV_ROOT: root,
+              DEV_CWD: root,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        const exitCode = await proc.exited;
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe("");
+        if (json) {
+          expect(JSON.parse(stderr)).toMatchObject({
+            error: { code: "WORKSPACE_NOT_FOUND", path: join(root, "ws", "missing") },
+          });
+        }
+        expect(await fs.readText(recentPath)).toBe(history);
+      } finally {
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  );
+
+  it("rejects a regular file jump target without recording recency", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dev-cli-e2e-file-jump-"));
+    try {
+      const path = join(root, "ws", "not-a-directory");
+      await fs.ensureDir(join(root, "ws"));
+      await fs.writeText(path, "not a workspace directory");
+      const proc = Bun.spawn(
+        [process.execPath, cliPath, "ws", "jump", "not-a-directory", "--root", root, "--json"],
+        {
+          env: {
+            ...process.env,
+            HOME: root,
+            USERPROFILE: root,
+            DEV_ROOT: root,
+            DEV_CWD: root,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const exitCode = await proc.exited;
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+
+      expect(exitCode).toBe(1);
+      expect(stdout).toBe("");
+      expect(JSON.parse(stderr)).toMatchObject({ error: { code: "WORKSPACE_NOT_FOUND", path } });
+      expect(fs.exists(join(root, ".dev", "state", "recent.json"))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it.each(["explicit name", "cwd inference"])(
+    "jumps to an existing custom-prefix workspace using %s",
+    async (selection) => {
+      const root = await mkdtemp(join(tmpdir(), "dev-cli-e2e-prefix-jump-"));
+      try {
+        const path = join(root, "tasks", "active", "nav-target");
+        const cwd = join(path, "mounts", "payments");
+        await fs.ensureDir(cwd);
+        await fs.writeText(join(root, "dev.yaml"), "defaults:\n  workspace_prefix: tasks/active\n");
+        const proc = Bun.spawn(
+          [
+            process.execPath,
+            cliPath,
+            "ws",
+            "jump",
+            ...(selection === "explicit name" ? ["nav-target"] : []),
+            "--root",
+            root,
+          ],
+          {
+            cwd,
+            env: {
+              ...process.env,
+              HOME: root,
+              USERPROFILE: root,
+              DEV_ROOT: root,
+              DEV_CWD: cwd,
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        const exitCode = await proc.exited;
+        const stdout = (await new Response(proc.stdout).text()).trim();
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toBe(path);
+        expect(await fs.isDirectory(stdout)).toBe(true);
+        const recent = JSON.parse(await fs.readText(join(root, ".dev", "state", "recent.json")));
+        expect(Number.isFinite(Date.parse(recent["nav-target"]))).toBe(true);
+      } finally {
+        await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+      }
+    },
+  );
+
   it("lists the workspace used last first and ignores corrupt history", async () => {
     const root = await mkdtemp(join(tmpdir(), "dev-cli-e2e-recent-"));
     try {

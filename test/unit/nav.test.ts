@@ -1,4 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { generateShellInit, resolveJumpTarget } from "../../src/nav";
 import { formatCommandHelp, formatHelp } from "../../src/cli";
 
@@ -90,31 +93,88 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
   });
 
   describe("resolveJumpTarget", () => {
-    test("resolves workspace path by explicit name", () => {
-      const target = resolveJumpTarget({
-        root: "C:/fake/dev",
+    let root: string;
+
+    beforeEach(async () => {
+      root = await mkdtemp(join(tmpdir(), "dev-cli-nav-"));
+    });
+
+    afterEach(async () => {
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    });
+
+    test("resolves an existing workspace directory by explicit name", async () => {
+      const path = join(root, "ws", "payment-fix");
+      await mkdir(path, { recursive: true });
+
+      const target = await resolveJumpTarget({ root, workspaceName: "payment-fix" });
+
+      expect(target).toEqual({ name: "payment-fix", path });
+    });
+
+    test("resolves an existing workspace from a nested current directory", async () => {
+      const path = join(root, "ws", "payment-fix");
+      const cwd = join(path, "mounts", "payments");
+      await mkdir(cwd, { recursive: true });
+
+      const target = await resolveJumpTarget({ root, cwd });
+
+      expect(target).toEqual({ name: "payment-fix", path });
+    });
+
+    test("rejects a missing explicit workspace with its resolved path", async () => {
+      const path = join(root, "ws", "missing");
+
+      await expect(
+        Promise.resolve().then(() => resolveJumpTarget({ root, workspaceName: "missing" })),
+      ).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND", details: { path } });
+    });
+
+    test("rejects a regular file at the workspace path", async () => {
+      const path = join(root, "ws", "not-a-directory");
+      await mkdir(join(root, "ws"));
+      await writeFile(path, "not a workspace directory");
+
+      await expect(
+        Promise.resolve().then(() => resolveJumpTarget({ root, workspaceName: "not-a-directory" })),
+      ).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND", details: { path } });
+    });
+
+    test("resolves an existing explicit workspace under a custom prefix", async () => {
+      const workspacePrefix = "tasks/active";
+      const path = join(root, workspacePrefix, "payment-fix");
+      await mkdir(path, { recursive: true });
+
+      const target = await resolveJumpTarget({
+        root,
+        workspacePrefix,
         workspaceName: "payment-fix",
       });
-      expect(target.name).toBe("payment-fix");
-      expect(target.path.replace(/\\/g, "/")).toBe("C:/fake/dev/ws/payment-fix");
+
+      expect(target).toEqual({ name: "payment-fix", path });
     });
 
-    test("resolves workspace path from current directory when name is omitted", () => {
-      const target = resolveJumpTarget({
-        root: "C:/fake/dev",
-        cwd: "C:/fake/dev/ws/payment-fix/mounts/payments",
-      });
-      expect(target.name).toBe("payment-fix");
-      expect(target.path.replace(/\\/g, "/")).toBe("C:/fake/dev/ws/payment-fix");
+    test("infers an existing workspace under a custom prefix from cwd", async () => {
+      const workspacePrefix = "tasks/active";
+      const path = join(root, workspacePrefix, "payment-fix");
+      const cwd = join(path, "mounts", "payments");
+      await mkdir(cwd, { recursive: true });
+
+      const target = await resolveJumpTarget({ root, workspacePrefix, cwd });
+
+      expect(target).toEqual({ name: "payment-fix", path });
     });
 
-    test("throws when workspace cannot be resolved", () => {
-      expect(() =>
-        resolveJumpTarget({
-          root: "C:/fake/dev",
-          cwd: "C:/fake/other-dir",
-        }),
-      ).toThrow();
+    test("rejects a target that escapes the dev root", async () => {
+      await expect(
+        Promise.resolve().then(() => resolveJumpTarget({ root, workspaceName: "../.." })),
+      ).rejects.toMatchObject({ code: "PATH_OUTSIDE_ROOT" });
+    });
+
+    test("rejects when cwd is outside the workspace prefix and no name is given", async () => {
+      await expect(
+        Promise.resolve().then(() => resolveJumpTarget({ root, cwd: root })),
+      ).rejects.toMatchObject({ code: "WORKSPACE_NOT_FOUND" });
     });
   });
 
