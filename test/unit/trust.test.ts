@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import {
   parseSourceIdentity,
   evaluateTrust,
@@ -78,6 +80,45 @@ describe("Trust Model and Hook Resolution Pure Logic (Phase 16)", () => {
     });
     expect(untrusted.isTrusted).toBe(false);
     expect(untrusted.matchedScope).toBeUndefined();
+  });
+
+  test("local trust distinguishes repositories with the same basename", () => {
+    const trustedPath = resolve(tmpdir(), "safe", "checkout");
+    const otherPath = resolve(tmpdir(), "other", "checkout");
+    const scope: TrustedScope = {
+      provider: "local",
+      tenant: "local",
+      owner: "local",
+      repos: [parseSourceIdentity(trustedPath).repo],
+      install: false,
+      allowedTools: [],
+    };
+
+    expect(evaluateTrust({ sourceUrl: otherPath, trustedScopes: [scope] }).isTrusted).toBe(false);
+    expect(evaluateTrust({ sourceUrl: trustedPath, trustedScopes: [scope] }).isTrusted).toBe(true);
+  });
+
+  test("local trust matches only the full resolved path", () => {
+    const trustedPath = resolve(tmpdir(), "safe", "foo");
+    const scope: TrustedScope = {
+      provider: "local",
+      tenant: "local",
+      owner: "local",
+      repos: [trustedPath],
+      install: false,
+      allowedTools: [],
+    };
+
+    expect(evaluateTrust({ sourceUrl: trustedPath, trustedScopes: [scope] }).isTrusted).toBe(true);
+    expect(
+      evaluateTrust({
+        sourceUrl: resolve(tmpdir(), "safe", "foobar"),
+        trustedScopes: [scope],
+      }).isTrusted,
+    ).toBe(false);
+    expect(
+      evaluateTrust({ sourceUrl: `${trustedPath}.git`, trustedScopes: [scope] }).isTrusted,
+    ).toBe(false);
   });
 
   test("resolveHookExecution: mount hook override takes top precedence for trusted scopes", () => {
