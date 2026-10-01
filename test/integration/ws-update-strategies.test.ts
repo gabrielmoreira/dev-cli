@@ -197,7 +197,7 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
     expect(fs.exists(rebaseDir.stdout.trim())).toBe(false);
   });
 
-  it("reports a coded recovery error when a failed rebase cannot be aborted", async () => {
+  it("reports the original failure when a pre-rebase hook rejects before rebase starts", async () => {
     const mountName = await newWorkspace("rebase-abort-failure");
     const mountPath = join(tempRoot, "ws", "rebase-abort-failure", mountName);
 
@@ -207,6 +207,7 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
     await git.runGit(["config", "user.email", "local@example.com"], { cwd: mountPath });
     await git.runGit(["add", "."], { cwd: mountPath });
     await git.runGit(["commit", "-m", "feat: local work"], { cwd: mountPath });
+    const beforeCommit = (await git.runGit(["rev-parse", "HEAD"], { cwd: mountPath })).stdout;
 
     const hooksPath = join(tempRoot, "rebase-abort-hooks");
     const hookPath = join(hooksPath, "pre-rebase");
@@ -220,22 +221,28 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
     await git.runGit(["config", "core.hooksPath", hooksPath], { cwd: mountPath });
 
     try {
-      const error = await failureFrom(
-        ws
-          .update({
-            root: tempRoot,
-            workspaceName: "rebase-abort-failure",
-            rebase: true,
-            refresh: true,
-          })
-          .finally(async () => {
-            // Prove Git ran the hook before checking the recovery error.
-            expect(await fs.readText(markerPath)).toBe("fired");
-          }),
-      );
+      const error: unknown = await ws
+        .update({
+          root: tempRoot,
+          workspaceName: "rebase-abort-failure",
+          rebase: true,
+          refresh: true,
+        })
+        .catch((caught: unknown) => caught);
 
-      expect(error.code).toBe("REBASE_ABORT_FAILED");
-      expect(error.details?.worktreePath).toBe(mountPath);
+      expect(await fs.readText(markerPath)).toBe("fired");
+      const gitDir = await git.runGit(["rev-parse", "--absolute-git-dir"], { cwd: mountPath });
+      expect(gitDir.exitCode).toBe(0);
+      expect(fs.exists(join(gitDir.stdout, "rebase-merge"))).toBe(false);
+      expect(fs.exists(join(gitDir.stdout, "rebase-apply"))).toBe(false);
+
+      expect(error).toBeInstanceOf(git.GitError);
+      expect(error).toHaveProperty("code", "FAILED");
+      expect(error).toHaveProperty("details.stderr", expect.stringContaining("pre-rebase hook"));
+      expect((await git.runGit(["rev-parse", "HEAD"], { cwd: mountPath })).stdout).toBe(
+        beforeCommit,
+      );
+      expect((await git.runGit(["status", "--porcelain"], { cwd: mountPath })).stdout).toBe("");
     } finally {
       await git.runGit(["config", "--unset", "core.hooksPath"], { cwd: mountPath });
       await rm(hooksPath, { recursive: true, force: true });

@@ -1052,12 +1052,24 @@ export interface RebaseOntoResult {
   abortError?: string;
 }
 
-/** Rebases the worktree onto the target ref, attempting rollback on failure.
+/** Rebases the worktree onto the target ref, attempting rollback only if rebase started.
  * Reports abort failures separately when rollback cannot be confirmed. */
 export async function rebaseOnto(options: RebaseOntoOptions): Promise<RebaseOntoResult> {
-  const res = await runGit(["-C", options.worktreePath, "rebase", options.targetRef]);
+  const args = ["-C", options.worktreePath, "rebase", options.targetRef];
+  const res = await runGit(args);
   if (res.exitCode === 0) {
     return { ok: true };
+  }
+  const gitDir = await runGit(["-C", options.worktreePath, "rev-parse", "--absolute-git-dir"]);
+  const inProgress =
+    gitDir.exitCode === 0 &&
+    (fs.exists(join(gitDir.stdout, "rebase-merge")) ||
+      fs.exists(join(gitDir.stdout, "rebase-apply")));
+  if (!inProgress) {
+    throw new GitError(classifyGitError(res.stderr), "Git rebase failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
   const abort = await runGit(["-C", options.worktreePath, "rebase", "--abort"]);
   if (abort.exitCode !== 0) {

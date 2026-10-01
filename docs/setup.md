@@ -78,6 +78,8 @@ Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are c
 
 Every repository is cloned once, as a bare mirror under `.dev/git/<host>/<owner>/<repo>.git`. Workspace mounts and `mirrors/` checkouts are Git worktrees on that clone, so the same repository in ten workspaces is downloaded once.
 
+`dev ws update --rebase` rolls back a conflicting rebase. If Git rejects the operation before a rebase starts, such as a failing `pre-rebase` hook, the command reports the original Git failure instead of attempting an abort.
+
 ## Access and credentials
 
 `provider add` records where to look. It does not grant access or save a token. Your account needs permission to list repositories and clone each private source; `dev ws add` itself needs no write permission.
