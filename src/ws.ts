@@ -334,7 +334,9 @@ async function healWorkspaceAdmins(params: {
               : revision.commit;
         await deps.git.adoptWorktree({
           adminRepoPath,
+          sourceKey,
           mountPath: join(workspacePath, mount.path),
+          mountRelativePath: mount.path,
           revision: head,
           trackBranch,
         });

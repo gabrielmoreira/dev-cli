@@ -90,6 +90,40 @@ describe("Workspace admin self-heal integration", () => {
     expect(status.mounts).toHaveLength(1);
   });
 
+  it("heals same-basename nested mounts into distinct registrations", async () => {
+    const workspaceName = "heal-nested";
+    await ws.init({ root: tempRoot, name: workspaceName });
+    await ws.add({
+      root: tempRoot,
+      workspaceName,
+      source: bareRemotePath,
+      path: "a/core",
+      branch: "main",
+    });
+    await ws.add({
+      root: tempRoot,
+      workspaceName,
+      source: bareRemotePath,
+      path: "b/core",
+      branch: "feature/v1",
+    });
+
+    const sourceKey = git.normalizeSourceKey(bareRemotePath);
+    const adminPath = workspaceAdminRepoPath({ root: tempRoot, workspaceName, sourceKey });
+    const firstPath = join(tempRoot, "ws", workspaceName, "a", "core");
+    const secondPath = join(tempRoot, "ws", workspaceName, "b", "core");
+    await rm(adminPath, { recursive: true, force: true });
+
+    const result = await ws.status({ root: tempRoot, workspaceName });
+
+    expect(result.healWarnings).toEqual([]);
+    expect((await git.inspectWorktree(firstPath)).currentRevision.branch).toBe("main");
+    expect((await git.inspectWorktree(secondPath)).currentRevision.branch).toBe("feature/v1");
+    const firstGitdir = (await fs.readText(join(firstPath, ".git"))).trim();
+    const secondGitdir = (await fs.readText(join(secondPath, ".git"))).trim();
+    expect(firstGitdir).not.toBe(secondGitdir);
+  });
+
   it("reports a heal it could not do instead of hiding it", async () => {
     const lostRemote = await mkdtemp(join(tmpdir(), "dev-cli-ws-heal-lost-"));
     await git.runGit(["clone", "--bare", bareRemotePath, lostRemote]);
