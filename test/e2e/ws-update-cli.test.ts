@@ -160,5 +160,26 @@ describe("dev ws update & ws sync CLI E2E (Phase 5)", () => {
     const syncJson = JSON.parse(syncStdout);
     expect(syncJson.summary.upToDate).toBe(1);
     expect(syncJson.summary.skipped).toBe(1);
+
+    // 8. The root sync shortcut remains available for an explicit workspace.
+    const rootSyncProc = Bun.spawn(
+      ["bun", "run", cliPath, "sync", "--ws", "sync-e2e-ws", "--json", "--root", tempRoot],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    const rootSyncStdout = await new Response(rootSyncProc.stdout).text();
+    expect(await rootSyncProc.exited).toBe(0);
+    const rootSyncJson = JSON.parse(rootSyncStdout);
+    expect(rootSyncJson.summary.upToDate).toBe(1);
+    expect(rootSyncJson.summary.skipped).toBe(1);
+
+    for (const alias of ["up"]) {
+      const aliasProc = Bun.spawn(
+        ["bun", "run", cliPath, "ws", alias, "sync-e2e-ws", "--json", "--root", tempRoot],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      const aliasStderr = await new Response(aliasProc.stderr).text();
+      expect(await aliasProc.exited).toBe(2);
+      expect(JSON.parse(aliasStderr).error.code).toBe("UNKNOWN_COMMAND");
+    }
   });
 });

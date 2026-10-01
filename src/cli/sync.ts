@@ -331,7 +331,7 @@ export const syncCommand = defineCommand({
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
     ws: { type: "string", description: "Target workspace name for contextual sync" },
-    // Inside a workspace, `dev sync` is `dev ws sync`: these reach it unchanged.
+    // Inside a workspace, `dev sync` is the root shortcut for workspace update.
     ...workspaceSyncOptions,
   },
   subCommands: {

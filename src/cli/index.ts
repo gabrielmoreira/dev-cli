@@ -359,7 +359,6 @@ const WORKSPACE_TARGET_SUBCOMMANDS = new Set([
   "lock",
   "unlock",
   "tag",
-  "up",
   "remove",
   "rm",
   "path",

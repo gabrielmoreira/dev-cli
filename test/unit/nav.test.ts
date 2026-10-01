@@ -152,6 +152,13 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
         init.arguments.find((argument: { name: string }) => argument.name === "name").required,
       ).toBe(false);
 
+      const update = ws.subcommands.find((command: { name: string }) => command.name === "update");
+      expect(update?.aliases ?? []).not.toContain("up");
+      expect(update?.aliases ?? []).toContain("sync");
+      expect(parsed.commands.some((command: { name: string }) => command.name === "sync")).toBe(
+        true,
+      );
+
       const pr = parsed.commands.find((command: { name: string }) => command.name === "pr");
       const view = pr.subcommands.find((command: { name: string }) => command.name === "view");
       expect(

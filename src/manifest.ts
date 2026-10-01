@@ -70,7 +70,7 @@ ${objective}
 - Add a repository with \`dev ws add <url-or-name>\`.
 - Compare declared and checked-out state with \`dev ws status\`.
 - Start or focus OMP in HerdR with \`dev ws start\`.
-- Bring the checkouts in line with this file with \`dev ws sync\`.
+- Bring the checkouts in line with this file with \`dev ws update\`.
 `;
 }
 
