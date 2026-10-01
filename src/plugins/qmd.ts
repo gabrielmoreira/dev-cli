@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { RuntimeConfig } from "../config.ts";
-import { deriveCanonicalParts } from "../paths.ts";
+import { devDir, deriveCanonicalParts } from "../paths.ts";
 import { LabelError, parseDeclaredSources, resolveLabeledSources } from "../labels.ts";
 import type { Integration, IntegrationFactory, PluginBase } from "./events.ts";
 
@@ -29,7 +29,7 @@ export function parseQmdConfig(raw: Record<string, unknown> | undefined): QmdPlu
 export function qmdEnv(base: PluginBase, config: QmdPluginConfig): Record<string, string> {
   const dir =
     config.config_dir === "scoped"
-      ? join(base.root, ".dev", "plugins", "qmd")
+      ? join(devDir({ root: base.root }), "plugins", "qmd")
       : config.config_dir === "global"
         ? ""
         : config.config_dir;
