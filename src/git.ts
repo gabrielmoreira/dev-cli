@@ -685,14 +685,14 @@ export async function stashWorktree(
 ): Promise<StashWorktreeResult> {
   const status = await runGit(["-C", worktreePath, "status", "--short"]);
   if (status.exitCode !== 0) {
-    throw new Error(`Failed to inspect local mirror changes: ${status.stderr || status.stdout}`);
+    throw new Error(`Failed to inspect local worktree changes: ${status.stderr || status.stdout}`);
   }
   const changes = status.stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
   if (changes.length === 0) {
-    throw new Error(`No local mirror changes found at ${worktreePath}`);
+    throw new Error(`No local worktree changes found at ${worktreePath}`);
   }
 
   const previousStash = await runGit(["-C", worktreePath, "rev-parse", "--verify", "refs/stash"]);
@@ -707,7 +707,9 @@ export async function stashWorktree(
     stashName,
   ]);
   if (stashed.exitCode !== 0) {
-    throw new Error(`Failed to preserve local mirror changes: ${stashed.stderr || stashed.stdout}`);
+    throw new Error(
+      `Failed to preserve local worktree changes: ${stashed.stderr || stashed.stdout}`,
+    );
   }
 
   const stashSha = await runGit(["-C", worktreePath, "rev-parse", "--verify", "refs/stash"]);
@@ -716,7 +718,7 @@ export async function stashWorktree(
     !stashSha.stdout ||
     (previousStash.exitCode === 0 && previousStash.stdout === stashSha.stdout)
   ) {
-    throw new Error(`Mirror changes were not stored in a new recoverable stash`);
+    throw new Error(`Worktree changes were not stored in a new recoverable stash`);
   }
 
   return { stashName, stashSha: stashSha.stdout, changes };
@@ -916,35 +918,46 @@ export async function inspectRepositories(worktreePaths: string[]): Promise<Obse
 export interface StashFastForwardOptions {
   worktreePath: string;
   targetRef: string;
+  stashName: string;
 }
 
 export interface StashFastForwardResult {
-  /** True when `git stash pop` hit conflicts; the stash entry is kept. */
-  stashConflict: boolean;
+  /** The verified backup is kept, even after a clean apply. */
+  stash?: { stashName: string; stashSha: string; recovery: string };
+  restored: boolean;
+  /** Both the fast-forward and the attempt to restore the backup failed. */
+  fastForwardFailed?: boolean;
 }
 
-/** Fast-forwards a dirty worktree: stash, fast-forward, pop. On pop
- * conflicts the stash entry stays intact for manual recovery. */
+/** Fast-forwards a worktree and restores local changes by verified stash SHA.
+ * The named stash is never dropped: it remains the user's backup. */
 export async function stashFastForward(
   options: StashFastForwardOptions,
 ): Promise<StashFastForwardResult> {
-  const stash = await runGit([
-    "-C",
-    options.worktreePath,
-    "stash",
-    "push",
-    "--include-untracked",
-    "-m",
-    "dev autostash",
-  ]);
-  if (stash.exitCode !== 0) {
-    throw new Error(`Failed to stash changes: ${stash.stderr || stash.stdout}`);
+  const observed = await inspectWorktree(options.worktreePath);
+  if (!observed.isDirty) {
+    await fastForward({ worktreePath: options.worktreePath, targetRef: options.targetRef });
+    return { restored: true };
   }
 
-  await fastForward({ worktreePath: options.worktreePath, targetRef: options.targetRef });
+  const created = await stashWorktree(options.worktreePath, options.stashName);
+  const stash = {
+    stashName: created.stashName,
+    stashSha: created.stashSha,
+    recovery: `git stash apply ${created.stashSha}`,
+  };
+  try {
+    await fastForward({ worktreePath: options.worktreePath, targetRef: options.targetRef });
+  } catch (error) {
+    const back = await runGit(["-C", options.worktreePath, "stash", "apply", stash.stashSha]);
+    if (back.exitCode !== 0) {
+      return { stash, restored: false, fastForwardFailed: true };
+    }
+    throw error;
+  }
 
-  const pop = await runGit(["-C", options.worktreePath, "stash", "pop"]);
-  return { stashConflict: pop.exitCode !== 0 };
+  const apply = await runGit(["-C", options.worktreePath, "stash", "apply", stash.stashSha]);
+  return { stash, restored: apply.exitCode === 0 };
 }
 
 export interface RebaseOntoOptions {

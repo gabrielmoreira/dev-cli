@@ -6,6 +6,15 @@ import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 import * as ws from "../../src/ws.ts";
 
+async function failureFrom(promise: Promise<unknown>): Promise<ws.WorkspaceError> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as ws.WorkspaceError;
+  }
+  throw new Error("expected rejection, got resolve");
+}
+
 describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", () => {
   let tempRoot: string;
   let bareRemotePath: string;
@@ -166,5 +175,91 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
     });
     expect(again).toEqual({ path: "core-repo", removed: false, healWarnings: [] });
     expect(await Bun.file(manifestPath).text()).toBe(manifestData);
+  });
+
+  it("preserves user stashes and reports autostash backups and restore conflicts", async () => {
+    const workspaceName = "stash-safety";
+    await ws.init({ root: tempRoot, name: workspaceName });
+    await ws.add({
+      root: tempRoot,
+      workspaceName,
+      source: bareRemotePath,
+      path: "core",
+      branch: "main",
+    });
+    const mountPath = join(tempRoot, "ws", workspaceName, "core");
+    const advance = await mkdtemp(join(tmpdir(), "sample-project-stash-advance-"));
+    try {
+      await git.runGit(["clone", bareRemotePath, advance]);
+      await git.runGit(["config", "user.name", "user"], { cwd: advance });
+      await git.runGit(["config", "user.email", "user@example.org"], { cwd: advance });
+
+      await fs.writeText(join(mountPath, "user.txt"), "user stash");
+      await git.runGit(["stash", "push", "--include-untracked", "-m", "pre-existing user stash"], {
+        cwd: mountPath,
+      });
+      const userStash = (await git.runGit(["rev-parse", "refs/stash"], { cwd: mountPath })).stdout;
+
+      await fs.writeText(join(advance, "remote-one.txt"), "first remote commit");
+      await git.runGit(["add", "remote-one.txt"], { cwd: advance });
+      await git.runGit(["commit", "-m", "advance remote once"], { cwd: advance });
+      await git.runGit(["push", "origin", "main"], { cwd: advance });
+      await git.runGit(["-C", mountPath, "fetch", "origin"]);
+
+      await git.stashFastForward({
+        worktreePath: mountPath,
+        targetRef: "refs/remotes/origin/main",
+        stashName: "dev autostash sample-workspace/core clean-case",
+      });
+      const afterClean = await git.runGit(["stash", "list", "--format=%H"], { cwd: mountPath });
+      expect(afterClean.stdout.split(/\r?\n/)).toEqual([userStash]);
+      expect(fs.exists(join(mountPath, "user.txt"))).toBe(false);
+      expect(await fs.readText(join(mountPath, "remote-one.txt"))).toBe("first remote commit");
+
+      await fs.writeText(join(mountPath, "notes.txt"), "local notes");
+      await fs.writeText(join(advance, "remote-two.txt"), "second remote commit");
+      await git.runGit(["add", "remote-two.txt"], { cwd: advance });
+      await git.runGit(["commit", "-m", "advance remote twice"], { cwd: advance });
+      await git.runGit(["push", "origin", "main"], { cwd: advance });
+
+      const result = await ws.update({ root: tempRoot, workspaceName, autostash: true });
+      const mount = result.mounts.find((item) => item.path === "core");
+      expect(mount?.action).toBe("fast_forward");
+      expect(mount?.stash?.stashName).toStartWith(`dev autostash ${workspaceName}/core `);
+      expect(mount?.stash?.stashSha).toMatch(/^[a-f0-9]{40}$/);
+      expect(mount?.stash?.recovery).toBe(`git stash apply ${mount?.stash?.stashSha}`);
+      expect(mount?.warning).toBeUndefined();
+      expect(await fs.readText(join(mountPath, "notes.txt"))).toBe("local notes");
+      expect(await fs.readText(join(mountPath, "remote-two.txt"))).toBe("second remote commit");
+      const afterRestored = await git.runGit(["stash", "list", "--format=%H"], { cwd: mountPath });
+      expect(afterRestored.stdout.split(/\r?\n/)).toEqual([mount!.stash!.stashSha, userStash]);
+
+      await fs.writeText(join(mountPath, "collision.txt"), "local version");
+      await fs.writeText(join(advance, "collision.txt"), "remote version");
+      await git.runGit(["add", "collision.txt"], { cwd: advance });
+      await git.runGit(["commit", "-m", "advance conflicting file"], { cwd: advance });
+      await git.runGit(["push", "origin", "main"], { cwd: advance });
+
+      const error = await failureFrom(
+        ws.update({ root: tempRoot, workspaceName, autostash: true }),
+      );
+      expect(error).toBeInstanceOf(ws.WorkspaceError);
+      expect(error.code).toBe("STASH_RESTORE_FAILED");
+      expect(error.details).toEqual({
+        path: mountPath,
+        stash: expect.stringContaining(`dev autostash ${workspaceName}/core `),
+        sha: expect.stringMatching(/^[a-f0-9]{40}$/),
+        recovery: `git stash apply ${error.details?.sha}`,
+      });
+      const kept = await git.runGit(["stash", "list", "--format=%H"], { cwd: mountPath });
+      expect(kept.stdout.split(/\r?\n/)).toEqual([
+        error.details?.sha as string,
+        mount!.stash!.stashSha,
+        userStash,
+      ]);
+      expect(await fs.readText(join(mountPath, "collision.txt"))).toBe("remote version");
+    } finally {
+      await rm(advance, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 });

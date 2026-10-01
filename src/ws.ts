@@ -1300,8 +1300,9 @@ export interface MountUpdateResult {
   revision?: manifest.MountRevision;
   /** On create: the checkout came from a mirror already in the local pool. */
   mirrorReused?: boolean;
-  /** Non-fatal condition reported to the user (e.g. stash pop conflict). */
+  /** Non-fatal condition reported to the user. */
   warning?: string;
+  stash?: git.StashFastForwardResult["stash"];
 }
 
 export interface WorkspaceUpdateResult {
@@ -1534,15 +1535,25 @@ export async function update(
       updatedCount++;
     } else if (item.action === "fast_forward") {
       const worktreePath = join(statusRes.workspacePath, item.path);
-      let warning: string | undefined;
+      let stash: MountUpdateResult["stash"];
       if (item.autostash) {
         const stashResult = await deps.git.stashFastForward({
           worktreePath,
           targetRef: item.targetRef!,
+          stashName: `dev autostash ${input.workspaceName}/${item.path} ${new Date().toISOString()}`,
         });
-        if (stashResult.stashConflict) {
-          warning =
-            "Stash pop had conflicts; the fast-forward succeeded and your changes were kept safe in the stash entry.";
+        stash = stashResult.stash;
+        if (!stashResult.restored) {
+          throw new WorkspaceError(
+            "STASH_RESTORE_FAILED",
+            `${stashResult.fastForwardFailed ? "Fast-forward and stash restore failed" : "Fast-forwarded, but stash apply conflicted"} at ${worktreePath}. Backup retained: ${stash!.stashName} (${stash!.stashSha.slice(0, 8)}). Recover with: ${stash!.recovery}`,
+            {
+              path: worktreePath,
+              stash: stash!.stashName,
+              sha: stash!.stashSha,
+              recovery: stash!.recovery,
+            },
+          );
         }
       } else {
         await deps.git.fastForward({ worktreePath, targetRef: item.targetRef! });
@@ -1554,7 +1565,7 @@ export async function update(
         action: "fast_forward",
         previousCommit: prevCommit,
         newCommit: reinspected.currentRevision?.commitSha,
-        warning,
+        stash,
       });
       updatedCount++;
     } else if (item.action === "rebase") {

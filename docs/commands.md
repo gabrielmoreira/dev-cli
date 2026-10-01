@@ -328,19 +328,19 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 
 **Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                                        |
-| ---------------- | ---------- | ------------------------------------------------------------------ |
-| `target`         | positional | Workspace name or path to ws.md                                    |
-| `--ws <value>`   | string     | Target workspace name                                              |
-| `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)   |
-| `--autostash`    | boolean    | Stash uncommitted changes, fast-forward, then pop the stash        |
-| `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict) |
-| `--dry-run`      | boolean    | Print the plan and change nothing                                  |
-| `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                      |
-| `--force`        | boolean    | Alias for --consent                                                |
-| `--offline`      | boolean    | Read strictly from local mirror without network                    |
-| `--root <value>` | string     | Explicit dev root directory                                        |
-| `--json`         | boolean    | Output in structured JSON format                                   |
+| Argument         | Type       | Description                                                                                   |
+| ---------------- | ---------- | --------------------------------------------------------------------------------------------- |
+| `target`         | positional | Workspace name or path to ws.md                                                               |
+| `--ws <value>`   | string     | Target workspace name                                                                         |
+| `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
+| `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
+| `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
+| `--dry-run`      | boolean    | Print the plan and change nothing                                                             |
+| `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                                                 |
+| `--force`        | boolean    | Alias for --consent                                                                           |
+| `--offline`      | boolean    | Read strictly from local mirror without network                                               |
+| `--root <value>` | string     | Explicit dev root directory                                                                   |
+| `--json`         | boolean    | Output in structured JSON format                                                              |
 
 ## `dev ws track`
 
@@ -613,7 +613,7 @@ Sync the current workspace; outside one, sync provider inventory plus work items
 | `--json`             | boolean | Output in structured JSON format                                                                                                  |
 | `--ws <value>`       | string  | Target workspace name for contextual sync                                                                                         |
 | `--refresh`          | boolean | Fetch remotes before fast-forwarding (default, unless --offline)                                                                  |
-| `--autostash`        | boolean | Stash uncommitted changes, fast-forward, then pop the stash                                                                       |
+| `--autostash`        | boolean | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup)                                     |
 | `--rebase`           | boolean | Rebase diverged mounts onto the remote branch (aborts on conflict)                                                                |
 | `--dry-run`          | boolean | Print the plan and change nothing                                                                                                 |
 | `--consent`          | boolean | Grant explicit consent to run lifecycle hooks                                                                                     |
