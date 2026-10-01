@@ -1,5 +1,5 @@
 import { defineCommand, renderUsage, runCommand, type ArgDef, type CommandDef } from "citty";
-import { wsCommand, wsGoCommand, wsListCommand, wsStartCommand } from "./ws.ts";
+import { wsCommand, wsGoCommand, wsListCommand, wsStartCommand, wsStatusCommand } from "./ws.ts";
 import { mirrorCommand } from "./mirror.ts";
 import { syncCommand } from "./sync.ts";
 import { prCommand } from "./pr.ts";
@@ -91,7 +91,7 @@ async function describeCommand(
   }
 
   return {
-    name: meta.name ?? fallbackName,
+    name: fallbackName,
     description: meta.description,
     arguments: Object.entries(args).map(([name, definition]) => ({
       name,
@@ -148,7 +148,8 @@ export async function formatCommandHelp(path: string[]): Promise<string> {
   }
   if (names.length === 0) return await renderCommandUsage(mainCommand);
   const parent: InspectableCommand = { meta: { name: ["dev", ...names.slice(0, -1)].join(" ") } };
-  return await renderCommandUsage(command, parent);
+  const meta = await resolveDefinition(command.meta ?? {});
+  return await renderCommandUsage({ ...command, meta: { ...meta, name: names.at(-1) } }, parent);
 }
 
 function editDistance(a: string, b: string): number {
@@ -317,6 +318,7 @@ export const mainCommand = defineCommand({
   subCommands: {
     init: initCommand,
     ls: wsListCommand,
+    status: wsStatusCommand,
     use: useCommand,
     go: wsGoCommand,
     start: wsStartCommand,
