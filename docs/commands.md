@@ -21,7 +21,8 @@ Developer CLI & Workspace Engine
 | Subcommand       | Description                                                                                                                              |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `dev init`       | Initialize or update a dev root; without arguments, guide providers and inventory                                                        |
-| `dev list`       | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
+| `dev ls`         | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
+| `dev status`     | Inspect Desired vs Observed workspace status                                                                                             |
 | `dev use`        | Switch active dev root environment or update global default                                                                              |
 | `dev go`         | Select a workspace and print its path for shell navigation                                                                               |
 | `dev start`      | Start or focus OMP in HerdR for a dev workspace                                                                                          |
@@ -55,16 +56,31 @@ Initialize or update a dev root; without arguments, guide providers and inventor
 | `--githubOwner <value>` | string     | Default GitHub owner/organization                          |
 | `--json`                | boolean    | Output in structured JSON format                           |
 
-## `dev list`
+## `dev ls`
 
 List all workspaces in $DEV_ROOT/ws/
 
-**Usage:** `dev list [--root <value>] [--json]`
+**Usage:** `dev ls [--root <value>] [--json]`
 
 | Argument         | Type    | Description                      |
 | ---------------- | ------- | -------------------------------- |
 | `--root <value>` | string  | Explicit dev root directory      |
 | `--json`         | boolean | Output in structured JSON format |
+
+## `dev status`
+
+Inspect Desired vs Observed workspace status
+
+**Usage:** `dev status [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                                     |
+| ---------------- | ---------- | ----------------------------------------------- |
+| `target`         | positional | Workspace name                                  |
+| `--ws <value>`   | string     | Target workspace name                           |
+| `--refresh`      | boolean    | Fetch latest remote refs before comparing       |
+| `--offline`      | boolean    | Read strictly from local mirror without network |
+| `--root <value>` | string     | Explicit dev root directory                     |
+| `--json`         | boolean    | Output in structured JSON format                |
 
 ## `dev use`
 
@@ -139,7 +155,7 @@ Register, select, and unregister dev roots
 | ----------------- | --------------------------------------------------------- |
 | `dev root add`    | Register an existing dev root without modifying its files |
 | `dev root remove` | Unregister a dev root without deleting any files          |
-| `dev root roots`  | List registered dev root environments from ~/.dev.toml    |
+| `dev root list`   | List registered dev root environments from ~/.dev.toml    |
 
 ## `dev root add`
 
@@ -166,11 +182,11 @@ Unregister a dev root without deleting any files
 | `target` | positional | Registered root alias or path    |
 | `--json` | boolean    | Output in structured JSON format |
 
-## `dev root roots`
+## `dev root list`
 
 List registered dev root environments from ~/.dev.toml
 
-**Usage:** `dev root roots [--json]`
+**Usage:** `dev root list [--json]`
 
 | Argument | Type    | Description                      |
 | -------- | ------- | -------------------------------- |

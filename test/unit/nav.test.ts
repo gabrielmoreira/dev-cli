@@ -110,6 +110,23 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       ).toBe(true);
     });
 
+    test("structured help uses root shortcut spellings", async () => {
+      const parsed = JSON.parse(await formatHelp(true));
+      const rootNames = parsed.commands.map((command: { name: string }) => command.name);
+      const ws = parsed.commands.find((command: { name: string }) => command.name === "ws");
+      const workspaceNames = ws.subcommands.map((command: { name: string }) => command.name);
+
+      expect(rootNames).toContain("ls");
+      expect(rootNames).toContain("status");
+      expect(rootNames).not.toContain("list");
+      expect(workspaceNames).toContain("status");
+      expect(workspaceNames).toContain("list");
+    });
+
+    test("human help uses the requested root shortcut spelling", async () => {
+      expect(await formatCommandHelp(["ls"])).toContain("USAGE dev ls");
+    });
+
     test("structured help reflects aliases and interactive optionality", async () => {
       const parsed = JSON.parse(await formatHelp(true));
       const ws = parsed.commands.find((command: { name: string }) => command.name === "ws");
