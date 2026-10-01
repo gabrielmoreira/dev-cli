@@ -49,9 +49,12 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
     // Verify ~/.dev.toml created and updated
     const globalTomlPath = join(tempHome, ".dev.toml");
     expect(fs.exists(globalTomlPath)).toBe(true);
-    const tomlContent = await fs.readText(globalTomlPath);
-    expect(tomlContent).toContain('default_root = "primary"');
-    expect(tomlContent).toContain("[roots.primary]");
+    const toml = Bun.TOML.parse(await fs.readText(globalTomlPath)) as {
+      default_root?: string;
+      roots?: Record<string, { path: string }>;
+    };
+    expect(toml.default_root).toBe("primary");
+    expect(toml.roots?.primary?.path).toBeDefined();
   });
 
   it("dev init creates AGENTS.md for human and LLM orientation", async () => {
@@ -244,7 +247,9 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
     );
     expect(await addProc.exited).toBe(0);
     expect(JSON.parse(await new Response(addProc.stdout).text()).alias).toBe("linked");
-    expect(await fs.readText(join(tempHome, ".dev.toml"))).toContain("[roots.linked]");
+    const roots = async () =>
+      (Bun.TOML.parse(await fs.readText(join(tempHome, ".dev.toml"))) as { roots?: object }).roots;
+    expect(await roots()).toHaveProperty("linked");
 
     const removeProc = Bun.spawn(["bun", "run", cliPath, "root", "remove", "linked", "--json"], {
       env: { ...process.env, HOME: tempHome, USERPROFILE: tempHome },
@@ -253,7 +258,7 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
     });
     expect(await removeProc.exited).toBe(0);
     expect(JSON.parse(await new Response(removeProc.stdout).text()).filesRemoved).toBe(false);
-    expect(await fs.readText(join(tempHome, ".dev.toml"))).not.toContain("[roots.linked]");
+    expect(await roots()).not.toHaveProperty("linked");
     expect(fs.exists(linkedRoot)).toBe(true);
   });
 });
