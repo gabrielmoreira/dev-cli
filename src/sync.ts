@@ -118,24 +118,31 @@ export async function syncData(
     }
   }
 
-  for (const repoName of targetRepos) {
-    try {
-      const prResult = await deps.pr.syncPullRequests({
-        root: input.root,
-        tenant: input.tenant,
-        repo: repoName,
-        client: input.client,
-        project: targetProject,
-        // Listings show open pull requests; closed ones are read only when asked for.
-        status: "open",
-        now: () => timestamp,
-      });
-      pullRequests.push(prResult);
-    } catch (err) {
-      errors.push(
-        `Pull request sync error for ${repoName}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
+  const prOutcomes = await Promise.all(
+    targetRepos.map(async (repoName) => {
+      try {
+        return {
+          result: await deps.pr.syncPullRequests({
+            root: input.root,
+            tenant: input.tenant,
+            repo: repoName,
+            client: input.client,
+            project: targetProject,
+            // Listings show open pull requests; closed ones are read only when asked for.
+            status: "open",
+            now: () => timestamp,
+          }),
+        };
+      } catch (err) {
+        return {
+          error: `Pull request sync error for ${repoName}: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+    }),
+  );
+  for (const outcome of prOutcomes) {
+    if (outcome.error !== undefined) errors.push(outcome.error);
+    else pullRequests.push(outcome.result);
   }
 
   // 4. Optionally synchronize canonical reference repositories and mirrors
