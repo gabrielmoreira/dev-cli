@@ -6,6 +6,15 @@ import * as fs from "../../src/fs.ts";
 import * as manifest from "../../src/manifest.ts";
 import * as ws from "../../src/ws.ts";
 
+async function failureFrom(p: Promise<unknown>): Promise<Error & { code?: string }> {
+  try {
+    await p;
+  } catch (error) {
+    return error as Error & { code?: string };
+  }
+  throw new Error("expected rejection, got resolve");
+}
+
 describe("workspace mount path containment", () => {
   let root: string;
 
@@ -15,6 +24,29 @@ describe("workspace mount path containment", () => {
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true });
+  });
+  test("rejects invalid workspace names before lookup", async () => {
+    const error = await failureFrom(ws.loadWorkspaceContext(root, "../outside"));
+    expect(error.code).toBe("INVALID_WORKSPACE_NAME");
+  });
+
+  test("rejects an escaping duplicate source before reading its manifest or creating a target", async () => {
+    const devRoot = join(root, "dev-root");
+    const outsideManifest = join(root, "outside", "ws.md");
+    await fs.ensureDir(join(root, "outside"));
+    await manifest.writeWorkspace(outsideManifest, {
+      version: 1,
+      name: "outside",
+      created_at: new Date(0).toISOString(),
+      mounts: [],
+    });
+    const original = await fs.readText(outsideManifest);
+    const error = await failureFrom(
+      ws.duplicate({ root: devRoot, sourceName: "../../outside", targetName: "contained" }),
+    );
+    expect(error.code).toBe("INVALID_WORKSPACE_NAME");
+    expect(fs.exists(devRoot)).toBe(false);
+    expect(await fs.readText(outsideManifest)).toBe(original);
   });
 
   test("refuses to remove a manifest mount outside the workspace", async () => {
