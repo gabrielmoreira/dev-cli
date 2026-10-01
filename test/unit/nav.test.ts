@@ -60,6 +60,29 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       }
     });
 
+    test("path-based navigation checks directories and delegates original arguments", () => {
+      for (const runner of ["direct", "mise"] as const) {
+        const bash = generateShellInit("bash", runner);
+        expect(
+          bash.match(
+            /target=.* ws path .*\n    if .*\[ -d "\$target" \]; then\n      cd .*\n    else\n      .* "\$@"/g,
+          ),
+        ).toHaveLength(3);
+        const fish = generateShellInit("fish", runner);
+        expect(
+          fish.match(
+            /set -l target \(.* ws path .*\n        if .*test -d "\$target"\n            cd .*\n        else\n            .* \$argv/g,
+          ),
+        ).toHaveLength(2);
+        const powershell = generateShellInit("powershell", runner);
+        expect(
+          powershell.match(
+            /\$target = \(.* ws path .*\n        if .*Test-Path -LiteralPath \$target -PathType Container.*\n            Set-Location .*\n        } else {\n            .* @args/g,
+          ),
+        ).toHaveLength(3);
+      }
+    });
+
     test("defaults to bash for unrecognized shell type", () => {
       const def = generateShellInit("unknown");
       expect(def).toContain("dev() {");
