@@ -3,13 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveConfig } from "../../src/config.ts";
-import {
-  builtinFactories,
-  buildIntegrations,
-  createPluginBase,
-  emit,
-} from "../../src/plugins/index.ts";
-import type { IntegrationFactory, PluginBase } from "../../src/plugins/index.ts";
+import { builtinFactories, buildPlugins, createPluginBase, emit } from "../../src/plugins/index.ts";
+import type { PluginFactory, PluginBase } from "../../src/plugins/index.ts";
 
 const cleanups: Array<() => void> = [];
 
@@ -23,7 +18,7 @@ function makeBase(): PluginBase {
 }
 
 /** Registers temporary factories, restoring the built-in list afterwards. */
-function withFactories(factories: IntegrationFactory[]): void {
+function withFactories(factories: PluginFactory[]): void {
   const originals = [...builtinFactories];
   builtinFactories.length = 0;
   builtinFactories.push(...factories);
@@ -34,14 +29,14 @@ function withFactories(factories: IntegrationFactory[]): void {
 }
 
 describe("plugin registry", () => {
-  it("builds integrations from factories in order", () => {
+  it("builds plugins from factories in order", () => {
     const base = makeBase();
     withFactories([
       (b) => ({ name: "first-" + b.root.slice(-6), run: async () => {} }),
       () => ({ name: "second", run: async () => {} }),
     ]);
-    const integrations = buildIntegrations(base);
-    expect(integrations.map((i) => i.name)).toEqual([integrations[0].name, "second"]);
+    const plugins = buildPlugins(base);
+    expect(plugins.map((i) => i.name)).toEqual([plugins[0].name, "second"]);
     rmSync(base.root, { recursive: true, force: true });
   });
 });
@@ -132,7 +127,7 @@ describe("emit", () => {
     rmSync(base.root, { recursive: true, force: true });
   });
 
-  it("skips integrations without a hook for the stage", async () => {
+  it("skips plugins without a hook for the stage", async () => {
     const base = makeBase();
     let ran = false;
     withFactories([
@@ -208,7 +203,7 @@ describe("external plugins", () => {
     ["non-function default", "export default 42;"],
     ["import error", 'throw new Error("import exploded");'],
     ["factory error", 'export default () => { throw new Error("factory exploded"); };'],
-    ["wrong integration name", 'export default () => ({ name: "other", run: async () => {} });'],
+    ["wrong plugin name", 'export default () => ({ name: "other", run: async () => {} });'],
   ])("warns once for a %s and runs other plugins", async (_kind, source) => {
     if (source !== null) await Bun.write(join(base.root, "broken.mjs"), source);
     await Bun.write(

@@ -9,7 +9,7 @@ import {
   resolveLabelAssignments,
   resolveLabeledSources,
 } from "../labels.ts";
-import type { Integration, IntegrationFactory, PluginBase } from "./events.ts";
+import type { Plugin, PluginFactory, PluginBase } from "./events.ts";
 
 export interface QmdPluginConfig {
   /** Invocation: PATH shim, absolute path, or "mise exec -q -- qmd" split on
@@ -107,7 +107,7 @@ async function reconcileIndexLabel(
   if (failed) throw new Error(`qmd ${failed.step} failed: ${failed.stderr}`);
 }
 
-export function createQmdPlugin(base: PluginBase): Integration {
+export function createQmdPlugin(base: PluginBase): Plugin {
   const config = parseQmdConfig(base.config.plugins);
 
   return {
@@ -304,4 +304,4 @@ export async function reconcileCollections(
   return null;
 }
 
-export const qmdFactory: IntegrationFactory = createQmdPlugin;
+export const qmdFactory: PluginFactory = createQmdPlugin;
