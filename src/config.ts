@@ -1,16 +1,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
-import yaml from "yaml";
+import yaml, { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml";
 import { z } from "zod";
 import * as fs from "./fs.ts";
+import { LabelError, type SourceSelector } from "./labels.ts";
 
 export const CONFIG_FILE_NAME = "dev.yaml";
 import { parseGlobalToml } from "./global.ts";
 
 export async function updateConfig(
   configPath: string,
-  mutate: (doc: yaml.Document) => void | Promise<void>,
+  mutate: (doc: ReturnType<typeof yaml.parseDocument>) => void | Promise<void>,
 ): Promise<void> {
   await fs.withFileLock(configPath, async () => {
     let content: string;
@@ -24,9 +25,142 @@ export async function updateConfig(
     if (doc.errors.length > 0) {
       throw new Error(doc.errors.map((error) => error.message).join("; "));
     }
+    const before = String(doc);
     await mutate(doc);
-    await fs.writeTextAtomic(configPath, String(doc));
+    const after = String(doc);
+    if (after !== before) await fs.writeTextAtomic(configPath, after);
   });
+}
+
+function findSourceNode(
+  doc: ReturnType<typeof parseDocument>,
+  selector: SourceSelector,
+): YAMLMap | undefined {
+  const seq = doc.get("sources");
+  if (!isSeq(seq)) return undefined;
+  const matches: YAMLMap[] = [];
+  for (const item of seq.items) {
+    if (!isMap(item) || item.get("url") !== selector.url) continue;
+    if (selector.branch !== undefined && item.get("branch") !== selector.branch) continue;
+    if (selector.pin !== undefined && item.get("pin") !== selector.pin) continue;
+    if (selector.path !== undefined && item.get("path") !== selector.path) continue;
+    matches.push(item);
+  }
+  const qualified =
+    selector.branch !== undefined || selector.pin !== undefined || selector.path !== undefined;
+  return qualified || matches.length === 1 ? matches[0] : undefined;
+}
+
+/** Inserts or updates a `sources:` entry for the URL. Mutates the caller's
+ * parsed document in place (comments preserved); persistence happens inside
+ * config.updateConfig(). Only url/branch are touched. */
+export function upsertSourceDeclaration(
+  doc: ReturnType<typeof parseDocument>,
+  upsert: SourceSelector,
+): { changed: boolean } {
+  const existing = findSourceNode(doc, upsert);
+  if (existing) {
+    const before = String(existing);
+    if (upsert.branch !== undefined) existing.set("branch", upsert.branch);
+    if (upsert.pin !== undefined) existing.set("pin", upsert.pin);
+    if (upsert.path !== undefined) existing.set("path", upsert.path);
+    return { changed: String(existing) !== before };
+  }
+  const existingSeq = doc.get("sources");
+  const seq = isSeq(existingSeq)
+    ? existingSeq
+    : (() => {
+        const created = doc.createNode([]);
+        doc.set("sources", created);
+        return created;
+      })();
+  seq.add(doc.createNode(upsert));
+  return { changed: true };
+}
+
+/** Sets (meta given) or removes (meta undefined) one label on a declared
+ * source. Mutates the caller's parsed document in place; persistence happens
+ * inside config.updateConfig(). Returns found: false when the source is not
+ * declared. */
+export function setSourceLabel(
+  doc: ReturnType<typeof parseDocument>,
+  selector: SourceSelector,
+  label: string,
+  meta: Record<string, unknown> | undefined,
+): { changed: boolean; found: boolean } {
+  const source = findSourceNode(doc, selector);
+  if (!source) return { changed: false, found: false };
+
+  const rawLabels = source.get("labels");
+  const currentLabels: Record<string, unknown> =
+    typeof rawLabels === "object" && rawLabels !== null
+      ? ((rawLabels as { toJS(d: unknown): unknown }).toJS(doc) as Record<string, unknown>)
+      : {};
+
+  if (meta === undefined) {
+    if (!(label in currentLabels)) return { changed: false, found: true };
+    delete currentLabels[label];
+  } else {
+    currentLabels[label] = meta;
+  }
+
+  if (Object.keys(currentLabels).length === 0) {
+    source.delete("labels");
+  } else {
+    source.set("labels", doc.createNode(currentLabels));
+  }
+  return { changed: true, found: true };
+}
+
+/**
+ * Renames a label everywhere dev.yaml names it: on sources, as a label def key,
+ * and as a workset member. Mutates the caller's document; persistence happens
+ * inside config.updateConfig(). Refuses a target name already in use.
+ */
+export function renameLabel(
+  doc: ReturnType<typeof parseDocument>,
+  from: string,
+  to: string,
+): { sources: number; def: boolean; worksetMembers: number } {
+  const renamed = { sources: 0, def: false, worksetMembers: 0 };
+  const sources = doc.get("sources");
+  if (isSeq(sources)) {
+    for (const item of sources.items) {
+      const itemLabels = isMap(item) ? item.get("labels") : undefined;
+      if (!isMap(itemLabels) || !itemLabels.has(from)) continue;
+      if (itemLabels.has(to)) {
+        throw new LabelError("LABEL_VALIDATION", `A source already carries label '${to}'.`);
+      }
+      renameMapKey(itemLabels, from, to);
+      renamed.sources += 1;
+    }
+  }
+  const defs = doc.get("label_defs");
+  if (isMap(defs) && defs.has(from)) {
+    if (defs.has(to)) throw new LabelError("LABEL_VALIDATION", `label_defs already has '${to}'.`);
+    renameMapKey(defs, from, to);
+    renamed.def = true;
+  }
+  const worksets = doc.get("worksets");
+  if (isMap(worksets)) {
+    for (const pair of worksets.items) {
+      const members = isMap(pair.value) ? pair.value.get("members") : undefined;
+      if (!isSeq(members)) continue;
+      for (const member of members.items) {
+        if (isMap(member) && member.get("label") === from) {
+          member.set("label", to);
+          renamed.worksetMembers += 1;
+        }
+      }
+    }
+  }
+  return renamed;
+}
+
+/** Renames a key in place, keeping its position, value, and comments. */
+function renameMapKey(map: YAMLMap, from: string, to: string): void {
+  const pair = map.items.find((candidate) => String(candidate.key) === from)!;
+  pair.key = isScalar(pair.key) ? Object.assign(pair.key, { value: to }) : to;
 }
 
 export type RootSource = "flag" | "env" | "file" | "global" | "default";
@@ -139,10 +273,6 @@ export interface RuntimeConfig {
   root: string;
   rootSource: RootSource;
   configPath?: string;
-  /** Parsed dev.yaml document (AST-preserving); undefined for dev.toml roots. */
-  configDoc?: ReturnType<typeof yaml.parseDocument>;
-  /** Persists the current configDoc back to configPath. No-op without dev.yaml. */
-  writeConfig?: () => Promise<void>;
   workspacePrefix: string;
   canonicalPrefix: string;
   defaults: ConfigDefaults;
@@ -406,13 +536,6 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
     root,
     rootSource,
     configPath,
-    configDoc,
-    writeConfig: configDoc
-      ? async () => {
-          if (!configPath) return;
-          await fs.writeTextAtomic(configPath, String(configDoc));
-        }
-      : undefined,
     workspacePrefix: defaults.workspacePrefix.replace(/\/+$/, ""),
     canonicalPrefix: defaults.canonicalPrefix.replace(/\/+$/, ""),
     defaults,

@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import yaml from "yaml";
 import { runCli } from "../../src/cli";
+import * as configFile from "../../src/config.ts";
+import { setSourceLabel } from "../../src/config.ts";
+import { createWorkset } from "../../src/workset.ts";
 import * as fs from "../../src/fs.ts";
 import { ui } from "../../src/ui.ts";
 
@@ -51,6 +54,44 @@ plugins:
     console.log = originalLog;
     console.error = originalError;
     await rm(root, { recursive: true, force: true });
+  });
+
+  test("keeps worksets created from separate configuration snapshots", async () => {
+    const first = configFile.resolveConfig({ rootFlag: root, cwd: root, env: {} });
+    const second = configFile.resolveConfig({ rootFlag: root, cwd: root, env: {} });
+    const definition = { members: [{ source: "https://example.org/sample-api.git" }] };
+
+    await createWorkset(first, "alpha", definition);
+    await createWorkset(second, "beta", definition);
+
+    const persisted = configFile.resolveConfig({ rootFlag: root, cwd: root, env: {} });
+    expect(persisted.worksets).toEqual({ alpha: definition, beta: definition });
+  });
+
+  test("keeps a concurrent label edit and workset save on different keys", async () => {
+    const configPath = join(root, "dev.yaml");
+    await fs.writeText(
+      configPath,
+      "# root\nsources:\n  - url: https://example.org/sample-api.git\n",
+    );
+    const snapshot = configFile.resolveConfig({ rootFlag: root, cwd: root, env: {} });
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const labelEdit = configFile.updateConfig(configPath, async (doc) => {
+      started.resolve();
+      await release.promise;
+      setSourceLabel(doc, { url: "https://example.org/sample-api.git" }, "team:a", {});
+    });
+    await started.promise;
+    const definition = { members: [{ source: "https://example.org/sample-api.git" }] };
+    const worksetSave = createWorkset(snapshot, "alpha", definition);
+    release.resolve();
+    await Promise.all([labelEdit, worksetSave]);
+
+    const persisted = configFile.resolveConfig({ rootFlag: root, cwd: root, env: {} });
+    expect(persisted.sources[0]?.labels).toEqual({ "team:a": {} });
+    expect(persisted.worksets.alpha).toEqual(definition);
+    expect(await fs.readText(configPath)).toContain("# root");
   });
 
   test("reports an identical create as already so and a different one as a conflict", async () => {

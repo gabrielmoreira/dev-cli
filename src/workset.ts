@@ -1,6 +1,7 @@
 import { isMap } from "yaml";
 import {
   WorksetDefinitionSchema,
+  updateConfig,
   type RuntimeConfig,
   type WorksetDefinition,
   type WorksetMember,
@@ -30,32 +31,30 @@ export class WorksetError extends Error {
   }
 }
 
-function writableDocument(config: RuntimeConfig): NonNullable<RuntimeConfig["configDoc"]> {
-  if (!config.configDoc || !config.writeConfig) {
+async function persistWorksets(
+  config: RuntimeConfig,
+  worksets: Record<string, WorksetDefinition>,
+): Promise<void> {
+  if (!config.configPath?.endsWith(".yaml")) {
     throw new WorksetError(
       "WORKSET_CONFIG_UNWRITABLE",
       "Workset management requires a dev.yaml configuration.",
     );
   }
-  return config.configDoc;
-}
-
-async function persistWorksets(
-  config: RuntimeConfig,
-  worksets: Record<string, WorksetDefinition>,
-): Promise<void> {
-  const doc = writableDocument(config);
-  const existing = doc.get("worksets");
-  const node = isMap(existing) ? existing : doc.createNode({});
-  if (!isMap(existing)) doc.set("worksets", node);
-
-  for (const name of node.items.map((item) => String(item.key))) {
-    if (!Object.hasOwn(worksets, name)) node.delete(name);
-  }
-  for (const [name, workset] of Object.entries(worksets)) {
-    node.set(name, doc.createNode(workset));
-  }
-  await config.writeConfig?.();
+  const before = config.worksets;
+  await updateConfig(config.configPath, (doc) => {
+    const existing = doc.get("worksets");
+    const node = isMap(existing) ? existing : doc.createNode({});
+    if (!isMap(existing)) doc.set("worksets", node);
+    for (const name of Object.keys(before)) {
+      if (!Object.hasOwn(worksets, name)) node.delete(name);
+    }
+    for (const [name, workset] of Object.entries(worksets)) {
+      if (JSON.stringify(before[name]) !== JSON.stringify(workset)) {
+        node.set(name, doc.createNode(workset));
+      }
+    }
+  });
   config.worksets = worksets;
 }
 
