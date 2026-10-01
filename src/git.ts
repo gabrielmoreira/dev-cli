@@ -147,15 +147,15 @@ export function stripCredentialsFromUrl(url: string): string {
 }
 
 /**
- * Removes `user:secret@` from every URL inside a free-text string. Use this on anything
- * that reaches a user, a log or a hook: error messages, git stderr, reports. Unlike
- * stripCredentialsFromUrl it is not anchored, so it also cleans URLs embedded in a
- * sentence, and it is safe to apply to text that contains no URL at all.
+ * Removes URL userinfo, authorization headers and GitHub token-shaped strings from
+ * free text before it reaches a user, a log or a hook. Unlike stripCredentialsFromUrl,
+ * it also cleans credentials embedded in a sentence and leaves non-sensitive text alone.
  */
 export function redactCredentials(text: string): string {
   return text
     .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@\s/]+@/gi, "$1")
-    .replace(/(\bauthorization["']?\s*:\s*["']?)[^\r\n"']*/gi, "$1[REDACTED]");
+    .replace(/(\bauthorization["']?\s*:\s*["']?)[^\r\n"']*/gi, "$1[REDACTED]")
+    .replace(/\b(?:gh[pousr]_|github_pat_)[a-zA-Z0-9_]+\b/g, "[REDACTED]");
 }
 
 export function normalizeSourceKey(url: string): string {

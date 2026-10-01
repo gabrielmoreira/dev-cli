@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   CredentialError,
   getAuthorizationHeader,
@@ -8,13 +10,143 @@ import {
   resolveGitHubCredential,
 } from "../../src/credentials.ts";
 import { resolveConfig } from "../../src/config.ts";
-import type * as shell from "../../src/shell.ts";
+import * as shell from "../../src/shell.ts";
+
+async function failureFrom(p: Promise<unknown>): Promise<Error & { code?: string }> {
+  try {
+    await p;
+  } catch (e) {
+    return e as Error & { code?: string };
+  }
+  throw new Error("expected rejection, got resolve");
+}
 
 describe("Credential resolution unit tests (Phase 9)", () => {
   const baseConfig = resolveConfig({
     cwd: "/mock/cwd",
     env: {},
   });
+
+  it("preserves spawn ENOENT for a missing executable", async () => {
+    const result = await shell.runCommand(
+      join(tmpdir(), `sample-missing-command-${crypto.randomUUID()}`),
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.errorCode).toBe("ENOENT");
+  });
+
+  const cliProviders = [
+    ["gh", resolveGitHubCredential, "GitHub CLI"],
+    ["az", resolveAzureDevOpsCredential, "Azure CLI"],
+  ] as const;
+
+  it.each(cliProviders)("retains %s missing CLI failure data", async (command, resolve, label) => {
+    const error = await failureFrom(
+      resolve(baseConfig, {
+        shell: {
+          runCommand: async () => ({
+            stdout: "",
+            stderr: "executable missing",
+            exitCode: 1,
+            errorCode: "ENOENT",
+          }),
+        } as unknown as typeof shell,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(CredentialError);
+    expect(error.code).toBe("CREDENTIAL_NOT_AVAILABLE");
+    expect(error.message).toBe(`${label} is not installed.`);
+    expect((error as CredentialError).details).toEqual({
+      command,
+      reason: "not_installed",
+      spawnCode: "ENOENT",
+      stderr: "executable missing",
+    });
+  });
+
+  it.each(cliProviders)(
+    "retains %s authentication failure data",
+    async (command, resolve, label) => {
+      const error = await failureFrom(
+        resolve(baseConfig, {
+          shell: {
+            runCommand: async () => ({
+              stdout: "",
+              stderr: "authentication required",
+              exitCode: 1,
+            }),
+          } as unknown as typeof shell,
+        }),
+      );
+
+      expect(error.code).toBe("CREDENTIAL_NOT_AVAILABLE");
+      expect(error.message).toContain(`${label} is not logged in.`);
+      expect((error as CredentialError).details).toEqual({
+        command,
+        reason: "not_logged_in",
+        stderr: "authentication required",
+      });
+    },
+  );
+
+  it.each(cliProviders)(
+    "does not classify other %s spawn failures as missing",
+    async (command, resolve) => {
+      const error = await failureFrom(
+        resolve(baseConfig, {
+          shell: {
+            runCommand: async () => ({
+              stdout: "",
+              stderr: "permission denied",
+              exitCode: 1,
+              errorCode: "EACCES",
+            }),
+          } as unknown as typeof shell,
+        }),
+      );
+
+      expect((error as CredentialError).details).toEqual({
+        command,
+        reason: "not_logged_in",
+        spawnCode: "EACCES",
+        stderr: "permission denied",
+      });
+    },
+  );
+
+  it.each(cliProviders)(
+    "redacts credentials from surfaced %s CLI stderr",
+    async (command, resolve) => {
+      const tokens = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_"].map(
+        (prefix) => `${prefix}sample_token`,
+      );
+      const error = await failureFrom(
+        resolve(baseConfig, {
+          shell: {
+            runCommand: async () => ({
+              stdout: "must-not-surface-stdout",
+              stderr: `authentication rejected: ${tokens.join(" ")}\nAuthorization: Bearer sample-secret\nhttps://user:sample-secret@example.org/repo`,
+              exitCode: 1,
+            }),
+          } as unknown as typeof shell,
+        }),
+      );
+
+      expect((error as CredentialError).details).toEqual({
+        command,
+        reason: "not_logged_in",
+        stderr: `authentication rejected: ${tokens.map(() => "[REDACTED]").join(" ")}\nAuthorization: [REDACTED]\nhttps://example.org/repo`,
+      });
+      const surfaced = JSON.stringify({
+        message: error.message,
+        ...(error as CredentialError).details,
+      });
+      for (const token of tokens) expect(surfaced).not.toContain(token);
+      expect(surfaced).not.toContain("sample-secret");
+      expect(surfaced).not.toContain("must-not-surface-stdout");
+    },
+  );
 
   describe("Azure DevOps credentials", () => {
     it("returns configured PAT from config without calling Azure CLI", async () => {
