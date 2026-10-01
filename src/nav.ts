@@ -49,8 +49,10 @@ function dev {
         }
     } elseif ($args.Count -ge 2 -and $args[0] -eq 'ws' -and $args[1] -eq 'jump') {
         $target = (${powerShellDev} ws path $args[2])
-        if ($LASTEXITCODE -eq 0 -and $target) {
+        if ($LASTEXITCODE -eq 0 -and $target -and (Test-Path -LiteralPath $target -PathType Container)) {
             Set-Location $target
+        } else {
+            ${powerShellDev} @args
         }
     } else {
         ${powerShellDev} @args
@@ -62,12 +64,14 @@ function ws {
         ${powerShellDev} ws
     } elseif ($args.Count -ge 1 -and $args[0] -eq 'jump') {
         $target = (${powerShellDev} ws path $args[1])
-        if ($LASTEXITCODE -eq 0 -and $target) {
+        if ($LASTEXITCODE -eq 0 -and $target -and (Test-Path -LiteralPath $target -PathType Container)) {
             Set-Location $target
+        } else {
+            ${powerShellDev} ws @args
         }
     } elseif ($args.Count -eq 1 -and $args[0] -notin @('init','add','list','status','update','sync','pick','path','remove','duplicate','lock','unlock','tag','track','--help','-h')) {
         $target = (${powerShellDev} ws path $args[0])
-        if ($LASTEXITCODE -eq 0 -and $target) {
+        if ($LASTEXITCODE -eq 0 -and $target -and (Test-Path -LiteralPath $target -PathType Container)) {
             Set-Location $target
         } else {
             ${powerShellDev} ws @args
@@ -93,8 +97,10 @@ function dev
         end
     else if test (count $argv) -ge 2; and test "$argv[1]" = "ws"; and test "$argv[2]" = "jump"
         set -l target (${posixDev} ws path $argv[3])
-        if test $status -eq 0; and test -n "$target"
+        if test $status -eq 0; and test -n "$target"; and test -d "$target"
             cd "$target"
+        else
+            ${posixDev} $argv
         end
     else
         ${posixDev} $argv
@@ -106,8 +112,10 @@ function ws
         ${posixDev} ws
     else if test "$argv[1]" = "jump"
         set -l target (${posixDev} ws path $argv[2])
-        if test $status -eq 0; and test -n "$target"
+        if test $status -eq 0; and test -n "$target"; and test -d "$target"
             cd "$target"
+        else
+            ${posixDev} ws $argv
         end
     else
         ${posixDev} ws $argv
@@ -136,11 +144,10 @@ dev() {
   elif [ "$1" = "ws" ] && [ "$2" = "jump" ]; then
     local target
     target=$(${posixDev} ws path "$3")
-    if [ $? -eq 0 ] && [ -n "$target" ]; then
+    if [ $? -eq 0 ] && [ -n "$target" ] && [ -d "$target" ]; then
       cd "$target" || return 1
     else
-      echo "Failed to resolve workspace path" >&2
-      return 1
+      ${posixDev} "$@"
     fi
   else
     ${posixDev} "$@"
@@ -153,13 +160,15 @@ ws() {
   elif [ "$1" = "jump" ]; then
     local target
     target=$(${posixDev} ws path "$2")
-    if [ $? -eq 0 ] && [ -n "$target" ]; then
+    if [ $? -eq 0 ] && [ -n "$target" ] && [ -d "$target" ]; then
       cd "$target" || return 1
+    else
+      ${posixDev} ws "$@"
     fi
   elif [ $# -eq 1 ] && [ "$1" != "init" ] && [ "$1" != "add" ] && [ "$1" != "list" ] && [ "$1" != "status" ] && [ "$1" != "update" ] && [ "$1" != "sync" ] && [ "$1" != "pick" ] && [ "$1" != "path" ] && [ "$1" != "remove" ] && [ "$1" != "duplicate" ] && [ "$1" != "lock" ] && [ "$1" != "unlock" ] && [ "$1" != "tag" ] && [ "$1" != "track" ] && [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
     local target
     target=$(${posixDev} ws path "$1")
-    if [ $? -eq 0 ] && [ -n "$target" ]; then
+    if [ $? -eq 0 ] && [ -n "$target" ] && [ -d "$target" ]; then
       cd "$target" || return 1
     else
       ${posixDev} ws "$@"

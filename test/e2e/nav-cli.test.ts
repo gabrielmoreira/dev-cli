@@ -249,6 +249,73 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
         ? join(dirname(Bun.which("git")!), "..", "bin", "bash.exe")
         : Bun.which(shell);
     it.skipIf(!executable)(
+      `workspace shortcuts delegate missing names and still navigate existing workspaces in ${shell}`,
+      async () => {
+        const root = await mkdtemp(join(tmpdir(), `dev-cli-shell-${shell}-`));
+        try {
+          const env: NodeJS.ProcessEnv = {
+            ...process.env,
+            HOME: root,
+            USERPROFILE: root,
+            DEV_ROOT: root,
+            DEV_CWD: root,
+          };
+          const init = Bun.spawn(
+            [process.execPath, cliPath, "ws", "init", "existing", "--root", root],
+            { env, stdout: "pipe", stderr: "pipe" },
+          );
+          expect(await init.exited).toBe(0);
+          const bin = join(root, "bin");
+          if (shell === "bash" || process.platform !== "win32") {
+            await fs.writeText(
+              join(bin, "dev"),
+              `#!/bin/sh\nexec '${process.execPath.replace(/\\/g, "/")}' '${cliPath.replace(/\\/g, "/")}' "$@"\n`,
+            );
+            await chmod(join(bin, "dev"), 0o755);
+          } else {
+            await fs.writeText(
+              join(bin, "dev.cmd"),
+              `@echo off\r\n"${process.execPath}" "${cliPath}" %*\r\n`,
+            );
+          }
+          for (const key of Object.keys(env)) {
+            if (key.toLowerCase() === "path") delete env[key];
+          }
+          env.PATH = shell === "pwsh" ? bin : `${bin}${delimiter}${dirname(executable!)}`;
+          for (const name of ["nosuchws", "up", "existing"]) {
+            const script =
+              shell === "bash"
+                ? `eval "$(dev shell-init bash)"; ws '${name}'; code=$?; printf '\\nSTATUS:%s\\nCWD:%s\\n' "$code" "$(pwd -W 2>/dev/null || pwd)"; exit "$code"`
+                : `Invoke-Expression (dev shell-init pwsh | Out-String); ws '${name}'; $code = $LASTEXITCODE; Write-Output "STATUS:$code"; Write-Output "CWD:$($PWD.Path)"; exit $code`;
+            const proc = Bun.spawn(
+              [executable!, ...(shell === "bash" ? ["-c"] : ["-NoProfile", "-Command"]), script],
+              { cwd: root, env, stdout: "pipe", stderr: "pipe" },
+            );
+            const stdout = await new Response(proc.stdout).text();
+            const stderr = await new Response(proc.stderr).text();
+            const exitCode = await proc.exited;
+            const cwd = stdout.match(/CWD:(.+)/)?.[1]?.trim();
+            expect(resolve(cwd!)).toBe(
+              resolve(name === "existing" ? join(root, "ws", name) : root),
+            );
+            if (name === "existing") {
+              expect(exitCode).toBe(0);
+              expect(stdout).toContain("STATUS:0");
+              expect(stderr).toBe("");
+            } else {
+              expect(exitCode).not.toBe(0);
+              expect(stdout).not.toContain("STATUS:0");
+              expect(stderr).not.toContain("Set-Location");
+              expect(stderr).not.toContain("cd:");
+            }
+          }
+        } finally {
+          await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+        }
+      },
+      20_000,
+    );
+    it.skipIf(!executable)(
       `dev go --json prints JSON without changing directory in ${shell}`,
       async () => {
         const name = `json-${shell}`;

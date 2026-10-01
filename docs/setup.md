@@ -115,6 +115,8 @@ Invoke-Expression (dev shell-init powershell | Out-String)
 
 `dev go` asks with a fuzzy-searchable list when several workspaces match; `dev go <query>` with a unique match skips the question.
 
+Workspace shortcuts only change directory when the resolved path exists. Otherwise, the wrapper runs the original CLI command so its error and exit code reach your shell.
+
 When `dev` is not on your `PATH` but a checkout is, generate wrappers that run it through Mise:
 
 ```bash
