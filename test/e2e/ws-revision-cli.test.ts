@@ -160,19 +160,19 @@ describe("dev ws revision lifecycle & reconciliation CLI E2E (Phase 6)", () => {
     );
     expect(await trackProc.exited).toBe(0);
 
-    // 7. Manually delete worktree from disk and restore via dev ws up
+    // 7. Manually delete worktree from disk and restore via dev ws update
     const worktreePath = join(tempRoot, "ws", "e2e-rev-ws", "service-x");
     await fs.removeDir(worktreePath);
     expect(fs.exists(worktreePath)).toBe(false);
 
-    const upProc = Bun.spawn(
-      ["bun", "run", cliPath, "ws", "up", "e2e-rev-ws", "--json", "--root", tempRoot],
+    const updateProc = Bun.spawn(
+      ["bun", "run", cliPath, "ws", "update", "e2e-rev-ws", "--json", "--root", tempRoot],
       { stdout: "pipe", stderr: "pipe" },
     );
-    const upStdout = await new Response(upProc.stdout).text();
-    expect(await upProc.exited).toBe(0);
-    const upJson = JSON.parse(upStdout);
-    expect(upJson.mounts.map((m: { action: string }) => m.action)).toEqual(["create"]);
+    const updateStdout = await new Response(updateProc.stdout).text();
+    expect(await updateProc.exited).toBe(0);
+    const updateJson = JSON.parse(updateStdout);
+    expect(updateJson.mounts.map((m: { action: string }) => m.action)).toEqual(["create"]);
     expect(fs.exists(worktreePath)).toBe(true);
 
     // 8. Remove mount safely

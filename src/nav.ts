@@ -65,7 +65,7 @@ function ws {
         if ($LASTEXITCODE -eq 0 -and $target) {
             Set-Location $target
         }
-    } elseif ($args.Count -eq 1 -and $args[0] -notin @('init','add','list','status','update','sync','pick','path','up','remove','duplicate','lock','unlock','tag','track','--help','-h')) {
+    } elseif ($args.Count -eq 1 -and $args[0] -notin @('init','add','list','status','update','sync','pick','path','remove','duplicate','lock','unlock','tag','track','--help','-h')) {
         $target = (${powerShellDev} ws path $args[0])
         if ($LASTEXITCODE -eq 0 -and $target) {
             Set-Location $target
@@ -156,7 +156,7 @@ ws() {
     if [ $? -eq 0 ] && [ -n "$target" ]; then
       cd "$target" || return 1
     fi
-  elif [ $# -eq 1 ] && [ "$1" != "init" ] && [ "$1" != "add" ] && [ "$1" != "list" ] && [ "$1" != "status" ] && [ "$1" != "update" ] && [ "$1" != "sync" ] && [ "$1" != "pick" ] && [ "$1" != "path" ] && [ "$1" != "up" ] && [ "$1" != "remove" ] && [ "$1" != "duplicate" ] && [ "$1" != "lock" ] && [ "$1" != "unlock" ] && [ "$1" != "tag" ] && [ "$1" != "track" ] && [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
+  elif [ $# -eq 1 ] && [ "$1" != "init" ] && [ "$1" != "add" ] && [ "$1" != "list" ] && [ "$1" != "status" ] && [ "$1" != "update" ] && [ "$1" != "sync" ] && [ "$1" != "pick" ] && [ "$1" != "path" ] && [ "$1" != "remove" ] && [ "$1" != "duplicate" ] && [ "$1" != "lock" ] && [ "$1" != "unlock" ] && [ "$1" != "tag" ] && [ "$1" != "track" ] && [ "$1" != "--help" ] && [ "$1" != "-h" ]; then
     local target
     target=$(${posixDev} ws path "$1")
     if [ $? -eq 0 ] && [ -n "$target" ]; then

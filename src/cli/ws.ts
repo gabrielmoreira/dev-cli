@@ -84,14 +84,14 @@ export function describeSkipReason(
     case "dirty_worktree":
       return {
         why: "uncommitted changes",
-        hint: `dev ws sync ${workspaceName} --autostash`,
+        hint: `dev ws update ${workspaceName} --autostash`,
       };
     case "ahead_commits":
       return { why: "local commits the remote does not have" };
     case "diverged_history":
       return {
         why: "local and remote history diverged",
-        hint: `dev ws sync ${workspaceName} --rebase`,
+        hint: `dev ws update ${workspaceName} --rebase`,
       };
     case "not_a_worktree":
       return { why: "the path holds files that are not this checkout; left untouched" };
@@ -883,8 +883,8 @@ export const wsUpdateCommand = defineCommand({
               value: args.ws || args.target,
               root: config.root,
               workspacePrefix: config.workspacePrefix,
-              command: "ws sync",
-              usage: "dev ws sync [workspace | path/to/ws.md] [--ws <name>]",
+              command: "ws update",
+              usage: "dev ws update [workspace | path/to/ws.md] [--ws <name>]",
             })
           ).value;
       const fetching = !args.offline && args.refresh !== false;
@@ -1773,7 +1773,6 @@ export const wsCommand = defineCommand({
     lock: wsLockCommand,
     unlock: wsUnlockCommand,
     tag: wsTagCommand,
-    up: wsUpdateCommand,
     remove: wsRemoveCommand,
     rm: wsRemoveCommand,
     list: wsListCommand,

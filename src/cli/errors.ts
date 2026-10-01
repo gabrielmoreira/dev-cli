@@ -27,7 +27,7 @@ const NEXT_STEPS: Record<string, string> = {
   UNKNOWN_OPTION: "<usage>",
   WORKSPACE_ALREADY_EXISTS: "dev go <name>",
   WORKSPACE_NOT_FOUND: "dev ls",
-  WORKTREE_NOT_FOUND: "dev ws sync",
+  WORKTREE_NOT_FOUND: "dev ws update",
 };
 
 /** What each exit code means; published in `dev --help --llms`. */
