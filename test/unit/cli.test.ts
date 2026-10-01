@@ -9,6 +9,7 @@ import {
   runCli,
   type AmbientContext,
 } from "../../src/cli.ts";
+import { generateShellInit } from "../../src/nav.ts";
 
 describe("CLI entrypoint (Phase 0)", () => {
   it("generates human help text by default", async () => {
@@ -85,9 +86,71 @@ describe("CLI entrypoint (Phase 0)", () => {
       };
       const exitCode = await runCli(ambient);
       expect(exitCode).toBe(0);
-      expect(logs.join("\n")).toContain("dev v0.0.0-development");
+      expect(logs.join("\n")).toBe("dev v0.0.0-development");
     } finally {
       console.log = originalLog;
+    }
+  });
+
+  it("prints one version JSON document", async () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    try {
+      expect(
+        await runCli({
+          argv: ["--version", "--json"],
+          cwd: process.cwd(),
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+      expect(JSON.parse(logs.join("\n"))).toEqual({ version: "0.0.0-development" });
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it("prints one shell-init JSON document", async () => {
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    try {
+      expect(
+        await runCli({
+          argv: ["shell-init", "bash", "--json"],
+          cwd: process.cwd(),
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+      expect(JSON.parse(logs.join("\n"))).toEqual({
+        shell: "bash",
+        script: generateShellInit("bash"),
+      });
+    } finally {
+      console.log = originalLog;
+    }
+  });
+
+  it.each(["sync", ""])("prints one qmd %s JSON document", async (subcommand) => {
+    const root = await mkdtemp(join(tmpdir(), "dev-cli-qmd-json-"));
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...args: unknown[]) => logs.push(args.join(" "));
+    try {
+      expect(
+        await runCli({
+          argv: ["qmd", ...(subcommand ? [subcommand] : []), "--root", root, "--json"],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+      expect(JSON.parse(logs.join("\n"))).toEqual({ exitCode: 0 });
+    } finally {
+      console.log = originalLog;
+      await rm(root, { recursive: true, force: true });
     }
   });
 

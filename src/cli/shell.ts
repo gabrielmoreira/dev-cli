@@ -18,6 +18,7 @@ export const shellInitCommand = defineCommand({
       type: "string",
       description: "CLI runner used by wrappers: direct or mise",
     },
+    json: { type: "boolean", description: "Output in structured JSON format" },
   },
   run({ args }) {
     const shellType = args.shell || (process.platform === "win32" ? "powershell" : "bash");
@@ -25,7 +26,12 @@ export const shellInitCommand = defineCommand({
     if (runner !== "direct" && runner !== "mise") {
       return reportError("--runner must be 'direct' or 'mise'.");
     }
-    ui.log(generateShellInit(shellType, runner));
+    const script = generateShellInit(shellType, runner);
+    ui.result({
+      data: { shell: shellType, script },
+      json: args.json,
+      text: () => script,
+    });
     return 0;
   },
 });

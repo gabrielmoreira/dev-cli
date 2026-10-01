@@ -436,7 +436,11 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   }
 
   if (argv.includes("--version") || argv.includes("-v")) {
-    ui.log(`dev v${VERSION}`);
+    ui.result({
+      data: { version: VERSION },
+      json: argv.includes("--json"),
+      text: `dev v${VERSION}`,
+    });
     return 0;
   }
 

@@ -84,7 +84,7 @@ export function createQmdPlugin(base: PluginBase): Integration {
           stdio: passthrough[0] === "mcp" ? "inherit" : "pipe",
         });
         if (res.exitCode !== 0) base.ui.error(res.stderr || res.stdout);
-        else if (res.stdout) base.ui.log(res.stdout);
+        else if (res.stdout) process.stdout.write(res.stdout);
         return res.exitCode;
       }
 

@@ -97,6 +97,30 @@ describe("qmd plugin config", () => {
     expect(shell.calls[0]?.args).toEqual(["mise", "exec", "-q", "--", "status"]);
     rmSync(root, { recursive: true, force: true });
   });
+
+  it("writes successful qmd passthrough output to stdout", async () => {
+    const { base, shell, root } = makeHarness();
+    const plugin = createQmdPlugin(base);
+    shell.answerWith(() => ({ stdout: '{"items":[]}\n', stderr: "", exitCode: 0 }));
+    const chunks: string[] = [];
+    const originalWrite = process.stdout.write;
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      chunks.push(String(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      const code = await plugin.run({
+        subcommand: "x",
+        passthrough: ["search", "sample query", "--json"],
+      });
+      expect(code).toBe(0);
+      expect(chunks.join("")).toBe('{"items":[]}\n');
+      expect(JSON.parse(chunks.join(""))).toEqual({ items: [] });
+    } finally {
+      process.stdout.write = originalWrite;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("qmd sync label selection", () => {
