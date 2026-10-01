@@ -90,6 +90,34 @@ describe("Hardware & Diagnostics Pure Logic (Phase 18)", () => {
       expect(report.root.exists).toBe(true);
     });
 
+    test("warns when a configured provider has no credential", () => {
+      const report = buildDoctorReport({
+        root: { path: "sample-root", exists: true, hasDevDir: true },
+        tools: validTools,
+        providers: {
+          azureDevOps: { configured: false },
+          github: { configured: false },
+        },
+        providerList: [
+          { id: "sample-provider", type: "github", target: "example-org", configured: false },
+        ],
+      });
+      expect(report.status).toBe("warning");
+      expect(report.providerList[0]?.configured).toBe(false);
+      expect(report.messages).toContain("Provider 'sample-provider' has no available credential.");
+
+      const noProviders = buildDoctorReport({
+        root: { path: "sample-root", exists: true, hasDevDir: true },
+        tools: validTools,
+        providers: {
+          azureDevOps: { configured: false },
+          github: { configured: false },
+        },
+        providerList: [],
+      });
+      expect(noProviders.status).toBe("healthy");
+    });
+
     test("constructs 'error' report when required tool is missing", () => {
       const missingRequired: ToolDiagnostic[] = [
         {
@@ -108,7 +136,9 @@ describe("Hardware & Diagnostics Pure Logic (Phase 18)", () => {
           azureDevOps: { configured: false },
           github: { configured: false },
         },
-        providerList: [],
+        providerList: [
+          { id: "sample-provider", type: "github", target: "example-org", configured: false },
+        ],
       });
 
       expect(report.status).toBe("error");
