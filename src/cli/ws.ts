@@ -848,7 +848,11 @@ export const workspaceSyncOptions = {
     type: "boolean",
     description: "Rebase diverged mounts onto the remote branch (aborts on conflict)",
   },
-  "dry-run": { type: "boolean", description: "Print the plan and change nothing" },
+  "dry-run": {
+    type: "boolean",
+    description:
+      "Fetches and shows the plan without changing worktrees, the manifest, or admin repositories",
+  },
   consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
   force: { type: "boolean", description: "Alias for --consent" },
 } as const;

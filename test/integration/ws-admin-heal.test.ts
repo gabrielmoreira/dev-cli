@@ -124,6 +124,41 @@ describe("Workspace admin self-heal integration", () => {
     expect(firstGitdir).not.toBe(secondGitdir);
   });
 
+  it("does not rebuild a missing admin repository for dry-run", async () => {
+    const workspaceName = "dry-run-no-heal";
+    await ws.init({ root: tempRoot, name: workspaceName });
+    const { mountName, sourceKey } = await ws.add({
+      root: tempRoot,
+      workspaceName,
+      source: bareRemotePath,
+      branch: "main",
+    });
+    const adminPath = workspaceAdminRepoPath({ root: tempRoot, workspaceName, sourceKey });
+    await rm(adminPath, { recursive: true, force: true });
+    expect(fs.exists(adminPath)).toBe(false);
+
+    const result = await ws.update({
+      root: tempRoot,
+      workspaceName,
+      dryRun: true,
+      refresh: false,
+    });
+
+    expect(result.dryRun).toBe(true);
+    expect(fs.exists(adminPath)).toBe(false);
+    expect(result.mounts).toHaveLength(1);
+    expect(result.mounts[0]?.path).toBe(mountName);
+
+    const updated = await ws.update({ root: tempRoot, workspaceName, refresh: false });
+    expect(fs.exists(adminPath)).toBe(true);
+    expect(updated.mounts).toEqual([
+      expect.objectContaining({ path: mountName, action: "up_to_date" }),
+    ]);
+    expect(
+      (await git.inspectWorktree(join(tempRoot, "ws", workspaceName, mountName))).isGitWorktree,
+    ).toBe(true);
+  });
+
   it("reports a heal it could not do instead of hiding it", async () => {
     const lostRemote = await mkdtemp(join(tmpdir(), "dev-cli-ws-heal-lost-"));
     await git.runGit(["clone", "--bare", bareRemotePath, lostRemote]);

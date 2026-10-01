@@ -335,7 +335,7 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 | `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
 | `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
-| `--dry-run`      | boolean    | Print the plan and change nothing                                                             |
+| `--dry-run`      | boolean    | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories    |
 | `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                                                 |
 | `--force`        | boolean    | Alias for --consent                                                                           |
 | `--offline`      | boolean    | Read strictly from local mirror without network                                               |
@@ -615,7 +615,7 @@ Sync the current workspace; outside one, sync provider inventory plus work items
 | `--refresh`          | boolean | Fetch remotes before fast-forwarding (default, unless --offline)                                                                  |
 | `--autostash`        | boolean | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup)                                     |
 | `--rebase`           | boolean | Rebase diverged mounts onto the remote branch (aborts on conflict)                                                                |
-| `--dry-run`          | boolean | Print the plan and change nothing                                                                                                 |
+| `--dry-run`          | boolean | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories                                        |
 | `--consent`          | boolean | Grant explicit consent to run lifecycle hooks                                                                                     |
 | `--force`            | boolean | Alias for --consent                                                                                                               |
 
