@@ -49,7 +49,7 @@ export function normalizeAdoRepository(
 
   const defaultBranch = repo.defaultBranch
     ? repo.defaultBranch.replace(/^refs\/heads\//, "")
-    : "main";
+    : undefined;
 
   const description = repo.description || repo.project?.description || "";
   const lastChanged = repo.project?.lastUpdateTime || syncedAt;
@@ -383,7 +383,7 @@ export async function resolveInputSource(
   }
 
   const matchNames = result.matches
-    .map((m) => `  - ${m.name} (${m.default_branch}) -> ${m.url}`)
+    .map((m) => `  - ${m.name} (${m.default_branch ?? "unknown"}) -> ${m.url}`)
     .join("\n");
   return {
     error: `Ambiguous repository '${query || ""}'. Matching repositories in local inventory:\n${matchNames}\nPlease specify an exact name or full URL.`,

@@ -131,7 +131,7 @@ export function normalizeGitHubRepository(
 ): InventoryRecord {
   const name = raw.name;
   const url = raw.clone_url || raw.html_url || `https://github.com/${raw.full_name || name}.git`;
-  const default_branch = raw.default_branch || "main";
+  const default_branch = raw.default_branch || undefined;
   const description = raw.description || "";
   const last_changed = raw.pushed_at || raw.updated_at || "";
 
