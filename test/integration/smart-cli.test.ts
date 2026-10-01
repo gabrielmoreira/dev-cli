@@ -477,6 +477,87 @@ describe("smart CLI input", () => {
     prompt.mockRestore();
   });
 
+  test("keeps picker and go orders independent of navigation history", async () => {
+    for (const [name, createdAt] of [
+      ["sample-a-old", "2026-09-01T00:00:00.000Z"],
+      ["sample-z-new", "2026-09-02T00:00:00.000Z"],
+    ]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+      const manifestPath = join(root, "ws", name, "ws.md");
+      const workspace = await manifest.readWorkspace(manifestPath);
+      workspace.manifest.created_at = createdAt;
+      await manifest.writeWorkspace(manifestPath, workspace.manifest, workspace.body);
+    }
+
+    expect(
+      await runCli({
+        argv: ["go", "sample-a-old", "--root", root],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    logs = [];
+    expect(
+      await runCli({
+        argv: ["ls", "--root", root, "--json"],
+        cwd: root,
+        env: {},
+        isTTY: false,
+      }),
+    ).toBe(0);
+    expect(JSON.parse(logs.join("\n")).map((item: { name: string }) => item.name)).toEqual([
+      "sample-a-old",
+      "sample-z-new",
+    ]);
+
+    const select = spyOn(ui, "select").mockResolvedValue("sample-z-new");
+    try {
+      logs = [];
+      expect(
+        await runCli({
+          argv: ["go", "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: true,
+          stdinIsTTY: true,
+        }),
+      ).toBe(0);
+      expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
+        "sample-z-new",
+        "sample-a-old",
+      ]);
+      expect(logs).toEqual([join(root, "ws", "sample-z-new")]);
+
+      for (const value of [undefined, "sample"]) {
+        select.mockClear();
+        expect(
+          await resolveWorkspaceInput({
+            value,
+            fuzzyValue: true,
+            root,
+            command: "ws start",
+            usage: "dev ws start [name]",
+            ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
+          }),
+        ).toEqual({ value: "sample-z-new", source: "prompt" });
+        expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
+          "sample-a-old",
+          "sample-z-new",
+        ]);
+      }
+    } finally {
+      select.mockRestore();
+    }
+  });
+
   test("go refuses ambiguity when no interactive person is present", async () => {
     for (const name of ["alpha-one", "alpha-two"]) {
       expect(
