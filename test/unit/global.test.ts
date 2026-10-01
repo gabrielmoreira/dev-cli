@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
+import { describeError } from "../../src/cli/errors.ts";
 import {
   getGlobalConfigPath,
   loadGlobalConfig,
@@ -76,6 +77,52 @@ path = "C:/Users/ExampleUser/Projects/Work"
     };
 
     expect(parseGlobalToml(serializeGlobalToml(config))).toEqual(config);
+  });
+
+  it.each([
+    ['"C:/WorkDev"', "C:/WorkDev"],
+    [String.raw`"C:\\WorkDev"`, String.raw`C:\WorkDev`],
+    [String.raw`'C:\WorkDev'`, String.raw`C:\WorkDev`],
+  ])("preserves a valid TOML Windows path %s", (tomlPath, expectedPath) => {
+    expect(parseGlobalToml(`[roots.work]\npath = ${tomlPath}`).roots.work?.path).toBe(expectedPath);
+  });
+
+  it.each([
+    ["unescaped Windows path", String.raw`path = "C:\Users\Example\dev"`],
+    ["unfinished table", "[roots.work"],
+  ])("reports invalid registry TOML from async loading: %s", async (_label, invalidToml) => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dev-global-invalid-"));
+    const configPath = join(tempDir, ".dev.toml");
+    try {
+      await fs.writeText(configPath, `private_value = "private-registry-value"\n${invalidToml}`);
+      const error: unknown = await loadGlobalConfig(configPath).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toHaveProperty("cause", expect.any(Error));
+      const described = describeError(error);
+      expect(described.code).toBe("INVALID_GLOBAL_TOML");
+      expect(described.details).toEqual({ path: configPath });
+      expect(described.message).toContain(configPath);
+      expect(described.message).toMatch(/forward slashes/i);
+      expect(described.message).toMatch(/TOML escaping/i);
+      expect(described.nextStep).toContain(configPath);
+      expect(JSON.stringify(described)).not.toContain("private-registry-value");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves async registry read failures as filesystem errors", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "dev-global-read-error-"));
+    const configPath = join(tempDir, ".dev.toml");
+    try {
+      await fs.ensureDir(configPath);
+      const error: unknown = await loadGlobalConfig(configPath).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(Error);
+      expect(describeError(error).code).not.toBe("INVALID_GLOBAL_TOML");
+      expect(describeError(error).message).not.toMatch(/TOML escaping/i);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("loads and saves config to disk atomically", async () => {

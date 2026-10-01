@@ -1,11 +1,16 @@
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { glob } from "tinyglobby";
 import { writeTextAtomic } from "./fs.ts";
-import { cacheDir, inventoryCachePath, prsCachePath, workItemsCachePath } from "./paths.ts";
-
-const cacheSubdir = ({ root, kind }: { root: string; kind: string }): string =>
-  join(cacheDir({ root }), kind);
+import {
+  inventoryCacheDir,
+  inventoryCachePath,
+  prsCacheDir,
+  prsCachePath,
+  pullRequestSelectionCachePath,
+  workItemsCacheDir,
+  workItemsCachePath,
+} from "./paths.ts";
 
 export interface InventoryRecord {
   id: string;
@@ -85,7 +90,7 @@ export async function readInventory(options: ReadInventoryOptions): Promise<Inve
  * Loads and combines all inventory records across all cached tenants in $DEV_ROOT/.dev/cache/inventory/.
  */
 export async function loadAllCachedInventories(root: string): Promise<InventoryRecord[]> {
-  const baseDir = cacheSubdir({ root, kind: "inventory" });
+  const baseDir = inventoryCacheDir({ root });
   if (!existsSync(baseDir)) {
     return [];
   }
@@ -224,12 +229,11 @@ export interface PullRequestSelectionOptions {
 }
 
 function pullRequestSelectionPath(options: PullRequestSelectionOptions): string {
-  return join(
-    cacheDir({ root: options.root }),
-    "pr-selections",
-    ...options.tenant.split("/").filter(Boolean),
-    `${options.name}.jsonl`,
-  );
+  return pullRequestSelectionCachePath({
+    root: options.root,
+    tenantSegments: options.tenant.split("/").filter(Boolean),
+    name: options.name,
+  });
 }
 
 export async function writePullRequestSelection(
@@ -266,7 +270,7 @@ export async function readPullRequestSelection(
 }
 
 export async function loadAllCachedPullRequests(root: string): Promise<PullRequestRecord[]> {
-  const baseDir = cacheSubdir({ root, kind: "prs" });
+  const baseDir = prsCacheDir({ root });
   if (!existsSync(baseDir)) {
     return [];
   }
@@ -379,7 +383,7 @@ export async function readWorkItems(options: ReadWorkItemsOptions): Promise<Work
   }
 
   const tenantSegments = options.tenant.split("/").filter(Boolean);
-  const tenantDir = join(cacheDir({ root: options.root }), "workitems", ...tenantSegments);
+  const tenantDir = workItemsCacheDir({ root: options.root, tenantSegments });
   if (!existsSync(tenantDir)) {
     return [];
   }
@@ -408,7 +412,7 @@ export async function readWorkItems(options: ReadWorkItemsOptions): Promise<Work
 }
 
 export async function loadAllCachedWorkItems(root: string): Promise<WorkItemRecord[]> {
-  const baseDir = cacheSubdir({ root, kind: "workitems" });
+  const baseDir = workItemsCacheDir({ root });
   if (!existsSync(baseDir)) {
     return [];
   }

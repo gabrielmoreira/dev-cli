@@ -8,6 +8,7 @@ import {
   saveGlobalConfig,
   unregisterGlobalRoot,
 } from "../global.ts";
+import { configFilePath, rootAgentsPath } from "../paths.ts";
 import { ui } from "../ui.ts";
 import { reportError } from "./errors.ts";
 import { providerAddCommand } from "./provider.ts";
@@ -114,7 +115,7 @@ export const initCommand = defineCommand({
     await fs.ensureDir(targetDir);
 
     const alias = args.alias || basename(targetDir);
-    const devYamlPath = resolve(targetDir, "dev.yaml");
+    const devYamlPath = configFilePath({ root: targetDir });
 
     if (!fs.exists(devYamlPath)) {
       let content = `# dev CLI Root Configuration\n`;
@@ -142,7 +143,7 @@ export const initCommand = defineCommand({
       await fs.writeTextAtomic(devYamlPath, content);
     }
 
-    const agentsPath = resolve(targetDir, "AGENTS.md");
+    const agentsPath = rootAgentsPath({ root: targetDir });
     if (!fs.exists(agentsPath)) {
       await fs.writeText(agentsPath, ROOT_AGENTS_CONTENT);
     }
@@ -379,7 +380,7 @@ export const rootAddCommand = defineCommand({
       },
     });
     const rootPath = resolve(ambient.cwd, pathInput.value);
-    if (!fs.exists(resolve(rootPath, "dev.yaml"))) {
+    if (!fs.exists(configFilePath({ root: rootPath }))) {
       return reportError(`'${rootPath}' is not a dev root because dev.yaml is missing.`, args.json);
     }
 

@@ -30,6 +30,8 @@ export function assertInside(root: string, target: string): string {
  *
  * Layout of a dev root:
  *   dev.yaml                      declared sources, labels, plugins (truth)
+ *   dev.toml                      legacy root configuration fallback
+ *   AGENTS.md                     root-local agent instructions
  *   .dev/git/<host>/<owner>/<repo>.git   object pool: one bare mirror per source
  *   .dev/repos/<sourceKey>.git    canonical admin instance (mirrors/ checkouts)
  *   .dev/repos/<ws>/<sourceKey>.git  per-workspace admin instance
@@ -50,6 +52,14 @@ export function recentWorkspacesPath({ root }: { root: string }): string {
 
 export function configFilePath({ root }: { root: string }): string {
   return join(root, "dev.yaml");
+}
+
+export function legacyConfigFilePath({ root }: { root: string }): string {
+  return join(root, "dev.toml");
+}
+
+export function rootAgentsPath({ root }: { root: string }): string {
+  return join(root, "AGENTS.md");
 }
 
 // --- object pool: git objects of a source exist exactly once, here ---
@@ -157,6 +167,10 @@ export function cacheDir({ root }: { root: string }): string {
   return join(root, ".dev", "cache");
 }
 
+export function inventoryCacheDir({ root }: { root: string }): string {
+  return join(cacheDir({ root }), "inventory");
+}
+
 export function inventoryCachePath({
   root,
   segments,
@@ -165,6 +179,10 @@ export function inventoryCachePath({
   segments: string[];
 }): string {
   return assertInside(root, join(root, ".dev", "cache", "inventory", ...segments, "repos.jsonl"));
+}
+
+export function prsCacheDir({ root }: { root: string }): string {
+  return join(cacheDir({ root }), "prs");
 }
 
 export function prsCachePath({
@@ -177,6 +195,32 @@ export function prsCachePath({
   repo: string;
 }): string {
   return assertInside(root, join(root, ".dev", "cache", "prs", ...segments, `${repo}.jsonl`));
+}
+
+/** Saved PR selections use JSONL and stay within the dev root, like other cache files. */
+export function pullRequestSelectionCachePath({
+  root,
+  tenantSegments,
+  name,
+}: {
+  root: string;
+  tenantSegments: string[];
+  name: string;
+}): string {
+  return assertInside(
+    root,
+    join(root, ".dev", "cache", "pr-selections", ...tenantSegments, `${name}.jsonl`),
+  );
+}
+
+export function workItemsCacheDir({
+  root,
+  tenantSegments = [],
+}: {
+  root: string;
+  tenantSegments?: string[];
+}): string {
+  return assertInside(root, join(cacheDir({ root }), "workitems", ...tenantSegments));
 }
 
 export function workItemsCachePath({

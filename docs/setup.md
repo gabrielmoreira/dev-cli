@@ -59,7 +59,7 @@ Extract the archive and move `dev` or `dev.exe` to a directory on `PATH`.
 
 With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an editable path, detects when you are already inside a dev root, and lets you update that root or create another one. It can then add providers and synchronizes their repository inventory before returning.
 
-After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, then registers the root in `~/.dev.toml`.
+After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, then registers the root in `~/.dev.toml`. If you edit this registry, write Windows paths with forward slashes (`path = "C:/dev"`) or valid TOML escaping (`path = "C:\\dev"`). When `dev` reads an invalid registry, it reports the file to fix instead of falling back to `~/dev`.
 
 `dev.yaml` is the root configuration: defaults, providers, sources, labels, worksets, hooks, and plugins. Generated repositories and caches do not belong there.
 
@@ -114,6 +114,8 @@ Invoke-Expression (dev shell-init powershell | Out-String)
 ```
 
 `dev go` asks with a fuzzy-searchable list when several workspaces match; `dev go <query>` with a unique match skips the question.
+
+`dev ws jump` uses the configured workspace prefix and returns `WORKSPACE_NOT_FOUND` for missing or non-directory targets without printing a path or recording recent use.
 
 Workspace shortcuts only change directory when the resolved path exists. Otherwise, the wrapper runs the original CLI command so its error and exit code reach your shell.
 
