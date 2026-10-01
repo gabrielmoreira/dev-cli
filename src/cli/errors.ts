@@ -50,6 +50,7 @@ const EXIT_CODES: Record<string, number> = {
   PROVIDER_NOT_CONFIGURED: EXIT_USAGE,
   PROVIDER_NOT_FOUND: EXIT_USAGE,
   LABEL_VALIDATION: EXIT_USAGE,
+  INVALID_LABEL_FIELD: EXIT_USAGE,
   UNKNOWN_COMMAND: EXIT_USAGE,
   UNKNOWN_OPTION: EXIT_USAGE,
   // mirror add --branch <default>: that checkout is the mirror itself.

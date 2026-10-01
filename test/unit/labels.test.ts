@@ -8,6 +8,15 @@ import {
   type LabelDef,
 } from "../../src/labels.ts";
 
+async function failureFrom(p: Promise<unknown>): Promise<Error & { code?: string }> {
+  try {
+    await p;
+  } catch (error) {
+    return error as Error & { code?: string };
+  }
+  throw new Error("expected rejection, got resolve");
+}
+
 describe("labels core", () => {
   describe("parseLabelDefs", () => {
     it("separates fixed values from field schemas", () => {
@@ -36,6 +45,27 @@ describe("labels core", () => {
       expect(warnings[0]).toContain("unknown type 'date'");
       expect(defs.x.fields.bad).toBeUndefined();
       expect(defs.x.fields.good.type).toBe("bool");
+    });
+
+    it("coerces false defaults and warns without retaining invalid typed defaults", () => {
+      const { defs, warnings } = parseLabelDefs({
+        settings: {
+          fields: {
+            enabled: { type: "bool", default: "false" },
+            invalidBool: { type: "bool", default: "yes" },
+            invalidInt: { type: "int", default: "1.5" },
+            ratio: { type: "float", default: "1.5" },
+          },
+        },
+      });
+      expect(defs.settings.fields.enabled.default).toBe(false);
+      expect(defs.settings.fields.invalidBool.default).toBeUndefined();
+      expect(defs.settings.fields.invalidInt.default).toBeUndefined();
+      expect(defs.settings.fields.ratio.default).toBe(1.5);
+      expect(warnings).toEqual([
+        "default of 'invalidBool': 'yes' is not a valid bool",
+        "default of 'invalidInt': '1.5' is not a valid int",
+      ]);
     });
   });
 
@@ -70,6 +100,34 @@ describe("labels core", () => {
       const { meta, warnings } = resolveLabelMeta(def, "qmd_wiki", { role: "primary", rolle: "x" });
       expect(warnings.join(" ")).toContain("unknown field 'rolle'");
       expect(meta.role).toBe("primary");
+    });
+
+    it("accepts only boolean literals and whole integer strings", async () => {
+      const typedDef: LabelDef = {
+        fixed: {},
+        fields: {
+          enabled: { type: "bool", required: true },
+          retries: { type: "int", required: true },
+        },
+      };
+
+      const badBoolean = await failureFrom(
+        Promise.resolve().then(() =>
+          resolveLabelMeta(typedDef, "settings", { enabled: "yes", retries: "2" }),
+        ),
+      );
+      expect(badBoolean.code).toBe("INVALID_LABEL_FIELD");
+
+      const badInteger = await failureFrom(
+        Promise.resolve().then(() =>
+          resolveLabelMeta(typedDef, "settings", { enabled: "false", retries: "1.5" }),
+        ),
+      );
+      expect(badInteger.code).toBe("INVALID_LABEL_FIELD");
+
+      const valid = resolveLabelMeta(typedDef, "settings", { enabled: "false", retries: "-2" });
+      expect(valid.errors).toEqual([]);
+      expect(valid.meta).toEqual({ enabled: false, retries: -2 });
     });
   });
 
