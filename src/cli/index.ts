@@ -28,6 +28,7 @@ export function createDefaultAmbient(): AmbientContext {
     env: { ...process.env },
     isTTY: Boolean(process.stdout.isTTY),
     stdinIsTTY: Boolean(process.stdin.isTTY),
+    stderrIsTTY: Boolean(process.stderr.isTTY),
   };
 }
 

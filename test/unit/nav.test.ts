@@ -9,8 +9,8 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       expect(bashScript).toContain("dev() {");
       expect(bashScript).toContain("ws() {");
       expect(bashScript).toContain("command dev ws path");
-      expect(bashScript).toContain("command dev go --candidates");
-      expect(bashScript).toContain("fzf");
+      expect(bashScript).not.toContain("fzf");
+      expect(bashScript).toContain('command dev go "$@"');
 
       const zshScript = generateShellInit("zsh");
       expect(zshScript).toBe(bashScript);
@@ -21,8 +21,8 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       expect(fishScript).toContain("function dev");
       expect(fishScript).toContain("function ws");
       expect(fishScript).toContain("command dev ws path");
-      expect(fishScript).toContain("command dev go --candidates");
-      expect(fishScript).toContain("fzf");
+      expect(fishScript).not.toContain("fzf");
+      expect(fishScript).toContain("command dev go $argv[2..-1]");
     });
 
     test("generates powershell wrapper functions", () => {
@@ -30,8 +30,11 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       expect(psScript).toContain("function dev {");
       expect(psScript).toContain("function ws {");
       expect(psScript).toContain("Set-Location");
-      expect(psScript).toContain("dev) go --candidates");
-      expect(psScript).toContain("fzf");
+      expect(psScript).not.toContain("fzf");
+      expect(psScript).toContain("go @goArgs)");
+      expect(psScript).toContain(
+        "Get-Command -CommandType Application dev | Select-Object -First 1",
+      );
 
       const pwshScript = generateShellInit("pwsh");
       expect(pwshScript).toBe(psScript);
@@ -39,9 +42,22 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
 
     test("generates wrappers backed by the global Mise task", () => {
       const script = generateShellInit("zsh", "mise");
-      expect(script).toContain("mise run dev -- go --candidates");
+      expect(script).not.toContain("fzf");
+      expect(script).toContain('mise run dev -- go "$@"');
       expect(script).toContain('mise run dev -- "$@"');
-      expect(script).not.toContain("command dev go --candidates");
+      expect(script).not.toContain("command dev go");
+    });
+
+    test("JSON bypasses navigation in every shell and runner", () => {
+      for (const runner of ["direct", "mise"] as const) {
+        for (const shell of ["bash", "zsh"]) {
+          expect(generateShellInit(shell, runner)).toContain('if [ "$arg" = "--json" ]; then');
+        }
+        expect(generateShellInit("fish", runner)).toContain("if contains -- --json $argv");
+        for (const shell of ["powershell", "pwsh"]) {
+          expect(generateShellInit(shell, runner)).toContain("if ($args -contains '--json') {");
+        }
+      }
     });
 
     test("defaults to bash for unrecognized shell type", () => {

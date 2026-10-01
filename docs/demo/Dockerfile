@@ -8,7 +8,7 @@ ARG SKILLS_REVISION=d5cdb657ea95ab27c6233e959c08af5eb3806092
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl fzf git zsh \
+    && apt-get install --yes --no-install-recommends ca-certificates curl git zsh \
     && rm -rf /var/lib/apt/lists/*
 ARG SPACESHIP_VERSION=4.22.5
 ARG HERDR_VERSION=0.9.1
