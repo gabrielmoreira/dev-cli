@@ -158,10 +158,20 @@ export function buildDoctorReport(input: {
     messages.push(`Development root directory exists but '.dev/' metadata directory is missing.`);
   }
 
+  for (const provider of input.providerList) {
+    if (!provider.configured) {
+      messages.push(`Provider '${provider.id}' has no available credential.`);
+    }
+  }
+
   let status: "healthy" | "warning" | "error" = "healthy";
   if (hasRequiredToolMissing) {
     status = "error";
-  } else if (!input.root.exists || !input.root.hasDevDir) {
+  } else if (
+    !input.root.exists ||
+    !input.root.hasDevDir ||
+    input.providerList.some((provider) => !provider.configured)
+  ) {
     status = "warning";
   }
 
