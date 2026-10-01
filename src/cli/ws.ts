@@ -21,7 +21,7 @@ import {
 import { createAzureDevOps } from "../ado.ts";
 import { createGitHubClient } from "../github.ts";
 import * as prWorkspace from "../pr-workspace.ts";
-import { ui } from "../ui.ts";
+import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInputs } from "./repository-input.ts";
@@ -1141,13 +1141,43 @@ export const wsUnlockCommand = defineCommand({
     });
 
     try {
-      const result = await ws.unlock({
-        root: config.root,
-        workspacePrefix: config.workspacePrefix,
-        workspaceName: workspace.value,
-        mountPath,
-        branch,
-      });
+      const result = await ws.unlock(
+        {
+          root: config.root,
+          workspacePrefix: config.workspacePrefix,
+          workspaceName: workspace.value,
+          mountPath,
+          branch,
+        },
+        canPrompt(getAmbient())
+          ? {
+              ...ws.defaultDeps,
+              interactions: {
+                chooseUnlockBranch: async ({ adminRepoPath }) => {
+                  const listed = await git.runGit([
+                    "-C",
+                    adminRepoPath,
+                    "for-each-ref",
+                    "--format=%(refname:short)",
+                    "refs/heads",
+                  ]);
+                  if (listed.exitCode !== 0) return undefined;
+                  const branches = listed.stdout.split(/\r?\n/).filter(Boolean);
+                  if (branches.length === 0) return undefined;
+                  try {
+                    return await ui.select(
+                      "Branch to track",
+                      branches.map((value) => ({ label: value, value })),
+                    );
+                  } catch (error) {
+                    if (error instanceof CancelledError) return undefined;
+                    throw error;
+                  }
+                },
+              },
+            }
+          : undefined,
+      );
       warnHealFailures([result]);
 
       ui.result({
