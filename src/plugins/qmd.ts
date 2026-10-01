@@ -1,7 +1,14 @@
 import { join } from "node:path";
 import type { RuntimeConfig } from "../config.ts";
+import * as git from "../git.ts";
+import * as mirror from "../mirror.ts";
 import { devDir, deriveCanonicalParts } from "../paths.ts";
-import { LabelError, parseDeclaredSources, resolveLabeledSources } from "../labels.ts";
+import {
+  LabelError,
+  parseDeclaredSources,
+  resolveLabelAssignments,
+  resolveLabeledSources,
+} from "../labels.ts";
 import type { Integration, IntegrationFactory, PluginBase } from "./events.ts";
 
 export interface QmdPluginConfig {
@@ -69,6 +76,37 @@ export function qmdSyncLabels(config: RuntimeConfig, explicitLabel: string): str
   return [...labels].filter((label) => label.startsWith("index:")).sort();
 }
 
+/** Reconciles index labels only against existing mirror checkouts. Mirror
+ * creation belongs to the label command's explicit sync decision; embedding
+ * stays opt-in via dev qmd sync. */
+async function reconcileIndexLabel(
+  base: PluginBase,
+  config: QmdPluginConfig,
+  label: string,
+): Promise<void> {
+  if (!label.startsWith("index:") || qmdSyncLabels(base.config, "").length === 0) return;
+  const { matches } = resolveLabelAssignments(base.config, label);
+  const checkouts = await mirror.list({
+    root: base.root,
+    canonicalPrefix: base.config.canonicalPrefix,
+  });
+  const desired = new Map<string, string>();
+  for (const { source } of matches) {
+    const expectedName =
+      source.path?.split(/[\\/]/).filter(Boolean).pop() ??
+      deriveCanonicalParts(source.url, base.config.canonicalPrefix).repo;
+    const checkout = checkouts.find(
+      (item) =>
+        item.sourceUrl !== undefined &&
+        git.normalizeSourceKey(item.sourceUrl) === git.normalizeSourceKey(source.url) &&
+        (source.branch === undefined ? item.name === expectedName : item.branch === source.branch),
+    );
+    if (checkout) desired.set(collectionName(label, checkout.path), checkout.path);
+  }
+  const failed = await reconcileCollections(base, config, label, desired, { embed: false });
+  if (failed) throw new Error(`qmd ${failed.step} failed: ${failed.stderr}`);
+}
+
 export function createQmdPlugin(base: PluginBase): Integration {
   const config = parseQmdConfig(base.config.plugins);
 
@@ -102,10 +140,14 @@ export function createQmdPlugin(base: PluginBase): Integration {
     hooks: {
       // Freshness: checkouts may have been fast-forwarded by mirror sync.
       // qmd update is delta and cheap; never embed here (heavy, opt-in).
+      // A root without index:* labels does not use qmd: stay silent there.
       "mirror:sync:after": async (b, data) => {
         if (data.updated.length === 0) return;
+        if (qmdSyncLabels(b.config, "").length === 0) return;
         await qmd(b, config, ["update"]);
       },
+      "label:add:after": (b, data) => reconcileIndexLabel(b, config, data.label),
+      "label:rm:after": (b, data) => reconcileIndexLabel(b, config, data.label),
     },
   };
 }

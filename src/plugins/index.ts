@@ -10,6 +10,7 @@ import type {
   IntegrationFactory,
   PluginBase,
 } from "./events.ts";
+import { qmdFactory } from "./qmd.ts";
 
 export type {
   Integration,
@@ -22,7 +23,7 @@ export type {
 /** Built-in plugins, in execution order. Adding one = a file in src/plugins/
  * plus an entry here. External plugins (plugins.<name>.module) load lazily at
  * dispatch and never appear in this list. */
-export const builtinFactories: IntegrationFactory[] = [];
+export const builtinFactories: IntegrationFactory[] = [qmdFactory];
 
 /** Builds the plugin base from the invocation environment. */
 export function createPluginBase(root: string, config?: RuntimeConfig): PluginBase {
