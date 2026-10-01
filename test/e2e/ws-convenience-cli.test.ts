@@ -38,6 +38,34 @@ describe("dev ws convenience CLI E2E (Phase 7)", () => {
     );
   });
 
+  it("prints an existing workspace path under the configured custom prefix", async () => {
+    const customRoot = join(tempRoot, "custom-prefix-root");
+    const home = join(tempRoot, "custom-prefix-home");
+    await fs.ensureDir(customRoot);
+    await fs.ensureDir(home);
+    await fs.writeText(
+      join(customRoot, "dev.yaml"),
+      "defaults:\n  workspace_prefix: tasks/nested/\n",
+    );
+    const env = { ...process.env, HOME: home, USERPROFILE: home, DEV_CWD: customRoot };
+    const initProc = Bun.spawn(
+      ["bun", "run", cliPath, "ws", "init", "custom-task", "--root", customRoot, "--json"],
+      { cwd: customRoot, env, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(await initProc.exited).toBe(0);
+
+    const pathProc = Bun.spawn(
+      ["bun", "run", cliPath, "ws", "path", "custom-task", "--root", customRoot],
+      { cwd: customRoot, env, stdout: "pipe", stderr: "pipe" },
+    );
+    const resolvedPath = (await new Response(pathProc.stdout).text()).trim();
+    expect(await pathProc.exited).toBe(0);
+    expect(resolvedPath.replace(/\\/g, "/")).toBe(
+      join(customRoot, "tasks", "nested", "custom-task").replace(/\\/g, "/"),
+    );
+    expect(fs.exists(join(resolvedPath, "ws.md"))).toBe(true);
+  });
+
   it("lists, duplicates and resolves paths via CLI commands", async () => {
     // 1. Initialize workspace via CLI
     const initProc = Bun.spawn(

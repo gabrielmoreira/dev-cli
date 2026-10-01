@@ -1455,7 +1455,11 @@ export const wsPathCommand = defineCommand({
     });
 
     try {
-      const resolvedPath = ws.deriveWorkspacePath(config.root, workspace.value);
+      const resolvedPath = ws.deriveWorkspacePath(
+        config.root,
+        workspace.value,
+        config.workspacePrefix,
+      );
 
       ui.result({
         data: { path: resolvedPath },
