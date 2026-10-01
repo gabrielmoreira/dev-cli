@@ -35,6 +35,11 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
     expect(record.syncedAt).toBe("2026-09-15T12:00:00Z");
   });
 
+  test("leaves an omitted default branch unknown", () => {
+    const record = normalizeGitHubRepository({ id: 1, name: "sample-api" });
+    expect(record.default_branch).toBeUndefined();
+  });
+
   test("createGitHubClient sends proper Authorization and User-Agent headers", async () => {
     let capturedUrl = "";
     let capturedHeaders: Record<string, string> = {};

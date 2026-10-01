@@ -11,7 +11,7 @@ export interface InventoryRecord {
   id: string;
   name: string;
   url: string;
-  default_branch: string;
+  default_branch?: string;
   description: string;
   last_changed: string;
   syncedAt: string;

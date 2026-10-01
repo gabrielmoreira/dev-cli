@@ -129,6 +129,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
       root: quarantineRoot,
       source: bareRemotePath,
       branch: "main",
+      defaultBranch: "main",
     });
     expect(added.path).toBe(plan.absolutePath);
     const occurrences: Array<{ stashName: string; stashSha: string }> = [];
@@ -270,6 +271,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
       root: tempRoot,
       source: bareRemotePath,
       branch: "main",
+      defaultBranch: "main",
     });
     const updatedContent = await fs.readText(join(plan.absolutePath, "file.txt"));
     expect(updatedContent).toBe("updated canonical content v2");
@@ -280,6 +282,7 @@ describe("Canonical repository local integration (Phase 8)", () => {
       root: tempRoot,
       source: bareRemotePath,
       branch: "main",
+      defaultBranch: "main",
     });
 
     // Mock git.fastForward to force a failure during sync

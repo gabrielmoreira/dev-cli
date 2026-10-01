@@ -36,11 +36,36 @@ describe("Canonical repository pure rules (Phase 8)", () => {
   });
 
   describe("planCanonicalCheckout", () => {
+    it("refuses to invent a default branch when none is known", () => {
+      let error: (Error & { code?: string }) | undefined;
+      try {
+        planCanonicalCheckout({
+          root: "/dev-root",
+          source: "https://example.org/sample-api.git",
+        });
+      } catch (caught) {
+        error = caught as Error & { code?: string };
+      }
+      expect(error?.code).toBe("DEFAULT_BRANCH_UNKNOWN");
+    });
+
+    it("treats an explicit branch as a sibling when the default is unknown", () => {
+      const plan = planCanonicalCheckout({
+        root: "/dev-root",
+        source: "https://example.org/sample-api.git",
+        branch: "develop",
+      });
+
+      expect(plan.isSibling).toBe(true);
+      expect(plan.relativePath.replace(/\\/g, "/")).toBe("mirrors/example.org/sample-api@develop");
+    });
+
     it("plans default checkout under mirrors/<host>/<owner>/<repo>", () => {
       const plan = planCanonicalCheckout({
         root: "/dev-root",
         source: "https://github.com/company/auth-service.git",
         branch: "main",
+        defaultBranch: "main",
       });
 
       expect(plan.branch).toBe("main");
@@ -60,6 +85,7 @@ describe("Canonical repository pure rules (Phase 8)", () => {
         canonicalPrefix: "repos",
         source: "https://github.com/company/auth-service.git",
         branch: "main",
+        defaultBranch: "main",
       });
 
       expect(plan.relativePath.replace(/\\/g, "/")).toBe("repos/github.com/company/auth-service");

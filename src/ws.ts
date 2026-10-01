@@ -743,10 +743,19 @@ export async function add(
       });
 
       // 3. Resolve revision
-      revision = plan.revision ?? {
-        mode: "track",
-        branch: await deps.git.resolveDefaultBranch(admin.adminRepoPath),
-      };
+      let resolvedRevision = plan.revision;
+      if (!resolvedRevision) {
+        const defaultBranch = await deps.git.resolveDefaultBranch(admin.adminRepoPath);
+        if (!defaultBranch) {
+          throw new WorkspaceError(
+            "INTERACTION_REQUIRED",
+            "The repository default branch is unknown. Pass --branch <branch> to ws add.",
+            { source: canonicalSource, required: "--branch" },
+          );
+        }
+        resolvedRevision = { mode: "track", branch: defaultBranch };
+      }
+      revision = resolvedRevision;
 
       // 4. A reused pool only knows what existed at its last fetch: a branch, tag or
       // commit created since then (a new pull request, say) is fetched once here.
@@ -1843,10 +1852,9 @@ export async function unlock(
           sourceKey,
         });
         const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
-        const hasDefault = await deps.git.hasRevision(adminRepoPath, {
-          mode: "track",
-          branch: defaultBranch,
-        });
+        const hasDefault = defaultBranch
+          ? await deps.git.hasRevision(adminRepoPath, { mode: "track", branch: defaultBranch })
+          : false;
         targetBranch = hasDefault
           ? defaultBranch
           : await deps.interactions?.chooseUnlockBranch?.({ path: mount.path, adminRepoPath });

@@ -368,7 +368,7 @@ export async function repairWorktreeLink(adminRepoPath: string, mountPath: strin
   await runGit(["-C", adminRepoPath, "worktree", "repair", mountPath]);
 }
 
-export async function resolveDefaultBranch(adminRepoPath: string): Promise<string> {
+export async function resolveDefaultBranch(adminRepoPath: string): Promise<string | undefined> {
   const symRef = await runGit(["-C", adminRepoPath, "symbolic-ref", "--short", "HEAD"]);
   if (symRef.exitCode === 0 && symRef.stdout.length > 0) {
     return symRef.stdout;
@@ -400,7 +400,7 @@ export async function resolveDefaultBranch(adminRepoPath: string): Promise<strin
     if (first) return first;
   }
 
-  return "main";
+  return undefined;
 }
 
 /** Whether the admin repository can check out the revision without fetching. */

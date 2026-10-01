@@ -355,7 +355,7 @@ function renderMountPlan(title: string, mounts: PlannedMount[]): string {
     ["Repository", "Branch", "Path", "Reason"],
     ...mounts.map((mount) => [
       git.deriveDefaultMountPath(mount.source),
-      mount.branch ?? "(remote default)",
+      mount.branch ?? "unknown default",
       mount.path,
       mount.reason ?? "",
     ]),
@@ -464,7 +464,7 @@ async function reviewMountPlan(
   const selected = await ui.multiSelect("Select repositories to customize", [
     { label: "Continue with defaults", value: "defaults" },
     ...mounts.map((mount, index) => ({
-      label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "remote default"} → ${mount.path})`,
+      label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
       value: String(index),
     })),
   ]);
@@ -613,7 +613,7 @@ export const wsAddCommand = defineCommand({
         const selected = await ui.multiSelect("Select mounts to customize", [
           { label: "Continue with defaults", value: "defaults" },
           ...plannedMounts.map((mount, index) => ({
-            label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "remote default"} → ${mount.path})`,
+            label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
             value: String(index),
           })),
         ]);

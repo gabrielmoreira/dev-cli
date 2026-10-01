@@ -40,7 +40,7 @@ export interface PlanCanonicalCheckoutInput {
   branch?: string;
   /** Default branch of the source. A checkout at any other revision is a
    * sibling (`<repo>@<branch>`); the default branch always owns `<repo>`.
-   * Omitted means the caller is planning the default checkout. */
+   * Omitted means the default branch is unknown. */
   defaultBranch?: string;
   alias?: string;
 }
@@ -61,8 +61,14 @@ export function planCanonicalCheckout(input: PlanCanonicalCheckoutInput): Canoni
   const parts = deriveCanonicalParts(input.source, input.canonicalPrefix);
   const sourceKey = git.normalizeSourceKey(input.source);
   const canonicalUrl = git.stripCredentialsFromUrl(input.source);
-  const branch = input.branch || input.defaultBranch || "main";
-  const isSibling = Boolean(input.defaultBranch) && branch !== input.defaultBranch;
+  const branch = input.branch || input.defaultBranch;
+  if (!branch) {
+    throw new CanonicalMirrorError(
+      "DEFAULT_BRANCH_UNKNOWN",
+      "The repository default branch is unknown; pass --branch explicitly.",
+    );
+  }
+  const isSibling = branch !== input.defaultBranch;
 
   let folderName: string;
   if (input.alias) {
@@ -180,6 +186,12 @@ export async function ensure(
   const pinned = input.pin && input.pin.trim().length > 0 ? input.pin.trim() : undefined;
   const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
   const branch = pinned || input.branch || defaultBranch;
+  if (!branch) {
+    throw new CanonicalMirrorError(
+      "DEFAULT_BRANCH_UNKNOWN",
+      "The repository default branch is unknown; pass --branch explicitly.",
+    );
+  }
 
   const plan = planCanonicalCheckout({
     root: input.root,
@@ -581,7 +593,7 @@ export async function sync(
   for (const { wtPath, observed } of inspected) {
     if (!observed.isDirty) continue;
 
-    const branch = observed.currentRevision.branch || "main";
+    const branch = observed.currentRevision.branch || "unknown";
     const stashName = `dev mirror sync ${new Date().toISOString()} ${basename(wtPath)} ${randomUUID()}`;
     try {
       const result = await deps.git.stashWorktree(wtPath, stashName);
@@ -615,7 +627,7 @@ export async function sync(
       };
     }
     const observed = await deps.git.inspectWorktree(wtPath);
-    const branch = observed.currentRevision.branch || "main";
+    const branch = observed.currentRevision.branch || "unknown";
     const plan = planRepoSyncAction(observed);
 
     if (plan.action === "skip") {

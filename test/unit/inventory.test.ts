@@ -47,7 +47,7 @@ describe("Inventory Orchestration and Normalization", () => {
 
     const record = normalizeAdoRepository(rawRepo, "2026-09-14T21:00:00Z");
 
-    expect(record.default_branch).toBe("main");
+    expect(record.default_branch).toBeUndefined();
     expect(record.url).toBe("https://dev.azure.com/my-org/_apis/git/repositories/uuid-456");
     expect(record.description).toBe("");
     expect(record.last_changed).toBe("2026-09-14T21:00:00Z");
