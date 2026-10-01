@@ -1,7 +1,9 @@
-import { resolveWorkspacePath } from "./ws.ts";
+import * as fs from "./fs.ts";
+import { resolveWorkspacePath, WorkspaceError } from "./ws.ts";
 
 export interface ResolveJumpTargetInput {
   root: string;
+  workspacePrefix?: string;
   workspaceName?: string;
   cwd?: string;
 }
@@ -11,14 +13,21 @@ export interface JumpTarget {
   path: string;
 }
 
-export function resolveJumpTarget(input: ResolveJumpTargetInput): JumpTarget {
+export async function resolveJumpTarget(input: ResolveJumpTargetInput): Promise<JumpTarget> {
   const wsPath = resolveWorkspacePath({
     root: input.root,
+    workspacePrefix: input.workspacePrefix,
     workspaceName: input.workspaceName,
     cwd: input.cwd,
   });
   const segments = wsPath.replace(/\\/g, "/").split("/").filter(Boolean);
   const name = input.workspaceName || segments[segments.length - 1] || "workspace";
+  if (!(await fs.isDirectory(wsPath))) {
+    throw new WorkspaceError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found at ${wsPath}`, {
+      workspaceName: name,
+      path: wsPath,
+    });
+  }
   return {
     name,
     path: wsPath,

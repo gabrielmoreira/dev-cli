@@ -1576,8 +1576,9 @@ export const wsJumpCommand = defineCommand({
     });
 
     try {
-      const target = resolveJumpTarget({
+      const target = await resolveJumpTarget({
         root: config.root,
+        workspacePrefix: config.workspacePrefix,
         workspaceName: workspace.value,
       });
       await ws.recordUse({ root: config.root, workspaceName: target.name });
