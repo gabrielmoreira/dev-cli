@@ -90,6 +90,13 @@ path = "C:/Users/ExampleUser/Projects/Work"
   it.each([
     ["unescaped Windows path", String.raw`path = "C:\Users\Example\dev"`],
     ["unfinished table", "[roots.work"],
+    ["numeric default root", "default_root = 1"],
+    ["scalar roots", 'roots = "bad"'],
+    ["array roots", "roots = []"],
+    ["scalar root entry", '[roots]\nwork = "bad"'],
+    ["array root entry", "roots = { work = [] }"],
+    ["missing root path", "[roots.work]"],
+    ["non-string root path", "[roots.work]\npath = 1"],
   ])("reports invalid registry TOML from async loading: %s", async (_label, invalidToml) => {
     const tempDir = await mkdtemp(join(tmpdir(), "dev-global-invalid-"));
     const configPath = join(tempDir, ".dev.toml");

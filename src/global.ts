@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { z } from "zod";
 import * as fs from "./fs.ts";
 
 export interface GlobalRootEntry {
@@ -10,6 +11,11 @@ export interface GlobalConfig {
   default_root?: string;
   roots: Record<string, GlobalRootEntry>;
 }
+
+const globalConfigSchema = z.object({
+  default_root: z.string().optional(),
+  roots: z.record(z.string(), z.object({ path: z.string() })).default({}),
+});
 
 export class GlobalRootError extends Error {
   constructor(message: string) {
@@ -24,7 +30,7 @@ class GlobalTomlError extends Error {
 
   constructor(path: string, cause: unknown) {
     super(
-      `Invalid TOML in global root registry at ${path}. Windows paths need forward slashes or valid TOML escaping.`,
+      `Invalid TOML syntax or registry structure in global root registry at ${path}. Windows paths need forward slashes or valid TOML escaping.`,
       { cause },
     );
     this.name = "GlobalTomlError";
@@ -38,16 +44,11 @@ export function getGlobalConfigPath(homeDir?: string): string {
 }
 
 export function parseGlobalToml(content: string, configPath = "~/.dev.toml"): GlobalConfig {
-  let parsed: Partial<GlobalConfig>;
   try {
-    parsed = (Bun.TOML.parse(content) ?? {}) as Partial<GlobalConfig>;
+    return globalConfigSchema.parse(Bun.TOML.parse(content));
   } catch (cause) {
     throw new GlobalTomlError(configPath, cause);
   }
-  return {
-    default_root: parsed.default_root,
-    roots: parsed.roots ?? {},
-  };
 }
 
 export function serializeGlobalToml(config: GlobalConfig): string {
