@@ -6,6 +6,15 @@ import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 import * as ws from "../../src/ws.ts";
 
+async function failureFrom(promise: Promise<unknown>): Promise<ws.WorkspaceError> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as ws.WorkspaceError;
+  }
+  throw new Error("expected rejection, got resolve");
+}
+
 describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
   let tempRoot: string;
   let bareRemotePath: string;
@@ -87,7 +96,7 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
     expect(await fs.readText(join(mountPath, "notes.txt"))).toBe("local notes");
   });
 
-  it("keeps the stash entry safe when autostash pop conflicts", async () => {
+  it("keeps the stash backup and reports recovery when autostash apply conflicts", async () => {
     const mountName = await newWorkspace("stash-conflict");
     const mountPath = join(tempRoot, "ws", "stash-conflict", mountName);
 
@@ -95,18 +104,24 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
     await advanceRemote("app.txt", "remote version\n");
     await fs.writeText(join(mountPath, "app.txt"), "local version\n");
 
-    const result = await ws.update({
-      root: tempRoot,
-      workspaceName: "stash-conflict",
-      autostash: true,
-      refresh: true,
-    });
+    const error = await failureFrom(
+      ws.update({
+        root: tempRoot,
+        workspaceName: "stash-conflict",
+        autostash: true,
+        refresh: true,
+      }),
+    );
 
-    const mount = result.mounts.find((m) => m.path === mountName);
-    expect(mount?.action).toBe("fast_forward");
-    expect(mount?.warning).toContain("stash");
-    // Pop conflicted: the file carries conflict markers; HEAD is at the
-    // remote tip and the stash entry survives for manual recovery.
+    expect(error).toBeInstanceOf(ws.WorkspaceError);
+    expect(error.code).toBe("STASH_RESTORE_FAILED");
+    expect(error.details).toEqual({
+      path: mountPath,
+      stash: expect.stringContaining("dev autostash stash-conflict/"),
+      sha: expect.stringMatching(/^[a-f0-9]{40}$/),
+      recovery: `git stash apply ${error.details?.sha}`,
+    });
+    // Apply conflicted: HEAD is at the remote tip and the backup survives.
     expect(await fs.readText(join(mountPath, "app.txt"))).toContain("<<<<<<<");
     const stashList = await git.runGit(["-C", mountPath, "stash", "list"]);
     expect(stashList.stdout).toContain("dev autostash");

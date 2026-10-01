@@ -841,7 +841,8 @@ export const workspaceSyncOptions = {
   },
   autostash: {
     type: "boolean",
-    description: "Stash uncommitted changes, fast-forward, then pop the stash",
+    description:
+      "Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup)",
   },
   rebase: {
     type: "boolean",
@@ -952,6 +953,10 @@ export const wsUpdateCommand = defineCommand({
             }
             if (mount.warning) {
               out += `    ⚠ ${mount.warning}\n`;
+            }
+            if (mount.stash) {
+              out += `    Work restored, backup retained: ${mount.stash.stashName} (${mount.stash.stashSha.slice(0, 8)})\n`;
+              out += `    Recovery: ${mount.stash.recovery}\n`;
             }
           }
           return out.trimEnd();
