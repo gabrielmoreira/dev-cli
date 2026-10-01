@@ -1,8 +1,14 @@
 import { realpathSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, win32 } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, win32 } from "node:path";
 import * as fs from "./fs.ts";
 import * as git from "./git.ts";
-import { gitPoolPath, workspaceAdminRepoPath, workspacePath, workspacesDir } from "./paths.ts";
+import {
+  gitPoolPath,
+  recentWorkspacesPath,
+  workspaceAdminRepoPath,
+  workspacePath,
+  workspacesDir,
+} from "./paths.ts";
 import * as manifest from "./manifest.ts";
 import * as shell from "./shell.ts";
 import * as trust from "./trust.ts";
@@ -2137,10 +2143,41 @@ export function resolveWorkspacePath(input: {
   );
 }
 
+/** Records rebuildable navigation history without failing the successful command. */
+export async function recordUse(
+  input: { root: string; workspaceName: string },
+  deps: WorkspaceDeps = defaultDeps,
+): Promise<void> {
+  try {
+    const recentPath = recentWorkspacesPath({ root: input.root });
+    await deps.fs.ensureDir(dirname(recentPath));
+    await deps.fs.withFileLock(recentPath, async () => {
+      let recent: Record<string, unknown> = {};
+      if (deps.fs.exists(recentPath)) {
+        try {
+          const parsed: unknown = JSON.parse(await deps.fs.readText(recentPath));
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            recent = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // Missing or corrupt rebuildable state means no history.
+        }
+      }
+      await deps.fs.writeTextAtomic(
+        recentPath,
+        `${JSON.stringify({ ...recent, [input.workspaceName]: new Date().toISOString() }, null, 2)}\n`,
+      );
+    });
+  } catch {
+    // History is optional; lock or IO failures must not block navigation.
+  }
+}
+
 export interface WorkspaceListItem {
   name: string;
   path: string;
   createdAt?: string;
+  lastUsedAt?: string;
   description?: string;
   mountCount?: number;
   error?: { code: string; message: string };
@@ -2153,6 +2190,19 @@ export async function list(
   const wsDir = workspacesDir({ root: input.root, workspacePrefix: input.workspacePrefix });
   if (!deps.fs.exists(wsDir)) {
     return [];
+  }
+
+  let recent: Record<string, unknown> = {};
+  const recentPath = recentWorkspacesPath({ root: input.root });
+  if (deps.fs.exists(recentPath)) {
+    try {
+      const parsed: unknown = JSON.parse(await deps.fs.readText(recentPath));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        recent = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Missing or corrupt rebuildable state means no history.
+    }
   }
 
   const entries = await deps.fs.listDirs(wsDir);
@@ -2168,6 +2218,10 @@ export async function list(
           name: manifest.name,
           path: wsPath,
           createdAt: manifest.created_at,
+          lastUsedAt:
+            typeof recent[manifest.name] === "string"
+              ? (recent[manifest.name] as string)
+              : undefined,
           description: manifest.description,
           mountCount: manifest.mounts.length,
         });
@@ -2175,6 +2229,7 @@ export async function list(
         items.push({
           name,
           path: wsPath,
+          lastUsedAt: typeof recent[name] === "string" ? (recent[name] as string) : undefined,
           error: {
             code: (error as { code?: string } | null)?.code ?? "INVALID_MANIFEST",
             message: error instanceof Error ? error.message : String(error),
@@ -2184,7 +2239,12 @@ export async function list(
     }
   }
 
-  return items.sort((a, b) => a.name.localeCompare(b.name));
+  return items.sort(
+    (left, right) =>
+      (right.lastUsedAt ?? "").localeCompare(left.lastUsedAt ?? "") ||
+      (right.createdAt ?? "").localeCompare(left.createdAt ?? "") ||
+      left.name.localeCompare(right.name),
+  );
 }
 
 export interface WorkspaceDuplicateInput {
