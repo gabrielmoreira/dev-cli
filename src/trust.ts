@@ -1,3 +1,5 @@
+import { existsSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import type { TrustedScope } from "./config.ts";
 
 export interface SourceIdentity {
@@ -44,9 +46,9 @@ export function parseSourceIdentity(url: string): SourceIdentity {
   const isLocalUnix = cleaned.startsWith("/");
 
   if (isLocalWindows || isLocalUnix) {
-    cleaned = cleaned.replace(/\.git$/, "").replace(/\/+$/, "");
-    const segments = cleaned.split("/").filter(Boolean);
-    const repo = segments[segments.length - 1] || "repo";
+    let canonicalPath = resolve(cleaned);
+    if (existsSync(canonicalPath)) canonicalPath = realpathSync.native(canonicalPath);
+    const repo = process.platform === "win32" ? canonicalPath.toLowerCase() : canonicalPath;
     return {
       provider: "local",
       tenant: "local",
@@ -142,7 +144,11 @@ export function evaluateTrust(options: EvaluateTrustOptions): TrustDecision {
     if (providerMatch && tenantMatch && ownerMatch) {
       const repoMatch =
         scope.repos.includes("*") ||
-        scope.repos.some((r) => r.toLowerCase() === identity.repo.toLowerCase());
+        scope.repos.some((r) =>
+          identity.provider === "local"
+            ? parseSourceIdentity(r).repo === identity.repo
+            : r.toLowerCase() === identity.repo.toLowerCase(),
+        );
 
       if (repoMatch) {
         return {
