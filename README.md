@@ -61,7 +61,7 @@ Let `dev go` change your shell's directory:
 eval "$(dev shell-init zsh)"     # bash, zsh, fish and PowerShell
 ```
 
-The picker uses [fzf](https://github.com/junegunn/fzf). Without the integration, `dev go` prints the path instead of jumping to it.
+Interactive pickers use fuzzy search. The `dev go` picker uses [fzf](https://github.com/junegunn/fzf). Without the integration, `dev go` prints the path instead of jumping to it.
 
 ## Your first workspace
 

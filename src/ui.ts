@@ -20,6 +20,55 @@ export interface ResultOptions<T = unknown> {
   text?: string | (() => string | void);
 }
 
+export function fuzzyScore(query: string, text: string): number | undefined {
+  query = query.trim().toLowerCase();
+  if (!query) return 0;
+  const lower = text.toLowerCase();
+  // Keep the best subsequence at each position: reward prefixes, word starts and runs, penalize gaps.
+  let scores = Array<number>(lower.length).fill(-Infinity);
+  let best = -Infinity;
+  for (let q = 0; q < query.length; q++) {
+    const next = Array<number>(lower.length).fill(-Infinity);
+    let bestGap = -Infinity;
+    best = -Infinity;
+    for (let index = 0; index < lower.length; index++) {
+      const adjacent = scores[index - 1] ?? -Infinity;
+      bestGap = Math.max(bestGap, adjacent + index);
+      if (lower[index] !== query[q]) continue;
+      const before = text[index - 1] ?? "";
+      const current = text[index] ?? "";
+      const wordStart =
+        index === 0 ||
+        "/-_.:@ ".includes(before) ||
+        (/[a-z]/.test(before) && /[A-Z]/.test(current));
+      const score =
+        (q === 0 ? -index : Math.max(adjacent + 12, bestGap - index)) + 1 + (wordStart ? 6 : 0);
+      next[index] = score;
+      best = Math.max(best, score);
+    }
+    scores = next;
+  }
+  return best === -Infinity ? undefined : best + (lower.startsWith(query) ? 20 : 0);
+}
+
+export function rankOptions<T extends { label: string; value: string }>(
+  query: string,
+  options: T[],
+): T[] {
+  if (!query.trim()) return options;
+  return options
+    .map((option) => ({
+      option,
+      score: Math.max(
+        fuzzyScore(query, option.label) ?? -Infinity,
+        option.value === option.label ? -Infinity : (fuzzyScore(query, option.value) ?? -Infinity),
+      ),
+    }))
+    .filter(({ score }) => score !== -Infinity)
+    .sort((a, b) => b.score - a.score)
+    .map(({ option }) => option);
+}
+
 export const ui = {
   reset(): void {
     errorReported = false;
@@ -120,7 +169,12 @@ export const ui = {
       message,
       placeholder: "Type to search...",
       maxItems: 10,
-      options: options.map((option) => ({ ...option, value: String(option.value) })),
+      options() {
+        return rankOptions(this.userInput, options);
+      },
+      filter: (search, option) =>
+        fuzzyScore(search, option.label ?? option.value) !== undefined ||
+        fuzzyScore(search, option.value) !== undefined,
     });
     if (isCancel(selection)) throw new CancelledError();
     return selection as T;
@@ -134,7 +188,12 @@ export const ui = {
       message,
       placeholder: "Type to search...",
       maxItems: 10,
-      options: options.map((option) => ({ ...option, value: String(option.value) })),
+      options() {
+        return rankOptions(this.userInput, options);
+      },
+      filter: (search, option) =>
+        fuzzyScore(search, option.label ?? option.value) !== undefined ||
+        fuzzyScore(search, option.value) !== undefined,
       required: true,
     });
     if (isCancel(selection)) throw new CancelledError();
