@@ -72,7 +72,9 @@ describe("Azure DevOps Integration - Inventory Discovery", () => {
       const alpha = cached.find((r) => r.name === config.repoName);
       expect(alpha).toBeDefined();
       expect(alpha?.default_branch).toBe("main");
-      expect(alpha?.url).toContain("dev.azure.com/example-org/example-project/_git/alpha-service");
+      expect(alpha?.url).toContain(
+        `dev.azure.com/${config.organization}/${config.project}/_git/${config.repoName}`,
+      );
       expect(alpha?.url).not.toContain("pat");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
