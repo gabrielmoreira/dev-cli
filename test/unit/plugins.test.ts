@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,8 +12,8 @@ import type { IntegrationFactory, PluginBase } from "../../src/plugins/index.ts"
 
 const cleanups: Array<() => void> = [];
 
-afterAll(() => {
-  for (const fn of cleanups) fn();
+afterEach(() => {
+  for (const fn of cleanups.splice(0).reverse()) fn();
 });
 
 function makeBase(): PluginBase {
