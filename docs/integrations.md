@@ -24,7 +24,7 @@ irm https://herdr.dev/install.ps1 | iex
 Then open OMP in a workspace:
 
 ```bash
-dev ws start gh-example-org-sample-repo
+dev ws start gh-can1357-oh-my-pi
 ```
 
 `dev` uses the workspace directory as the pane working directory. It reuses an existing ready OMP, starts OMP in an available matching pane, or creates a named HerdR workspace and agent when neither exists. The command works from a HerdR pane or a normal terminal. If no server is running, it starts one and waits for readiness; an interactive call from a normal terminal then hands that terminal to the HerdR client, attached to the chosen session, and returns when you close it. `--json` performs the same server orchestration without taking over the calling terminal.
@@ -39,7 +39,7 @@ Install QMD through Mise, then put an indexing label on each repository that sho
 
 ```bash
 mise use -g npm:@tobilu/qmd
-dev label add index:docs https://github.com/example-org/sample-repo --sync
+dev label add index:docs https://github.com/can1357/oh-my-pi --sync
 ```
 
 With no positional label, sync reconciles every assigned `index:*` label. An explicit label remains available for targeted automation. The command removes stale collections owned by those labels, adds missing collections, updates the index once, and embeds new chunks unless `--no-embed` is set.
@@ -50,10 +50,10 @@ dev qmd sync index:docs
 dev qmd sync --no-embed
 ```
 
-Collections are named `<label>--<checkout>`, so the example creates `index:docs--sample-repo`. Query the resulting index through the passthrough:
+Collections are named `<label>--<checkout>`, so the example creates `index:docs--oh-my-pi`. Query the resulting index through the passthrough:
 
 ```bash
-dev qmd x query "how are tools registered?" -c index:docs--sample-repo --json -n 10
+dev qmd x query "how are tools registered?" -c index:docs--oh-my-pi --json -n 10
 dev qmd x status
 ```
 
