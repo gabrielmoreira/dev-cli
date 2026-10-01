@@ -1,4 +1,5 @@
-import { basename, dirname, join } from "node:path";
+import { createHash } from "node:crypto";
+import { dirname, join } from "node:path";
 import { canonicalAdminRepoPath, gitPoolPath, reposDir, workspaceAdminRepoPath } from "./paths.ts";
 import { withHostLimit } from "./host-limit.ts";
 
@@ -327,7 +328,9 @@ export async function ensureWorkspaceRepo(
 
 export interface AdoptWorktreeOptions {
   adminRepoPath: string;
+  sourceKey: string;
   mountPath: string;
+  mountRelativePath: string;
   /** Branch name, tag, or commit the mount should point at. */
   revision: string;
   trackBranch: boolean;
@@ -340,7 +343,13 @@ export interface AdoptWorktreeOptions {
  * edits inside the mount are preserved; staged state is not.
  */
 export async function adoptWorktree(options: AdoptWorktreeOptions): Promise<void> {
-  const worktreeId = basename(options.mountPath);
+  const normalizedMountPath = options.mountRelativePath.replace(/\\/g, "/");
+  const readableMountPath = normalizedMountPath.replace(/\//g, "-");
+  const mountHash = createHash("sha256")
+    .update(JSON.stringify([options.sourceKey, options.revision, normalizedMountPath]))
+    .digest("hex")
+    .slice(0, 8);
+  const worktreeId = `${readableMountPath}-${mountHash}`;
   const metadataDir = join(options.adminRepoPath, "worktrees", worktreeId);
   await fs.ensureDir(metadataDir);
 
