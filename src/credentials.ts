@@ -1,10 +1,12 @@
 import * as shell from "./shell.ts";
 import type { RuntimeConfig } from "./config.ts";
+import { redactCredentials } from "./git.ts";
 
 export class CredentialError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "CredentialError";
@@ -49,6 +51,7 @@ export async function resolveAzureDevOpsCredential(
 
   // 2. Azure CLI session fallback, asked once per process: a token lasts an
   // hour, and a sync over many repositories must not start `az` for each one.
+  let cliResult: Awaited<ReturnType<CredentialDeps["shell"]["runCommand"]>> | undefined;
   try {
     const request = () =>
       deps.shell.runCommand("az", [
@@ -69,11 +72,21 @@ export async function resolveAzureDevOpsCredential(
         source: "azure_cli",
       };
     }
+    cliResult = res;
   } catch {}
 
+  const reason = cliResult?.errorCode === "ENOENT" ? "not_installed" : "not_logged_in";
   throw new CredentialError(
     "CREDENTIAL_NOT_AVAILABLE",
-    "Azure DevOps credentials not available. Configure AZURE_DEVOPS_PAT or authenticate via 'az login'.",
+    reason === "not_installed"
+      ? "Azure CLI is not installed."
+      : "Azure CLI is not logged in. Configure AZURE_DEVOPS_PAT or authenticate with az login.",
+    {
+      command: "az",
+      reason,
+      stderr: redactCredentials(cliResult?.stderr ?? ""),
+      ...(cliResult?.errorCode ? { spawnCode: cliResult.errorCode } : {}),
+    },
   );
 }
 
@@ -92,6 +105,7 @@ export async function resolveGitHubCredential(
   }
 
   // 2. GitHub CLI session fallback
+  let cliResult: Awaited<ReturnType<CredentialDeps["shell"]["runCommand"]>> | undefined;
   try {
     const res = await deps.shell.runCommand("gh", ["auth", "token"]);
     if (res.exitCode === 0 && res.stdout.trim().length > 0) {
@@ -101,11 +115,21 @@ export async function resolveGitHubCredential(
         source: "github_cli",
       };
     }
+    cliResult = res;
   } catch {}
 
+  const reason = cliResult?.errorCode === "ENOENT" ? "not_installed" : "not_logged_in";
   throw new CredentialError(
     "CREDENTIAL_NOT_AVAILABLE",
-    "GitHub credentials not available. Configure GITHUB_TOKEN or authenticate via 'gh auth login'.",
+    reason === "not_installed"
+      ? "GitHub CLI is not installed."
+      : "GitHub CLI is not logged in. Configure GITHUB_TOKEN or authenticate with gh auth login.",
+    {
+      command: "gh",
+      reason,
+      stderr: redactCredentials(cliResult?.stderr ?? ""),
+      ...(cliResult?.errorCode ? { spawnCode: cliResult.errorCode } : {}),
+    },
   );
 }
 

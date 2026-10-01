@@ -2,6 +2,7 @@ export interface ShellExecResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  errorCode?: string;
 }
 
 export interface RunCommandOptions {
@@ -42,10 +43,18 @@ export async function runCommand(
       exitCode,
     };
   } catch (error) {
+    const errorCode =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof error.code === "string"
+        ? error.code
+        : undefined;
     return {
       stdout: "",
       stderr: error instanceof Error ? error.message : String(error),
       exitCode: 1,
+      ...(errorCode ? { errorCode } : {}),
     };
   }
 }
