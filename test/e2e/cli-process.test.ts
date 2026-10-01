@@ -42,4 +42,21 @@ describe("CLI Process E2E (Phase 0)", () => {
     expect(stderr).toContain("Unknown command: 'nonexistent-cmd'");
     expect(stderr).toContain("↳ dev --help");
   });
+
+  it("returns a structured usage error for an unknown root command in JSON mode", async () => {
+    const proc = Bun.spawn(["bun", "run", cliPath, "not-a-command", "--json"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+
+    expect(exitCode).toBe(2);
+    expect(stdout).toBe("");
+    const error = JSON.parse(stderr).error;
+    expect(error.code).toBe("UNKNOWN_COMMAND");
+    expect(error.command).toBe("not-a-command");
+    expect(error.nextStep).toBe("dev --help");
+  });
 });
