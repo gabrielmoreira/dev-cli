@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import * as git from "../../src/git.ts";
+import * as manifest from "../../src/manifest.ts";
 import * as ws from "../../src/ws.ts";
 
 interface RemovedWorktree {
@@ -13,14 +14,43 @@ function makeDeps(options: {
   removed: RemovedWorktree[];
   removeFails?: Error;
 }): ws.WorkspaceDeps {
+  const readWorkspace = async (): Promise<{
+    manifest: manifest.WorkspaceManifest;
+    body: string;
+  }> => ({
+    manifest: {
+      version: 1,
+      name: "sample-workspace",
+      created_at: new Date(0).toISOString(),
+      mounts: [],
+    },
+    body: "",
+  });
+  const writeWorkspace = async (
+    _path: string,
+    _manifest: manifest.WorkspaceManifest,
+    _body?: string,
+  ): Promise<void> => {
+    if (options.writeFails) throw options.writeFails;
+  };
   return {
     fs: {
       exists: (p: string) => !p.endsWith("core"),
     },
     manifest: {
-      readWorkspace: async () => ({ manifest: { mounts: [] }, body: "" }),
-      writeWorkspace: async () => {
-        if (options.writeFails) throw options.writeFails;
+      readWorkspace,
+      writeWorkspace,
+      updateWorkspace: async (
+        path: string,
+        mutate: (doc: {
+          manifest: manifest.WorkspaceManifest;
+          body: string;
+        }) => void | Promise<void>,
+      ) => {
+        const doc = await readWorkspace();
+        await mutate(doc);
+        await writeWorkspace(path, doc.manifest, doc.body);
+        return doc;
       },
     },
     git: {

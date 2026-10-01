@@ -1,5 +1,5 @@
 import yaml from "yaml";
-import { readText, writeTextAtomic } from "./fs.ts";
+import { readText, withFileLock, writeTextAtomic } from "./fs.ts";
 
 export interface RevisionTracking {
   mode: "track";
@@ -128,4 +128,16 @@ export async function writeWorkspace(
 ): Promise<void> {
   const content = serializeWorkspace(manifest, body);
   await writeTextAtomic(filePath, content);
+}
+
+export async function updateWorkspace(
+  filePath: string,
+  mutate: (doc: { manifest: WorkspaceManifest; body: string }) => void | Promise<void>,
+): Promise<{ manifest: WorkspaceManifest; body: string }> {
+  return await withFileLock(filePath, async () => {
+    const doc = await readWorkspace(filePath);
+    await mutate(doc);
+    await writeWorkspace(filePath, doc.manifest, doc.body);
+    return doc;
+  });
 }

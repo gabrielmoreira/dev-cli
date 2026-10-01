@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { chmod, mkdir, readdir, rename, rm, stat, unlink } from "node:fs/promises";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 
 export async function ensureDir(dirPath: string): Promise<void> {
@@ -57,6 +58,101 @@ export async function writeTextAtomic(path: string, content: string): Promise<vo
     }
   }
 }
+
+export class FileLockError extends Error {
+  readonly code = "FILE_LOCKED";
+  readonly details: {
+    path: string;
+    lockPath: string;
+    owner?: { pid: number; hostname: string };
+  };
+
+  constructor(path: string, lockPath: string, owner?: { pid: number; hostname: string }) {
+    super(`Timed out waiting for file lock: ${lockPath}. Remove it only if you know it is stale.`);
+    this.name = "FileLockError";
+    this.details = { path, lockPath, ...(owner ? { owner } : {}) };
+  }
+}
+
+/** Serializes writers; timeoutMs defaults to 10 seconds and never breaks a live lock. */
+export async function withFileLock<T>(
+  targetPath: string,
+  fn: () => Promise<T>,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
+  const lockPath = `${targetPath}.lock`;
+  const reclaimPath = join(lockPath, "reclaim");
+  const localHostname = hostname();
+  const startedAt = Date.now();
+  let created = false;
+  let owner: { pid: number; hostname: string } | undefined;
+
+  try {
+    while (!created) {
+      try {
+        await mkdir(lockPath);
+        created = true;
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+
+      // Only one waiter may verify and reclaim a dead owner at a time.
+      let reclaimCreated = false;
+      try {
+        await mkdir(reclaimPath);
+        reclaimCreated = true;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "ENOENT") continue;
+        if (code !== "EEXIST") throw error;
+      }
+      if (reclaimCreated) {
+        let dead = false;
+        owner = undefined;
+        try {
+          try {
+            const parsed = JSON.parse(await readText(join(lockPath, "owner")));
+            if (
+              Number.isInteger(parsed.pid) &&
+              parsed.pid > 0 &&
+              typeof parsed.hostname === "string"
+            ) {
+              owner = { pid: parsed.pid, hostname: parsed.hostname };
+              if (owner.hostname === localHostname) {
+                try {
+                  process.kill(owner.pid, 0);
+                } catch (error) {
+                  dead = (error as NodeJS.ErrnoException).code === "ESRCH";
+                }
+              }
+            }
+          } catch {
+            // Missing or unreadable ownership is not proof that the writer died.
+          }
+          if (dead) await rm(lockPath, { recursive: true, force: true });
+        } finally {
+          if (!dead) await rm(reclaimPath, { recursive: true, force: true });
+        }
+        if (dead) continue;
+      }
+
+      if (Date.now() - startedAt >= (options.timeoutMs ?? 10_000)) {
+        throw new FileLockError(targetPath, lockPath, owner);
+      }
+      await Bun.sleep(50);
+    }
+
+    await writeText(
+      join(lockPath, "owner"),
+      JSON.stringify({ pid: process.pid, hostname: localHostname }),
+    );
+    return await fn();
+  } finally {
+    if (created) await rm(lockPath, { recursive: true, force: true });
+  }
+}
+
 export async function makeExecutable(path: string): Promise<void> {
   await chmod(path, 0o755);
 }
