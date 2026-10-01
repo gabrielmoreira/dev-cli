@@ -465,6 +465,18 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     );
   }
 
+  const rootCommands = await subCommandsOf(mainCommand as unknown as InspectableCommand);
+  const rootWord = normalizedArgs[0];
+  if (rootWord && !rootWord.startsWith("-") && !Object.hasOwn(rootCommands, rootWord)) {
+    return reportError(
+      new WorkspaceError("UNKNOWN_COMMAND", `Unknown command: '${rootWord}'`, {
+        command: rootWord,
+        usage: (await suggestCommand(normalizedArgs)) ?? "dev --help",
+      }),
+      currentAmbient.argv.includes("--json"),
+    );
+  }
+
   try {
     const result = await runCommand(mainCommand, { rawArgs: normalizedArgs });
     const code =
@@ -487,17 +499,6 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       }
       ui.error(`✗ ${error.message}`);
       ui.error(`↳ ${error.details.usage}`);
-      return EXIT_USAGE;
-    }
-
-    const msg = error instanceof Error ? error.message : String(error);
-    if (msg.includes("Unknown command")) {
-      // eslint-disable-next-line no-control-regex
-      const cleanMsg = msg.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
-      const match = cleanMsg.match(/Unknown command\s+([^\s]+)/i);
-      const cmdName = match ? match[1] : argv[0];
-      ui.error(`✗ Unknown command: '${cmdName}'`);
-      ui.error(`↳ ${(await suggestCommand(normalizedArgs)) ?? "dev --help"}`);
       return EXIT_USAGE;
     }
 

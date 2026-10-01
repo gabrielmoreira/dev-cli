@@ -22,6 +22,7 @@ const NEXT_STEPS: Record<string, string> = {
   WORKSET_MEMBER_EXISTS: "dev workset list",
   WORKSET_MEMBER_NOT_FOUND: "dev workset list",
   WORKSET_NOT_FOUND: "dev workset list",
+  UNKNOWN_COMMAND: "<usage>",
   // The corrected command when an option is near a known one, else the command's help.
   UNKNOWN_OPTION: "<usage>",
   WORKSPACE_ALREADY_EXISTS: "dev go <name>",
@@ -49,6 +50,7 @@ const EXIT_CODES: Record<string, number> = {
   PROVIDER_NOT_CONFIGURED: EXIT_USAGE,
   PROVIDER_NOT_FOUND: EXIT_USAGE,
   LABEL_VALIDATION: EXIT_USAGE,
+  UNKNOWN_COMMAND: EXIT_USAGE,
   UNKNOWN_OPTION: EXIT_USAGE,
   // mirror add --branch <default>: that checkout is the mirror itself.
   DEFAULT_BRANCH: EXIT_USAGE,
