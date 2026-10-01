@@ -9,6 +9,7 @@ import type { InventoryRecord } from "../../src/cache";
 import type { WorkItemSyncResult } from "../../src/workitem";
 import type { PrSyncResult } from "../../src/pr";
 import type { MirrorSyncResult } from "../../src/mirror";
+import { GitHubError } from "../../src/github";
 
 /** The provider returned exactly the cached records. */
 function withFetched(
@@ -208,8 +209,18 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
       "sample-api-b",
     ]);
     expect(result.errors).toEqual([
-      "Pull request sync error for failing-api-a: Unavailable failing-api-a",
-      "Pull request sync error for failing-api-b: Unavailable failing-api-b",
+      {
+        code: "FAILED",
+        phase: "pullRequests",
+        repository: "failing-api-a",
+        message: "Pull request sync error for failing-api-a: Unavailable failing-api-a",
+      },
+      {
+        code: "FAILED",
+        phase: "pullRequests",
+        repository: "failing-api-b",
+        message: "Pull request sync error for failing-api-b: Unavailable failing-api-b",
+      },
     ]);
   }, 500);
 
@@ -347,7 +358,10 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
       pr: {
         syncPullRequests: async (input) => {
           if (input.repo === "failing-repo") {
-            throw new Error("Network timeout on failing-repo");
+            throw new GitHubError("RATE_LIMITED", "Provider request limit reached", {
+              status: 429,
+              details: { body: "" },
+            });
           }
           return {
             tenant: input.tenant,
@@ -373,11 +387,15 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
       mockDeps,
     );
 
-    expect(result.pullRequests.length).toBe(1);
-    expect(result.pullRequests[0].repo).toBe("working-repo");
-    expect(result.errors).toBeDefined();
-    expect(result.errors?.length).toBe(1);
-    expect(result.errors?.[0]).toContain("failing-repo");
+    expect(result.pullRequests.map((item) => item.repo)).toEqual(["working-repo"]);
+    expect(result.errors).toEqual([
+      {
+        code: "RATE_LIMITED",
+        phase: "pullRequests",
+        repository: "failing-repo",
+        message: "Pull request sync error for failing-repo: Provider request limit reached",
+      },
+    ]);
   });
 
   test("syncData reads pull requests only for enabled repositories this run fetched", async () => {

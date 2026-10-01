@@ -23,6 +23,7 @@ import {
 import * as shell from "./shell.ts";
 import type { GlobalHooksConfig } from "./config.ts";
 import type { MountRevision } from "./manifest.ts";
+import { describeFailure } from "./failures.ts";
 
 export class CanonicalMirrorError extends Error {
   constructor(
@@ -457,6 +458,8 @@ export interface MirrorSyncItemResult {
   sourceUrl?: string;
   status: "updated" | "skipped";
   reason?: string;
+  /** Present only when an exception, rather than a business rule, skipped this checkout. */
+  code?: string;
   behindCount?: number;
 }
 
@@ -470,7 +473,7 @@ export interface MirrorSyncResult {
   skipped: MirrorSyncItemResult[];
   stashed: MirrorStashResult[];
   /** Repositories whose fetch failed: their checkouts were compared with stale refs. */
-  refreshFailures: Array<{ path: string; reason: string }>;
+  refreshFailures: Array<{ path: string; code: string; reason: string }>;
   hookWarning?: string;
   /** Where the time went: stage durations + the slowest items. */
   trace: SyncTrace;
@@ -495,8 +498,7 @@ export interface SyncTrace {
 }
 
 /** The line of a git error that names the problem, without the clone chatter. */
-function firstLine(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
+function firstLine(message: string): string {
   const lines = message
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -546,7 +548,7 @@ export async function sync(
   const totalStart = Date.now();
   let stageStart = totalStart;
   // A fetch that failed leaves its mirror looking up to date: the result says so.
-  const refreshFailures: Array<{ path: string; reason: string }> = [];
+  const refreshFailures: MirrorSyncResult["refreshFailures"] = [];
   // If refresh is requested, refresh mirrors from remote
   if (input.refresh && !input.offline) {
     const poolPaths = targetSourceKey
@@ -565,7 +567,12 @@ export async function sync(
             resolveExtraHeader: input.resolveExtraHeader,
           });
         } catch (error) {
-          refreshFailures.push({ path: mirrorPath, reason: firstLine(error) });
+          const failure = describeFailure(error);
+          refreshFailures.push({
+            path: mirrorPath,
+            code: failure.code,
+            reason: firstLine(failure.message),
+          });
         }
       }),
     );
@@ -596,7 +603,12 @@ export async function sync(
         if (!deps.fs.exists(poolPath)) return;
         await deps.git.fetchAdminRepo(adminRepoPath, poolPath);
       } catch (error) {
-        refreshFailures.push({ path: adminRepoPath, reason: firstLine(error) });
+        const failure = describeFailure(error);
+        refreshFailures.push({
+          path: adminRepoPath,
+          code: failure.code,
+          reason: firstLine(failure.message),
+        });
       }
     });
     stageMs.set("refresh", Date.now() - stageStart);
@@ -604,7 +616,7 @@ export async function sync(
 
   stageStart = Date.now();
   const stashed: MirrorStashResult[] = [];
-  const stashFailures = new Map<string, { branch: string; reason: string }>();
+  const stashFailures = new Map<string, { branch: string; code: string; reason: string }>();
   // Guards and stashes write to an admin two checkouts may share: one at a time.
   // Inspecting is read-only, so it runs in parallel.
   for (const wtPath of worktreePaths) await deps.git.installCanonicalCommitGuardForWorktree(wtPath);
@@ -621,9 +633,11 @@ export async function sync(
       const result = await deps.git.stashWorktree(wtPath, stashName);
       stashed.push({ path: wtPath, branch, ...result });
     } catch (error) {
+      const failure = describeFailure(error);
       stashFailures.set(wtPath, {
         branch,
-        reason: `STASH_FAILED: ${error instanceof Error ? error.message : String(error)}`,
+        code: failure.code,
+        reason: `STASH_FAILED: ${failure.message}`,
       });
     }
   }
@@ -644,6 +658,7 @@ export async function sync(
           branch: stashFailure.branch,
           status: "skipped" as const,
           reason: stashFailure.reason,
+          code: stashFailure.code,
         },
         ms: Date.now() - itemStart,
       };
@@ -680,12 +695,14 @@ export async function sync(
         ms: Date.now() - itemStart,
       };
     } catch (error) {
+      const failure = describeFailure(error);
       return {
         item: {
           path: wtPath,
           branch,
           status: "skipped" as const,
-          reason: `FAST_FORWARD_FAILED: ${error instanceof Error ? error.message : String(error)}`,
+          code: failure.code,
+          reason: `FAST_FORWARD_FAILED: ${failure.message}`,
         },
         ms: Date.now() - itemStart,
       };

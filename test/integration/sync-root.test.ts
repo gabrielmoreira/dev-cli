@@ -82,14 +82,16 @@ describe("root sync failures", () => {
     expect(data.mirrors.ok).toBe(true);
     const refreshFailures = data.mirrors.result.refreshFailures;
     expect(refreshFailures).toEqual([
-      expect.objectContaining({ path: expect.stringContaining("broken.git") }),
+      expect.objectContaining({ path: expect.stringContaining("broken.git"), code: "NOT_FOUND" }),
     ]);
     expect(data.failures).toEqual([
-      ...refreshFailures.map(({ path, reason }: { path: string; reason: string }) => ({
-        component: "mirrors",
-        code: "FAILED",
-        message: `${path}: ${reason}`.split(/\r?\n/)[0],
-      })),
+      ...refreshFailures.map(
+        ({ path, code, reason }: { path: string; code: string; reason: string }) => ({
+          component: "mirrors",
+          code,
+          message: `${path}: ${reason}`.split(/\r?\n/)[0],
+        }),
+      ),
       {
         component: "workspace broken-workspace",
         code: "NOT_FOUND",
@@ -117,5 +119,7 @@ describe("root sync failures", () => {
       new Response(humanRun.stderr).text(),
     ]);
     expect(humanExitCode, `${humanStdout}\n${humanStderr}`).toBe(1);
+    expect(`${humanStdout}\n${humanStderr}`).not.toContain("[object Object]");
+    expect(`${humanStdout}\n${humanStderr}`).toContain("Git mirror fetch failed.");
   }, 30_000);
 });

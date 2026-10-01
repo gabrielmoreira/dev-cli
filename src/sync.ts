@@ -18,6 +18,21 @@ import {
 import * as github from "./github";
 import * as labels from "./labels";
 import * as ws from "./ws";
+import { describeFailure } from "./failures";
+
+export interface SyncDataFailure {
+  code: string;
+  message: string;
+  phase: "workItems" | "pullRequests" | "canonicalRepos";
+  repository?: string;
+}
+
+export interface ProviderSyncFailure {
+  code: string;
+  message: string;
+  providerId: string;
+  phase: "credential" | "inventory" | "data";
+}
 
 export interface SyncDataInput {
   root: string;
@@ -38,7 +53,7 @@ export interface SyncDataResult {
   /** Repositories the provider reports as disabled; their pull requests cannot be read. */
   skippedDisabled: string[];
   canonicalRepos?: MirrorSyncResult;
-  errors?: string[];
+  errors?: SyncDataFailure[];
   timestamp: string;
 }
 
@@ -74,7 +89,7 @@ export async function syncData(
   deps: SyncDataDeps = defaultDeps,
 ): Promise<SyncDataResult> {
   const timestamp = input.now ? input.now() : new Date().toISOString();
-  const errors: string[] = [];
+  const errors: SyncDataFailure[] = [];
 
   // 1. Synchronize repository inventory
   const invResult = await deps.inventory.syncInventory({
@@ -98,7 +113,12 @@ export async function syncData(
         now: () => timestamp,
       });
     } catch (err) {
-      errors.push(`Work item sync error: ${err instanceof Error ? err.message : String(err)}`);
+      const failure = describeFailure(err);
+      errors.push({
+        ...failure,
+        phase: "workItems",
+        message: `Work item sync error: ${failure.message}`,
+      });
     }
   }
 
@@ -134,8 +154,14 @@ export async function syncData(
           }),
         };
       } catch (err) {
+        const failure = describeFailure(err);
         return {
-          error: `Pull request sync error for ${repoName}: ${err instanceof Error ? err.message : String(err)}`,
+          error: {
+            ...failure,
+            phase: "pullRequests" as const,
+            repository: repoName,
+            message: `Pull request sync error for ${repoName}: ${failure.message}`,
+          },
         };
       }
     }),
@@ -154,9 +180,12 @@ export async function syncData(
         refresh: true,
       });
     } catch (err) {
-      errors.push(
-        `Canonical repositories sync error: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      const failure = describeFailure(err);
+      errors.push({
+        ...failure,
+        phase: "canonicalRepos",
+        message: `Canonical repositories sync error: ${failure.message}`,
+      });
     }
   }
 
@@ -183,15 +212,24 @@ async function syncAdoProvider(
   credential: ReturnType<typeof resolveAzureDevOpsCredential>,
   project?: string,
 ): Promise<
-  { ok: true; result: Awaited<ReturnType<typeof syncInventory>> } | { ok: false; error: string }
+  | { ok: true; result: Awaited<ReturnType<typeof syncInventory>> }
+  | { ok: false; error: ProviderSyncFailure }
 > {
   const tenant = adoTenantFromOrg(provider.organization);
   let cred;
   try {
     cred = await credential;
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `[${provider.id}] ${msg}` };
+    const failure = describeFailure(err);
+    return {
+      ok: false,
+      error: {
+        ...failure,
+        providerId: provider.id,
+        phase: "credential",
+        message: `[${provider.id}] ${failure.message}`,
+      },
+    };
   }
   const client = createAzureDevOps({ organization: provider.organization, token: cred.token });
   const result = await syncInventory({
@@ -209,7 +247,7 @@ async function syncGithubProvider(
   credential: ReturnType<typeof resolveGitHubCredential>,
 ): Promise<
   | { ok: true; result: Awaited<ReturnType<typeof github.syncGitHubInventory>> }
-  | { ok: false; error: string }
+  | { ok: false; error: ProviderSyncFailure }
 > {
   let token: string | undefined;
   try {
@@ -237,7 +275,7 @@ export async function syncProviderInventories(
   config: RuntimeConfig,
   providers: ProviderConfig[],
   project?: string,
-): Promise<{ results: InventorySyncSummary[]; errors: string[] }> {
+): Promise<{ results: InventorySyncSummary[]; errors: ProviderSyncFailure[] }> {
   const adoCredential = providers.some((provider) => provider.type === "azure_devops")
     ? resolveAzureDevOpsCredential(config)
     : undefined;
@@ -257,14 +295,25 @@ export async function syncProviderInventories(
               : await syncGithubProvider(config.root, provider, githubCredential!),
         };
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { provider, outcome: { ok: false as const, error: `[${provider.id}] ${message}` } };
+        const failure = describeFailure(err);
+        return {
+          provider,
+          outcome: {
+            ok: false as const,
+            error: {
+              ...failure,
+              providerId: provider.id,
+              phase: "inventory" as const,
+              message: `[${provider.id}] ${failure.message}`,
+            },
+          },
+        };
       }
     }),
   );
 
   const results: InventorySyncSummary[] = [];
-  const errors: string[] = [];
+  const errors: ProviderSyncFailure[] = [];
   for (const { provider, outcome } of outcomes) {
     if (outcome.ok) {
       results.push({
@@ -293,7 +342,7 @@ export async function syncProvidersWithData(
 ): Promise<{
   inventory: InventorySyncSummary[];
   data: Array<SyncDataResult & { providerId: string }>;
-  errors: string[];
+  errors: ProviderSyncFailure[];
 }> {
   const providers = config.providers.filter((p) => !filter.provider || p.id === filter.provider);
   const dataProviders = providers.filter(
@@ -306,10 +355,13 @@ export async function syncProvidersWithData(
     syncProviderInventories(config, inventoryProviders, filter.project),
     Promise.all(
       dataProviders.map(async (provider) => {
+        let phase: ProviderSyncFailure["phase"] = "credential";
         try {
+          const cred = await credential!;
+          phase = "data";
           const client = createAzureDevOps({
             organization: provider.organization,
-            token: (await credential!).token,
+            token: cred.token,
           });
           const result = await syncData({
             root: config.root,
@@ -319,7 +371,15 @@ export async function syncProvidersWithData(
           });
           return { result: { providerId: provider.id, ...result } };
         } catch (err) {
-          return { error: `[${provider.id}] ${err instanceof Error ? err.message : String(err)}` };
+          const failure = describeFailure(err);
+          return {
+            error: {
+              ...failure,
+              providerId: provider.id,
+              phase,
+              message: `[${provider.id}] ${failure.message}`,
+            },
+          };
         }
       }),
     ),
@@ -337,12 +397,8 @@ async function step<T>(run: () => Promise<T>): Promise<RootSyncStep<T>> {
   try {
     return { ok: true, result: await run() };
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : String(err),
-      code:
-        err instanceof Error && "code" in err && typeof err.code === "string" ? err.code : "FAILED",
-    };
+    const failure = describeFailure(err);
+    return { ok: false, code: failure.code, error: failure.message };
   }
 }
 
@@ -444,26 +500,40 @@ export async function syncRoot(
       ? [{ component: "providers", code: providers.code, message: providers.error }]
       : []),
     ...(providers?.ok
-      ? providers.result.errors.map((error) => ({
-          component: "providers",
-          code: "FAILED",
-          message: error,
-        }))
+      ? [
+          ...providers.result.errors.map(({ code, message }) => ({
+            component: "providers",
+            code,
+            message,
+          })),
+          ...providers.result.data.flatMap(({ providerId, errors }) =>
+            (errors ?? []).map(({ code, message }) => ({
+              component: "providers",
+              code,
+              message: `[${providerId}] ${message}`,
+            })),
+          ),
+        ]
       : []),
     ...(!mirrors.ok ? [{ component: "mirrors", code: mirrors.code, message: mirrors.error }] : []),
     ...(mirrors.ok
-      ? mirrors.result.refreshFailures.map(({ path, reason }) => ({
+      ? mirrors.result.refreshFailures.map(({ path, code, reason }) => ({
           component: "mirrors",
-          code: "FAILED",
+          code,
           message: `${path}: ${reason}`,
         }))
       : []),
     ...(mirrors.ok
-      ? mirrors.result.labelMirrors.failures.map(({ url, reason }) => ({
+      ? mirrors.result.labelMirrors.failures.map(({ url, code, reason }) => ({
           component: "mirrors",
-          code: "FAILED",
+          code,
           message: `${url}: ${reason}`,
         }))
+      : []),
+    ...(mirrors.ok
+      ? mirrors.result.skipped.flatMap(({ path, code, reason }) =>
+          code ? [{ component: "mirrors", code, message: `${path}: ${reason}` }] : [],
+        )
       : []),
     ...workspaces.flatMap((item) =>
       item.ok
