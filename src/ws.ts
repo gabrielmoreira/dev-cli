@@ -1380,7 +1380,7 @@ async function createDeclaredMount(params: {
     DEV_ROOT: input.root,
     DEV_WORKSPACE: input.workspaceName,
     DEV_MOUNT_PATH: mountPath,
-    DEV_SOURCE: mount.source,
+    DEV_SOURCE: deps.git.stripCredentialsFromUrl(mount.source),
     DEV_REVISION: revisionTarget(mount.revision),
   };
 
