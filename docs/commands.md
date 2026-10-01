@@ -606,8 +606,8 @@ Sync the current workspace; outside one, sync provider inventory plus work items
 | Argument             | Type    | Description                                                                                                                       |
 | -------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `--all`              | boolean | Sync everything, in or out of a workspace: provider data, mirrors, and every workspace. Reads from remotes only and runs no hooks |
-| `--provider <value>` | string  | Limit provider data to one provider id                                                                                            |
-| `--project <value>`  | string  | Azure DevOps project for provider data                                                                                            |
+| `--provider <value>` | string  | Limit provider data to one provider id (outside a workspace or with --all)                                                        |
+| `--project <value>`  | string  | Azure DevOps project for provider data (outside a workspace or with --all)                                                        |
 | `--offline`          | boolean | Read the local caches only, without network access                                                                                |
 | `--root <value>`     | string  | Explicit dev root directory                                                                                                       |
 | `--json`             | boolean | Output in structured JSON format                                                                                                  |
