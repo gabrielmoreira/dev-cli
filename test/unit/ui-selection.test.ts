@@ -1,29 +1,50 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
 
+type Option = { label?: string; value: string };
+type PromptConfig = {
+  options: Option[] | ((this: { userInput: string }) => Option[]);
+  filter?: (search: string, option: Option) => boolean;
+};
+
+let typed = "";
+
+/** Plays the user typing `typed`: the options the prompt would list, filtered as it would filter them. */
+function visible(config: PromptConfig): string[] {
+  const options =
+    typeof config.options === "function"
+      ? config.options.call({ userInput: typed })
+      : config.options;
+  return options
+    .filter((option) => !typed || !config.filter || config.filter(typed, option))
+    .map((option) => option.value);
+}
+
 mock.module("@clack/prompts", () => ({
-  autocomplete: async () => "repository-a",
-  autocompleteMultiselect: async () => ["repository-a", "repository-b"],
+  autocomplete: async (config: PromptConfig) => visible(config)[0],
+  autocompleteMultiselect: async (config: PromptConfig) => visible(config),
   isCancel: () => false,
 }));
 
 afterAll(() => mock.restore());
 
+const options = [
+  { label: "feature/login-flow", value: "feature/login-flow" },
+  { label: "main", value: "main" },
+  { label: "Billing API (ado-contoso)", value: "ado-contoso-billing-api" },
+];
+
 describe("CLI searchable selection", () => {
-  test("returns every value selected by the autocomplete multiselect prompt", async () => {
+  test("select finds an option by a fuzzy, non-prefix query", async () => {
     const { ui } = await import("../../src/ui.ts");
-    const selectableUi = ui as typeof ui & {
-      multiSelect<T extends string>(
-        message: string,
-        options: Array<{ label: string; value: T }>,
-      ): Promise<T[]>;
-    };
+    typed = "lgf";
+    expect(await ui.select("Branch", options)).toBe("feature/login-flow");
+    typed = "bapi";
+    expect(await ui.select("Repository", options)).toBe("ado-contoso-billing-api");
+  });
 
-    expect(typeof selectableUi.multiSelect).toBe("function");
-    const selected = await selectableUi.multiSelect("Select repositories", [
-      { label: "Repository A", value: "repository-a" },
-      { label: "Repository B", value: "repository-b" },
-    ]);
-
-    expect(selected).toEqual(["repository-a", "repository-b"]);
+  test("multiSelect lists only the options the fuzzy query matches", async () => {
+    const { ui } = await import("../../src/ui.ts");
+    typed = "mn";
+    expect(await ui.multiSelect("Repositories", options)).toEqual(["main"]);
   });
 });
