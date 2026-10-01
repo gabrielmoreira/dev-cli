@@ -222,10 +222,15 @@ function optionKey(name: string): string {
  * silently, so a typo like `--dryrun` would run the real thing. A command
  * called without a subcommand may hand off to one (`dev ws` lists), so
  * the options of its subcommands count too.
+ * An unknown nested command returns its parent path for the same usage-error guidance.
  */
 export async function findUnknownOption(
   argv: string[],
-): Promise<{ option: string; command: string; suggestion?: string } | undefined> {
+): Promise<
+  | { option: string; command: string; suggestion?: string }
+  | { unknownCommand: string; command: string }
+  | undefined
+> {
   const known = new Map<string, { name: string; takesValue: boolean }>();
   const learn = async (command: InspectableCommand) => {
     for (const [name, definition] of Object.entries(await resolveDefinition(command.args ?? {}))) {
@@ -264,8 +269,11 @@ export async function findUnknownOption(
       break;
     }
     const next = subCommands[rest[index]!];
-    // Not a command: citty reports that, with its own suggestion.
-    if (!next) return undefined;
+    if (!next) {
+      return names.length > 1
+        ? { unknownCommand: rest[index]!, command: names.join(" ") }
+        : undefined;
+    }
     command = await resolveDefinition(next);
     names.push(rest[index]!);
     if (PASSTHROUGH_COMMANDS.has(command)) return undefined;
@@ -456,6 +464,15 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   }
 
   const unknownOption = await findUnknownOption(normalizedArgs);
+  if (unknownOption && "unknownCommand" in unknownOption) {
+    return reportError(
+      new WorkspaceError("UNKNOWN_COMMAND", `Unknown command: '${unknownOption.unknownCommand}'`, {
+        command: unknownOption.unknownCommand,
+        usage: `${unknownOption.command} --help`,
+      }),
+      currentAmbient.argv.includes("--json"),
+    );
+  }
   if (unknownOption) {
     const { option, command, suggestion } = unknownOption;
     return reportError(

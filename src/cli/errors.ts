@@ -101,8 +101,16 @@ function fillPlaceholders(hint: string, details?: Record<string, unknown>): stri
 export function describeError(error: unknown): StructuredError {
   const message = error instanceof Error ? error.message : String(error);
   const rawCode = (error as { code?: unknown } | null)?.code;
-  const code = typeof rawCode === "string" ? rawCode : undefined;
-  const details = detailsOf(error);
+  const code =
+    rawCode === "E_UNKNOWN_COMMAND"
+      ? "UNKNOWN_COMMAND"
+      : typeof rawCode === "string"
+        ? rawCode
+        : undefined;
+  const details =
+    rawCode === "E_UNKNOWN_COMMAND"
+      ? { usage: "dev --help", ...detailsOf(error) }
+      : detailsOf(error);
   const hint = code ? NEXT_STEPS[code] : undefined;
 
   return {

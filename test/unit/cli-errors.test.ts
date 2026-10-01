@@ -20,6 +20,26 @@ describe("describeError", () => {
     expect(described.nextStep).toBe("dev ls");
   });
 
+  test("normalizes citty unknown commands to usage errors with actionable help", () => {
+    const error = new Coded("E_UNKNOWN_COMMAND", "Unknown command missing", {
+      usage: "dev ws --help",
+    });
+    expect(describeError(error)).toMatchObject({
+      code: "UNKNOWN_COMMAND",
+      nextStep: "dev ws --help",
+    });
+    expect(describeError(new Coded("E_UNKNOWN_COMMAND", "Unknown command missing")).nextStep).toBe(
+      "dev --help",
+    );
+    ui.reset();
+    const stderr = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(reportError(error, true)).toBe(2);
+    } finally {
+      stderr.mockRestore();
+    }
+  });
+
   test("fills the next step from the error's own details", () => {
     const described = describeError(
       new Coded("UNSAFE_REMOVE", "core has local commits", { path: "/dev/ws/fix/core" }),
