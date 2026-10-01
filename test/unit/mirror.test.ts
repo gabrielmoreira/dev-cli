@@ -4,8 +4,10 @@ import {
   planCanonicalCheckout,
   planRepoSyncAction,
   CanonicalMirrorError,
+  sync,
+  defaultDeps,
 } from "../../src/mirror.ts";
-import type { ObservedWorktree } from "../../src/git.ts";
+import { GitError, type ObservedWorktree } from "../../src/git.ts";
 
 describe("Canonical repository pure rules (Phase 8)", () => {
   describe("deriveCanonicalParts", () => {
@@ -190,5 +192,78 @@ describe("Canonical repository pure rules (Phase 8)", () => {
       expect(err.message).toBe("Sample error message");
       expect(err.name).toBe("CanonicalMirrorError");
     });
+  });
+});
+
+describe("mirror sync nested failure codes", () => {
+  it("preserves refresh and exception skip codes alongside successful and business skip results", async () => {
+    const paths = ["stash-failed", "forward-failed", "healthy", "current"];
+    const deps = {
+      fs: {
+        ...defaultDeps.fs,
+        findGitWorktrees: async () => paths,
+        findFiles: async () => ["pool.git/HEAD"],
+        listDirs: async () => [],
+      },
+      git: {
+        ...defaultDeps.git,
+        fetchMirror: async () => {
+          throw new GitError("NOT_FOUND", "Remote repository is missing", { args: [], stderr: "" });
+        },
+        installCanonicalCommitGuardForWorktree: async () => {},
+        inspectWorktree: async (path: string): Promise<ObservedWorktree> => ({
+          path,
+          exists: true,
+          isGitWorktree: true,
+          currentRevision: { branch: "main" },
+          isDirty: path === "stash-failed",
+          modifiedFiles: path === "stash-failed" ? 1 : 0,
+          untrackedFiles: 0,
+          aheadCount: 0,
+          behindCount: path === "current" ? 0 : 1,
+        }),
+        stashWorktree: async () => {
+          throw new GitError("AUTH_FAILED", "Cannot write the stash", { args: [], stderr: "" });
+        },
+        fastForward: async ({ worktreePath }: { worktreePath: string }) => {
+          if (worktreePath === "forward-failed") {
+            throw new GitError("REF_NOT_FOUND", "Branch is missing", { args: [], stderr: "" });
+          }
+        },
+        worktreeOriginUrl: async () => "https://example.org/healthy",
+      },
+    };
+
+    const result = await sync({ root: "/fixture-root", refresh: true }, deps);
+
+    expect(result.refreshFailures).toEqual([
+      { path: "pool.git", code: "NOT_FOUND", reason: "Remote repository is missing" },
+    ]);
+    expect(result.updated).toEqual([
+      {
+        path: "healthy",
+        branch: "main",
+        status: "updated",
+        sourceUrl: "https://example.org/healthy",
+        behindCount: 1,
+      },
+    ]);
+    expect(result.skipped).toEqual([
+      {
+        path: "stash-failed",
+        branch: "main",
+        status: "skipped",
+        code: "AUTH_FAILED",
+        reason: "STASH_FAILED: Cannot write the stash",
+      },
+      {
+        path: "forward-failed",
+        branch: "main",
+        status: "skipped",
+        code: "REF_NOT_FOUND",
+        reason: "FAST_FORWARD_FAILED: Branch is missing",
+      },
+      { path: "current", branch: "main", status: "skipped", reason: "UP_TO_DATE" },
+    ]);
   });
 });

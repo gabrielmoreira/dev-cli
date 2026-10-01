@@ -2,6 +2,7 @@ import * as configFile from "./config.ts";
 import type { RuntimeConfig } from "./config.ts";
 import { normalizeSourceKey } from "./git.ts";
 import * as mirror from "./mirror.ts";
+import { describeFailure } from "./failures.ts";
 
 /** Semantic error for label resolution failures (validation, unknown label). */
 export class LabelError extends Error {
@@ -450,7 +451,7 @@ export function sourcesToMirror(
 
 export interface LabelMirrorsResult {
   created: Array<{ url: string; branch: string; path: string; labels: string[] }>;
-  failures: Array<{ url: string; reason: string }>;
+  failures: Array<{ url: string; code: string; reason: string }>;
 }
 
 /**
@@ -483,8 +484,12 @@ export async function ensureLabelMirrors(
         options.onCreated?.(item);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      result.failures.push({ url: source.url, reason: message.split("\n")[0]! });
+      const failure = describeFailure(error);
+      result.failures.push({
+        url: source.url,
+        code: failure.code,
+        reason: failure.message.split(/\r?\n/)[0]!,
+      });
     }
   }
   return result;

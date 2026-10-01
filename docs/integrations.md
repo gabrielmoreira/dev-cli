@@ -151,3 +151,16 @@ worksets:
 ```
 
 `dev workset label add checkout-incident team:checkout` and `dev workset label remove` edit label members from a script; `dev workset manage` offers the same in a terminal. `dev ws init --label team:checkout` starts a workspace from a label alone, named `team-checkout`, and `--label` combines with `--workset` into one plan; several labels are comma-separated.
+
+## Read sync failures in scripts
+
+`dev sync --all --json` keeps each phase's partial result and lists failures as `{ component, code, message }`. Known Git, GitHub, and credential codes survive into this aggregate; an unclassified exception uses `FAILED`. A failed refresh, clone, or exception-backed checkout skip makes root sync exit nonzero, even when other repositories succeed. Ordinary skips such as `UP_TO_DATE` are not failures.
+
+Nested failures carry the same semantic code:
+
+- Provider `errors` contain `{ providerId, phase, code, message }`. The phase identifies credential resolution, inventory, or project data synchronization.
+- Project data `errors` contain `{ phase, code, message }`, with `repository` for a pull request failure. Successful inventories and pull requests remain in their original order.
+- Mirror `refreshFailures` contain `{ path, code, reason }`; label mirror `failures` contain `{ url, code, reason }`.
+- Mirror `skipped` entries carry `code` only when an exception caused the skip. Business skips keep their existing reason values; stash recovery details remain in `stashed`.
+
+For the unreleased major version, provider and project data `errors` change from strings to objects. Read `message` for text and `code` for classification; do not parse reason or message strings. Human output still shows the actionable message or reason, and returned error messages redact credentials.

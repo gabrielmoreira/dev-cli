@@ -48,7 +48,7 @@ function formatDataResult(result: sync.SyncDataResult): string {
   }
   if (result.errors && result.errors.length > 0) {
     out += "\nWarnings/Errors:\n";
-    for (const err of result.errors) out += `  - ${err}\n`;
+    for (const err of result.errors) out += `  - ${err.message}\n`;
   }
   return out.trimEnd();
 }
@@ -105,7 +105,7 @@ export const syncInventoryCommand = defineCommand({
       json: args.json,
       text: () => {
         let out = formatInventoryResults(results);
-        for (const error of errors) out += `\n  ⚠ ${error}`;
+        for (const error of errors) out += `\n  ⚠ ${error.message}`;
         return out.trim();
       },
     });
@@ -296,11 +296,11 @@ export const syncDataCommand = defineCommand({
 function formatProviderSync(result: {
   inventory: sync.InventorySyncSummary[];
   data: sync.SyncDataResult[];
-  errors: string[];
+  errors: sync.ProviderSyncFailure[];
 }): string {
   const parts = [formatInventoryResults(result.inventory), ...result.data.map(formatDataResult)];
   let out = parts.filter(Boolean).join("\n");
-  for (const error of result.errors) out += `\n  ⚠ ${error}`;
+  for (const error of result.errors) out += `\n  ⚠ ${error.message}`;
   return out.trim();
 }
 
