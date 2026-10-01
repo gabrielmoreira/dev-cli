@@ -140,7 +140,9 @@ export const initCommand = defineCommand({
         content += `  enabled: true\n\n`;
       }
 
-      await fs.writeTextAtomic(devYamlPath, content);
+      await fs.withFileLock(devYamlPath, async () => {
+        if (!fs.exists(devYamlPath)) await fs.writeTextAtomic(devYamlPath, content);
+      });
     }
 
     const agentsPath = rootAgentsPath({ root: targetDir });

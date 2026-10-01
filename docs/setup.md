@@ -72,7 +72,7 @@ After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, the
 └── .dev/     # bare mirrors, worktree admin repositories, caches; rebuildable
 ```
 
-Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are created when first needed. `AGENTS.md` is not a global machine or user configuration, and running `dev init` again does not overwrite it.
+Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are created when first needed. `AGENTS.md` is not a global machine or user configuration. Running `dev init` again preserves existing `dev.yaml` and `AGENTS.md` files; concurrent initializations do not replace a configuration created by another initializer.
 
 Every repository is cloned once, as a bare mirror under `.dev/git/<host>/<owner>/<repo>.git`. Workspace mounts and `mirrors/` checkouts are Git worktrees on that clone, so the same repository in ten workspaces is downloaded once.
 

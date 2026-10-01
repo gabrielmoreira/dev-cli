@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ui } from "../../src/ui.ts";
 import * as git from "../../src/git.ts";
+import * as fs from "../../src/fs.ts";
 import { runCli } from "../../src/cli";
 import * as cache from "../../src/cache.ts";
 import * as manifest from "../../src/manifest.ts";
@@ -31,6 +32,37 @@ describe("smart CLI input", () => {
     console.log = originalLog;
     console.error = originalError;
     await rm(root, { recursive: true, force: true });
+  });
+
+  test("preserves config created after init observes a missing file", async () => {
+    const targetRoot = join(root, "concurrent-init");
+    const configPath = join(targetRoot, "dev.yaml");
+    const existingContent = "sync_strategy: ff-only\ngithub:\n  owner: first-writer\n";
+    const exists = fs.exists;
+    let appeared = false;
+    const observation = spyOn(fs, "exists").mockImplementation((path) => {
+      const present = exists(path);
+      if (path === configPath && !present && !appeared) {
+        // Schedule another writer immediately after the missing-file observation.
+        writeFileSync(configPath, existingContent);
+        appeared = true;
+      }
+      return present;
+    });
+    try {
+      const input = {
+        argv: ["init", targetRoot, "--githubOwner", "second-writer", "--json"],
+        cwd: root,
+        env: { HOME: root, USERPROFILE: root },
+        isTTY: false,
+      };
+      expect(await runCli(input)).toBe(0);
+      expect(await fs.readText(configPath)).toBe(existingContent);
+      expect(await runCli(input)).toBe(0);
+      expect(await fs.readText(configPath)).toBe(existingContent);
+    } finally {
+      observation.mockRestore();
+    }
   });
 
   test("guides an argument-free init with an editable default root path", async () => {
