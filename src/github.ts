@@ -93,10 +93,15 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
   return {
     async listRepositories(owner?: string): Promise<GitHubRawRepository[]> {
-      const endpoint = owner
+      const base = owner
         ? `/users/${encodeURIComponent(owner)}/repos?per_page=100`
         : "/user/repos?per_page=100";
-      return await request<GitHubRawRepository[]>(endpoint);
+      const repositories: GitHubRawRepository[] = [];
+      for (let pageNumber = 1; ; pageNumber++) {
+        const page = await request<GitHubRawRepository[]>(`${base}&page=${pageNumber}`);
+        repositories.push(...page);
+        if (page.length < 100) return repositories;
+      }
     },
 
     async getRepository(owner: string, repo: string): Promise<GitHubRawRepository> {

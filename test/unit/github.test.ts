@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { readInventory, writeInventory } from "../../src/cache";
 import {
   createGitHubClient,
   normalizeGitHubRepository,
+  syncGitHubInventory,
   type GitHubRawRepository,
 } from "../../src/github";
 
@@ -54,5 +59,56 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
     expect(capturedHeaders["User-Agent"]).toBe("dev-cli");
     expect(repos.length).toBe(1);
     expect(repos[0].name).toBe("repo-a");
+  });
+
+  test("reads all repository pages before replacing inventory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dev-cli-github-pages-"));
+    try {
+      const existing = {
+        id: "old",
+        name: "removed-repository",
+        url: "https://github.com/example-org/removed-repository.git",
+        default_branch: "main",
+        description: "",
+        last_changed: "",
+        syncedAt: "2026-10-01T00:00:00Z",
+      };
+      await writeInventory({ root, tenant: "github.com/example-org", records: [existing] });
+      const page = (start: number, count: number) =>
+        Array.from({ length: count }, (_, offset) => {
+          const id = start + offset;
+          return {
+            id,
+            name: `sample-repo-${id}`,
+            full_name: `example-org/sample-repo-${id}`,
+            clone_url: `https://github.com/example-org/sample-repo-${id}.git`,
+            default_branch: "main",
+          };
+        });
+      const fetchPage = (async (url: string | URL | Request) => {
+        const pageNumber = Number(new URL(String(url)).searchParams.get("page") ?? "1");
+        const body = pageNumber === 1 ? page(0, 100) : page(100, 50);
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }) as typeof fetch;
+      const client = createGitHubClient({ token: "example-token", fetch: fetchPage });
+
+      const result = await syncGitHubInventory({
+        root,
+        owner: "example-org",
+        client,
+        now: () => "2026-10-01T00:00:00Z",
+      });
+      const saved = await readInventory({ root, tenant: "github.com/example-org" });
+
+      expect(result.total).toBe(150);
+      expect(result.removed).toBe(1);
+      expect(saved.map((repository) => repository.name)).toContain("sample-repo-149");
+      expect(saved).toHaveLength(150);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
