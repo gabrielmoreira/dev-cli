@@ -68,7 +68,7 @@ seed_skills
 cat > "$HOME/dev/.dev/cache/inventory/demo/repos.jsonl" <<'JSONL'
 {"id":"checkout-api","name":"checkout-api","url":"/demo/remotes/checkout-api.git","default_branch":"main","description":"Checkout service adopting OMP","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
 {"id":"omp-docs","name":"omp-docs","url":"/demo/remotes/omp-docs.git","default_branch":"main","description":"Pinned OMP 18.2.6 model and provider docs","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
-{"id":"gabrielmoreira-skills","name":"gabrielmoreira-skills","url":"/demo/remotes/skills.git","default_branch":"main","description":"Pinned evidence-driven debugging skill","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
+{"id":"sample-skills","name":"sample-skills","url":"/demo/remotes/skills.git","default_branch":"main","description":"Pinned evidence-driven debugging skill","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
 JSONL
 
 if (( $# > 0 )); then

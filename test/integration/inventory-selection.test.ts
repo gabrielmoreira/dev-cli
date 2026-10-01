@@ -116,12 +116,12 @@ describe("Inventory Source Resolution Integration (Phase 11)", () => {
       {
         id: "1",
         name: "ado-bot",
-        url: "https://dev.azure.com/example-org/retail-app/_git/ado-bot",
+        url: "https://dev.azure.com/example-org/sample-project/_git/ado-bot",
         default_branch: "main",
         description: "",
         last_changed: "",
         syncedAt: "",
-        project: "retail-app",
+        project: "sample-project",
       },
       {
         id: "2",
@@ -143,11 +143,11 @@ describe("Inventory Source Resolution Integration (Phase 11)", () => {
 
     const result = await resolveRepositorySource({
       root: tempRoot,
-      query: "ado:example-org:retail-app:ado-bot",
+      query: "ado:example-org:sample-project:ado-bot",
     });
 
     expect(result.sourceUrl).toBe(records[0].url);
-    expect(result.record?.project).toBe("retail-app");
+    expect(result.record?.project).toBe("sample-project");
   });
 
   test("keeps duplicate repository names ambiguous without an ADO selector", async () => {
@@ -155,12 +155,12 @@ describe("Inventory Source Resolution Integration (Phase 11)", () => {
       {
         id: "1",
         name: "expo-hello-world",
-        url: "https://dev.azure.com/example-org/retail-app/_git/expo-hello-world",
+        url: "https://dev.azure.com/example-org/sample-project/_git/expo-hello-world",
         default_branch: "main",
         description: "",
         last_changed: "",
         syncedAt: "",
-        project: "retail-app",
+        project: "sample-project",
       },
       {
         id: "2",

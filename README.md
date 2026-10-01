@@ -68,13 +68,13 @@ Interactive pickers use fuzzy search. Without the integration, `dev go` prints t
 Paste a repository URL. `dev` asks for a name and a one-line objective; accept the defaults or type your own:
 
 ```bash
-dev ws init https://github.com/can1357/oh-my-pi
-cd ~/dev/ws/gh-can1357-oh-my-pi
+dev ws init https://github.com/example-org/sample-repo
+cd ~/dev/ws/gh-example-org-sample-repo
 ```
 
 ```text
-gh-can1357-oh-my-pi/
-├── oh-my-pi/    # Git worktree on the default branch
+gh-example-org-sample-repo/
+├── sample-repo/ # Git worktree on the default branch
 ├── ws.md        # what this is, what it holds, where you stopped
 └── .local/      # scratch that never gets committed
 ```
@@ -83,21 +83,21 @@ gh-can1357-oh-my-pi/
 
 ```markdown
 ---
-name: gh-can1357-oh-my-pi
-description: Contribute to Oh My Pi
+name: gh-example-org-sample-repo
+description: Contribute to the sample repository
 mounts:
-  - path: oh-my-pi
-    source: https://github.com/can1357/oh-my-pi
+  - path: sample-repo
+    source: https://github.com/example-org/sample-repo
     revision:
       mode: track
       branch: main
 ---
 
-# Workspace: gh-can1357-oh-my-pi
+# Workspace: gh-example-org-sample-repo
 
 ## Objective
 
-Contribute to Oh My Pi
+Contribute to the sample repository
 
 ## Current Progress
 
@@ -122,7 +122,7 @@ dev wi
 Most reviews end there. When you do need the code, the PR URL becomes a workspace on the PR's source branch, forks included, while your own work on that repository stays where it is:
 
 ```bash
-dev ws init https://github.com/gabrielmoreira/tiny-asl-machine/pull/52
+dev ws init https://github.com/example-org/sample-repo/pull/52
 ```
 
 ## One task, four repositories
