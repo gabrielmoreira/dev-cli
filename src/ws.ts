@@ -1623,6 +1623,13 @@ export async function update(
         worktreePath,
         targetRef: item.targetRef!,
       });
+      if (rebaseResult.abortFailed) {
+        throw new WorkspaceError(
+          "REBASE_ABORT_FAILED",
+          `Failed to abort rebase for worktree '${worktreePath}'.`,
+          { worktreePath, stderr: rebaseResult.abortError },
+        );
+      }
       if (rebaseResult.ok) {
         const reinspected = await deps.git.inspectWorktree(worktreePath);
         mountResults.push({

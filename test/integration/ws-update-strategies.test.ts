@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
@@ -195,5 +195,50 @@ describe("Workspace update ergonomic strategies (Phase 2.6)", () => {
       "rebase-merge",
     ]);
     expect(fs.exists(rebaseDir.stdout.trim())).toBe(false);
+  });
+
+  it("reports a coded recovery error when a failed rebase cannot be aborted", async () => {
+    const mountName = await newWorkspace("rebase-abort-failure");
+    const mountPath = join(tempRoot, "ws", "rebase-abort-failure", mountName);
+
+    await advanceRemote("abort-remote.txt", "from remote\n");
+    await fs.writeText(join(mountPath, "abort-local.txt"), "from local\n");
+    await git.runGit(["config", "user.name", "Local Dev"], { cwd: mountPath });
+    await git.runGit(["config", "user.email", "local@example.com"], { cwd: mountPath });
+    await git.runGit(["add", "."], { cwd: mountPath });
+    await git.runGit(["commit", "-m", "feat: local work"], { cwd: mountPath });
+
+    const hooksPath = join(tempRoot, "rebase-abort-hooks");
+    const hookPath = join(hooksPath, "pre-rebase");
+    const markerPath = join(hooksPath, "pre-rebase-fired");
+    await mkdir(hooksPath);
+    await fs.writeText(
+      hookPath,
+      '#!/bin/sh\nprintf fired > "$(dirname "$0")/pre-rebase-fired"\nexit 1\n',
+    );
+    await chmod(hookPath, 0o755);
+    await git.runGit(["config", "core.hooksPath", hooksPath], { cwd: mountPath });
+
+    try {
+      const error = await failureFrom(
+        ws
+          .update({
+            root: tempRoot,
+            workspaceName: "rebase-abort-failure",
+            rebase: true,
+            refresh: true,
+          })
+          .finally(async () => {
+            // Prove Git ran the hook before checking the recovery error.
+            expect(await fs.readText(markerPath)).toBe("fired");
+          }),
+      );
+
+      expect(error.code).toBe("REBASE_ABORT_FAILED");
+      expect(error.details?.worktreePath).toBe(mountPath);
+    } finally {
+      await git.runGit(["config", "--unset", "core.hooksPath"], { cwd: mountPath });
+      await rm(hooksPath, { recursive: true, force: true });
+    }
   });
 });

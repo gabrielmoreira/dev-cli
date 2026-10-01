@@ -1048,15 +1048,25 @@ export interface RebaseOntoResult {
   ok: boolean;
   /** Rebase output listing the conflicting files when ok is false. */
   conflicts?: string;
+  abortFailed?: boolean;
+  abortError?: string;
 }
 
-/** Rebases the worktree onto the target ref with atomic rollback: any
- * non-zero rebase exit immediately aborts, leaving the worktree untouched. */
+/** Rebases the worktree onto the target ref, attempting rollback on failure.
+ * Reports abort failures separately when rollback cannot be confirmed. */
 export async function rebaseOnto(options: RebaseOntoOptions): Promise<RebaseOntoResult> {
   const res = await runGit(["-C", options.worktreePath, "rebase", options.targetRef]);
   if (res.exitCode === 0) {
     return { ok: true };
   }
-  await runGit(["-C", options.worktreePath, "rebase", "--abort"]);
+  const abort = await runGit(["-C", options.worktreePath, "rebase", "--abort"]);
+  if (abort.exitCode !== 0) {
+    return {
+      ok: false,
+      conflicts: `${res.stdout}\n${res.stderr}`.trim(),
+      abortFailed: true,
+      abortError: `${abort.stdout}\n${abort.stderr}`.trim(),
+    };
+  }
   return { ok: false, conflicts: `${res.stdout}\n${res.stderr}`.trim() };
 }
