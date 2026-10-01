@@ -111,11 +111,15 @@ export function describeError(error: unknown): StructuredError {
   };
 }
 
-// citty drops the value a subcommand returns, so the code reportError decided
-// is kept here for runCli to read.
+// citty drops the value a subcommand returns, so reported codes
+// are kept here for runCli to read.
 let reportedExitCode: number | undefined;
 
-/** The exit code of the last reported error since the previous call, if any. */
+export function reportExitCode(code: number): void {
+  reportedExitCode = code;
+}
+
+/** The last reported exit code since the previous call, if any. */
 export function takeReportedExitCode(): number | undefined {
   const code = reportedExitCode;
   reportedExitCode = undefined;

@@ -2,16 +2,10 @@ import { defineCommand } from "citty";
 import * as sync from "../sync.ts";
 import * as ws from "../ws.ts";
 import * as cache from "../cache.ts";
-import * as github from "../github.ts";
 import { createAzureDevOps } from "../ado.ts";
-import { syncInventory } from "../inventory.ts";
-import {
-  resolveAzureDevOpsCredential,
-  resolveExtraHeader,
-  resolveGitHubCredential,
-} from "../credentials.ts";
+import { resolveAzureDevOpsCredential } from "../credentials.ts";
 import { ui } from "../ui.ts";
-import { reportError } from "./errors.ts";
+import { reportError, reportExitCode } from "./errors.ts";
 import { getActiveConfig, getAmbient } from "./context.ts";
 import {
   describeSkipReason,
@@ -19,9 +13,7 @@ import {
   workspaceSyncOptions,
   wsUpdateCommand,
 } from "./ws.ts";
-import * as mirror from "../mirror.ts";
 import { formatLabelMirrors, formatMirrorSync } from "./mirror.ts";
-import * as labels from "../labels.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
@@ -30,121 +22,11 @@ import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function adoTenantFromOrg(organization: string): string {
-  return organization.includes("/") ? organization : `dev.azure.com/${organization}`;
-}
-
 function providerError(code: "PROVIDER_NOT_CONFIGURED" | "PROVIDER_NOT_FOUND", message: string) {
   return Object.assign(new Error(message), { code });
 }
 
-async function syncAdoProvider(
-  root: string,
-  provider: Extract<ProviderConfig, { type: "azure_devops" }>,
-  credential: ReturnType<typeof resolveAzureDevOpsCredential>,
-  project?: string,
-): Promise<
-  { ok: true; result: Awaited<ReturnType<typeof syncInventory>> } | { ok: false; error: string }
-> {
-  const tenant = adoTenantFromOrg(provider.organization);
-  let cred;
-  try {
-    cred = await credential;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, error: `[${provider.id}] ${msg}` };
-  }
-  const client = createAzureDevOps({ organization: provider.organization, token: cred.token });
-  const result = await syncInventory({
-    root,
-    tenant,
-    client,
-    project: project || provider.project,
-  });
-  return { ok: true, result };
-}
-
-async function syncGithubProvider(
-  root: string,
-  provider: Extract<ProviderConfig, { type: "github" }>,
-  credential: ReturnType<typeof resolveGitHubCredential>,
-): Promise<
-  | { ok: true; result: Awaited<ReturnType<typeof github.syncGitHubInventory>> }
-  | { ok: false; error: string }
-> {
-  let token: string | undefined;
-  try {
-    const cred = await credential;
-    token = cred.token;
-  } catch {
-    // proceed without token — public repos still work
-  }
-  const client = github.createGitHubClient({ token });
-  const result = await github.syncGitHubInventory({ root, owner: provider.owner, client });
-  return { ok: true, result };
-}
-
-type InventorySyncSummary = {
-  providerId: string;
-  tenant: string;
-  total: number;
-  added: number;
-  updated: number;
-  cachePath: string;
-  repositories: cache.InventoryRecord[];
-};
-
-async function syncProviderInventories(
-  config: ReturnType<typeof getActiveConfig>,
-  providers: ProviderConfig[],
-  project?: string,
-): Promise<{ results: InventorySyncSummary[]; errors: string[] }> {
-  const adoCredential = providers.some((provider) => provider.type === "azure_devops")
-    ? resolveAzureDevOpsCredential(config)
-    : undefined;
-  const githubCredential = providers.some((provider) => provider.type === "github")
-    ? resolveGitHubCredential(config)
-    : undefined;
-
-  // One provider failing (a rate limit, a revoked token) is reported; the others still land.
-  const outcomes = await Promise.all(
-    providers.map(async (provider) => {
-      try {
-        return {
-          provider,
-          outcome:
-            provider.type === "azure_devops"
-              ? await syncAdoProvider(config.root, provider, adoCredential!, project)
-              : await syncGithubProvider(config.root, provider, githubCredential!),
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { provider, outcome: { ok: false as const, error: `[${provider.id}] ${message}` } };
-      }
-    }),
-  );
-
-  const results: InventorySyncSummary[] = [];
-  const errors: string[] = [];
-  for (const { provider, outcome } of outcomes) {
-    if (outcome.ok) {
-      results.push({
-        providerId: provider.id,
-        tenant: outcome.result.tenant,
-        total: outcome.result.total,
-        added: outcome.result.added,
-        updated: outcome.result.updated,
-        cachePath: outcome.result.cachePath,
-        repositories: outcome.result.repositories,
-      });
-    } else {
-      errors.push(outcome.error);
-    }
-  }
-  return { results, errors };
-}
-
-function formatInventoryResults(results: InventorySyncSummary[]): string {
+function formatInventoryResults(results: sync.InventorySyncSummary[]): string {
   let out = "";
   for (const result of results) {
     out += `Synchronized repository inventory for '${result.tenant}': ${result.total} repositories (${result.added} added, ${result.updated} updated).\n`;
@@ -221,7 +103,7 @@ export const syncInventoryCommand = defineCommand({
       );
     }
 
-    const { results, errors } = await syncProviderInventories(config, providers, args.project);
+    const { results, errors } = await sync.syncProviderInventories(config, providers, args.project);
 
     ui.result({
       data: { results, errors },
@@ -328,7 +210,7 @@ export const syncDataCommand = defineCommand({
         args.json,
       );
     }
-    const tenant = adoTenantFromOrg(provider.organization);
+    const tenant = sync.adoTenantFromOrg(provider.organization);
 
     const cachedProjects = [
       ...new Set(
@@ -415,56 +297,8 @@ export const syncDataCommand = defineCommand({
 // sync (root command — workspace-aware alias)
 // ---------------------------------------------------------------------------
 
-/**
- * Provider data for a bare `dev sync`: a provider with a project gets inventory,
- * work items, and pull requests; every other provider gets its inventory. Reads only.
- */
-async function syncProvidersWithData(
-  config: ReturnType<typeof getActiveConfig>,
-  filter: { provider?: string; project?: string },
-): Promise<{
-  inventory: InventorySyncSummary[];
-  data: Array<sync.SyncDataResult & { providerId: string }>;
-  errors: string[];
-}> {
-  const providers = config.providers.filter((p) => !filter.provider || p.id === filter.provider);
-  const dataProviders = providers.filter(
-    (p): p is Extract<ProviderConfig, { type: "azure_devops" }> =>
-      p.type === "azure_devops" && Boolean(filter.project ?? p.project),
-  );
-  const inventoryProviders = providers.filter((p) => !dataProviders.includes(p as never));
-  const credential = dataProviders.length > 0 ? resolveAzureDevOpsCredential(config) : undefined;
-  const [inventory, data] = await Promise.all([
-    syncProviderInventories(config, inventoryProviders, filter.project),
-    Promise.all(
-      dataProviders.map(async (provider) => {
-        try {
-          const client = createAzureDevOps({
-            organization: provider.organization,
-            token: (await credential!).token,
-          });
-          const result = await sync.syncData({
-            root: config.root,
-            tenant: adoTenantFromOrg(provider.organization),
-            client,
-            project: filter.project ?? provider.project,
-          });
-          return { result: { providerId: provider.id, ...result } };
-        } catch (err) {
-          return { error: `[${provider.id}] ${err instanceof Error ? err.message : String(err)}` };
-        }
-      }),
-    ),
-  ]);
-  return {
-    inventory: inventory.results,
-    data: data.flatMap((item) => item.result ?? []),
-    errors: [...inventory.errors, ...data.flatMap((item) => item.error ?? [])],
-  };
-}
-
 function formatProviderSync(result: {
-  inventory: InventorySyncSummary[];
+  inventory: sync.InventorySyncSummary[];
   data: sync.SyncDataResult[];
   errors: string[];
 }): string {
@@ -472,16 +306,6 @@ function formatProviderSync(result: {
   let out = parts.filter(Boolean).join("\n");
   for (const error of result.errors) out += `\n  ⚠ ${error}`;
   return out.trim();
-}
-
-type SyncAllStep<T> = { ok: true; result: T } | { ok: false; error: string };
-
-async function step<T>(run: () => Promise<T>): Promise<SyncAllStep<T>> {
-  try {
-    return { ok: true, result: await run() };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
 }
 
 export const syncCommand = defineCommand({
@@ -537,11 +361,93 @@ export const syncCommand = defineCommand({
           args.json,
         );
       }
-      return await syncAll(config, {
+      const started = Date.now();
+      // Progress is narration: stderr, and silent under --json.
+      const progress = (message: string) => {
+        if (!args.json) ui.info(`↻ ${message}`);
+      };
+      const result = await sync.syncRoot(config, {
         provider: args.provider,
         project: args.project,
-        json: args.json,
+        onProgress: args.json
+          ? undefined
+          : (event) => {
+              if (event.kind === "workspace") {
+                progress(`  ${event.ok ? "✓" : "✗"} ${event.name} (${event.done}/${event.total})`);
+              } else if (event.phase === "providers") {
+                progress("Provider data…");
+              } else if (event.phase === "mirrors") {
+                progress("Mirrors…");
+              } else if (event.phase === "workspaces") {
+                progress(`Workspaces (${event.total})…`);
+              }
+            },
       });
+      const { providers, mirrors, workspaces } = result.phases;
+      const { failures } = result;
+      warnHealFailures(workspaces.flatMap((item) => (item.ok ? [item.result] : [])));
+      const durationMs = Date.now() - started;
+      const seconds = (durationMs / 1000).toFixed(1);
+      ui.result({
+        data: {
+          providers,
+          mirrors,
+          workspaces,
+          failures,
+          hooksRun: false,
+          durationMs,
+        },
+        json: args.json,
+        text: () => {
+          const out: string[] = ["Providers"];
+          if (!providers) out.push("  ○ none configured  ↳ dev provider add <type>");
+          else if (!providers.ok) out.push(`  ✗ ${providers.error}`);
+          else out.push(formatProviderSync(providers.result).replace(/^/gm, "  "));
+
+          out.push("", "Mirrors");
+          if (!mirrors.ok) out.push(`  ✗ ${mirrors.error}`);
+          else {
+            out.push(
+              ...[
+                ...formatLabelMirrors(mirrors.result.labelMirrors),
+                ...formatMirrorSync(mirrors.result),
+              ].map((line) => `  ${line}`),
+            );
+          }
+
+          out.push("", "Workspaces");
+          if (workspaces.length === 0) out.push("  ○ none  ↳ dev ws init <name>");
+          for (const item of workspaces) {
+            if (!item.ok) {
+              out.push(`  ✗ ${item.name}: ${item.error}`);
+              continue;
+            }
+            const { updated, upToDate, skipped } = item.result.summary;
+            const counts = [
+              updated > 0 ? `${updated} updated` : "",
+              upToDate > 0 ? `${upToDate} up to date` : "",
+              skipped > 0 ? `${skipped} skipped` : "",
+            ].filter(Boolean);
+            out.push(
+              `  ${skipped > 0 ? "⚠" : updated > 0 ? "✓" : "○"} ${item.name}: ${counts.join(", ") || "no mounts"}`,
+            );
+            for (const mount of item.result.mounts) {
+              if (mount.action !== "skipped") continue;
+              const skip = describeSkipReason(mount.reason, item.name);
+              out.push(`    ${mount.path}: ${skip.why}`);
+              if (skip.hint) out.push(`    ↳ ${skip.hint}`);
+            }
+          }
+
+          out.push(
+            "",
+            `${failures.length > 0 ? "⚠" : "✓"} Done in ${seconds}s. Read from remotes only; nothing was sent, and no hook ran.`,
+          );
+          return out.join("\n");
+        },
+      });
+      if (failures.length > 0) reportExitCode(1);
+      return failures.length > 0 ? 1 : 0;
     }
 
     const ambient = getAmbient();
@@ -581,7 +487,7 @@ export const syncCommand = defineCommand({
         "Sync action: provider inventory, plus work items and pull requests of configured projects.",
       );
     }
-    const result = await syncProvidersWithData(config, {
+    const result = await sync.syncProvidersWithData(config, {
       provider: args.provider,
       project: args.project,
     });
@@ -591,145 +497,3 @@ export const syncCommand = defineCommand({
       : 0;
   },
 });
-
-/** Workspaces synced at once; network still waits for each host's slot. */
-const WORKSPACE_CONCURRENCY = 4;
-
-/**
- * Everything that can be brought from remotes, in order: provider data, mirrors, then
- * each workspace. Each step reads or fetches only; nothing is pushed and no hook runs,
- * since a hook is a user command that could send data out. A failing step or
- * workspace is reported and the rest go on.
- */
-async function syncAll(
-  config: ReturnType<typeof getActiveConfig>,
-  options: { provider?: string; project?: string; json?: boolean },
-): Promise<number> {
-  const started = Date.now();
-  // Progress is narration: stderr, and silent under --json.
-  const progress = (message: string) => {
-    if (!options.json) ui.info(`↻ ${message}`);
-  };
-
-  progress("Provider data…");
-  const providers =
-    config.providers.length > 0
-      ? await step(() =>
-          syncProvidersWithData(config, { provider: options.provider, project: options.project }),
-        )
-      : null;
-
-  progress("Mirrors…");
-  const mirrors = await step(async () => {
-    // Labels that keep repositories mirrored get their missing mirrors first.
-    const labelMirrors = await labels.ensureLabelMirrors(config, {
-      resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-    });
-    const synced = await mirror.sync({
-      root: config.root,
-      canonicalPrefix: config.canonicalPrefix,
-      refresh: true,
-      resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-    });
-    return { ...synced, labelMirrors };
-  });
-
-  // Workspaces sync side by side: each fetch waits for its host's slot
-  // (host-limit.ts), and each workspace writes only its own worktrees.
-  const workspaceNames = await ws.list({
-    root: config.root,
-    workspacePrefix: config.workspacePrefix,
-  });
-  if (workspaceNames.length > 0) progress(`Workspaces (${workspaceNames.length})…`);
-  let finished = 0;
-  const workspaces: Array<{ name: string } & SyncAllStep<ws.WorkspaceUpdateResult>> =
-    await mirror.mapWithConcurrency(workspaceNames, WORKSPACE_CONCURRENCY, async ({ name }) => {
-      const outcome = await step(() =>
-        ws.update({
-          root: config.root,
-          workspacePrefix: config.workspacePrefix,
-          workspaceName: name,
-          refresh: true,
-          resolveExtraHeader: (source) => resolveExtraHeader(config, source),
-          skipHooks: true,
-        }),
-      );
-      finished += 1;
-      progress(`  ${outcome.ok ? "✓" : "✗"} ${name} (${finished}/${workspaceNames.length})`);
-      return { name, ...outcome };
-    });
-  warnHealFailures(workspaces.flatMap((item) => (item.ok ? [item.result] : [])));
-
-  const failures = [
-    ...(providers && !providers.ok ? [`providers: ${providers.error}`] : []),
-    ...(providers?.ok ? providers.result.errors.map((error) => `providers: ${error}`) : []),
-    ...(!mirrors.ok ? [`mirrors: ${mirrors.error}`] : []),
-    ...workspaces.flatMap((item) => (item.ok ? [] : [`workspace ${item.name}: ${item.error}`])),
-  ];
-  const synced =
-    (providers?.ok &&
-      (providers.result.inventory.length > 0 || providers.result.data.length > 0)) ||
-    mirrors.ok ||
-    workspaces.some((item) => item.ok);
-  const seconds = ((Date.now() - started) / 1000).toFixed(1);
-
-  ui.result({
-    data: {
-      providers,
-      mirrors,
-      workspaces,
-      failures,
-      hooksRun: false,
-      durationMs: Date.now() - started,
-    },
-    json: options.json,
-    text: () => {
-      const out: string[] = ["Providers"];
-      if (!providers) out.push("  ○ none configured  ↳ dev provider add <type>");
-      else if (!providers.ok) out.push(`  ✗ ${providers.error}`);
-      else out.push(formatProviderSync(providers.result).replace(/^/gm, "  "));
-
-      out.push("", "Mirrors");
-      if (!mirrors.ok) out.push(`  ✗ ${mirrors.error}`);
-      else {
-        out.push(
-          ...[
-            ...formatLabelMirrors(mirrors.result.labelMirrors),
-            ...formatMirrorSync(mirrors.result),
-          ].map((line) => `  ${line}`),
-        );
-      }
-
-      out.push("", "Workspaces");
-      if (workspaces.length === 0) out.push("  ○ none  ↳ dev ws init <name>");
-      for (const item of workspaces) {
-        if (!item.ok) {
-          out.push(`  ✗ ${item.name}: ${item.error}`);
-          continue;
-        }
-        const { updated, upToDate, skipped } = item.result.summary;
-        const counts = [
-          updated > 0 ? `${updated} updated` : "",
-          upToDate > 0 ? `${upToDate} up to date` : "",
-          skipped > 0 ? `${skipped} skipped` : "",
-        ].filter(Boolean);
-        out.push(
-          `  ${skipped > 0 ? "⚠" : updated > 0 ? "✓" : "○"} ${item.name}: ${counts.join(", ") || "no mounts"}`,
-        );
-        for (const mount of item.result.mounts) {
-          if (mount.action !== "skipped") continue;
-          const skip = describeSkipReason(mount.reason, item.name);
-          out.push(`    ${mount.path}: ${skip.why}`);
-          if (skip.hint) out.push(`    ↳ ${skip.hint}`);
-        }
-      }
-
-      out.push(
-        "",
-        `${failures.length > 0 ? "⚠" : "✓"} Done in ${seconds}s. Read from remotes only; nothing was sent, and no hook ran.`,
-      );
-      return out.join("\n");
-    },
-  });
-  return synced ? 0 : 1;
-}
