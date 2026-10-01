@@ -1,4 +1,27 @@
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+
+export class PathOutsideRootError extends Error {
+  readonly code = "PATH_OUTSIDE_ROOT";
+  readonly details: { root: string; target: string };
+
+  constructor(root: string, target: string) {
+    super(`Path '${target}' is outside root '${root}'`);
+    this.name = "PathOutsideRootError";
+    this.details = { root, target };
+  }
+}
+
+export function assertInside(root: string, target: string): string {
+  const relativeTarget = relative(resolve(root), resolve(target));
+  if (
+    relativeTarget === ".." ||
+    relativeTarget.startsWith(`..${sep}`) ||
+    isAbsolute(relativeTarget)
+  ) {
+    throw new PathOutsideRootError(root, target);
+  }
+  return target;
+}
 
 /**
  * Single semantic owner of the dev-root layout. Every path the CLI derives
@@ -37,7 +60,7 @@ export function gitPoolPath({ root, source }: { root: string; source: string }):
   const parts = deriveCanonicalParts(source);
   const segments =
     parts.host === "local" ? parts.fullPathSegments : [parts.host, ...parts.fullPathSegments];
-  return join(root, ".dev", "git", ...segments) + ".git";
+  return assertInside(root, join(root, ".dev", "git", ...segments) + ".git");
 }
 
 // --- repo instances: bare repos holding refs + worktree metadata ---
@@ -54,7 +77,7 @@ export function canonicalAdminRepoPath({
   root: string;
   sourceKey: string;
 }): string {
-  return join(root, ".dev", "repos", `${sourceKey}.git`);
+  return assertInside(root, join(root, ".dev", "repos", `${sourceKey}.git`));
 }
 
 /** Admin holding workspace-local branches and worktree metadata for mounts. */
@@ -67,7 +90,7 @@ export function workspaceAdminRepoPath({
   workspaceName: string;
   sourceKey: string;
 }): string {
-  return join(root, ".dev", "repos", workspaceName, `${sourceKey}.git`);
+  return assertInside(root, join(root, ".dev", "repos", workspaceName, `${sourceKey}.git`));
 }
 
 // --- canonical checkouts ---
@@ -79,7 +102,10 @@ export function checkoutsDir({
   root: string;
   canonicalPrefix?: string;
 }): string {
-  return join(root, canonicalPrefix);
+  return assertInside(
+    root,
+    isAbsolute(canonicalPrefix) ? canonicalPrefix : join(root, canonicalPrefix),
+  );
 }
 
 // --- workspaces ---
@@ -91,7 +117,10 @@ export function workspacesDir({
   root: string;
   workspacePrefix?: string;
 }): string {
-  return join(root, workspacePrefix);
+  return assertInside(
+    root,
+    isAbsolute(workspacePrefix) ? workspacePrefix : join(root, workspacePrefix),
+  );
 }
 
 export function workspacePath({
@@ -103,7 +132,7 @@ export function workspacePath({
   workspaceName: string;
   workspacePrefix?: string;
 }): string {
-  return join(workspacesDir({ root, workspacePrefix }), workspaceName.trim());
+  return assertInside(root, join(workspacesDir({ root, workspacePrefix }), workspaceName.trim()));
 }
 
 export function workspaceManifestPath({
@@ -131,7 +160,7 @@ export function inventoryCachePath({
   root: string;
   segments: string[];
 }): string {
-  return join(root, ".dev", "cache", "inventory", ...segments, "repos.jsonl");
+  return assertInside(root, join(root, ".dev", "cache", "inventory", ...segments, "repos.jsonl"));
 }
 
 export function prsCachePath({
@@ -143,7 +172,7 @@ export function prsCachePath({
   segments: string[];
   repo: string;
 }): string {
-  return join(root, ".dev", "cache", "prs", ...segments, `${repo}.jsonl`);
+  return assertInside(root, join(root, ".dev", "cache", "prs", ...segments, `${repo}.jsonl`));
 }
 
 export function workItemsCachePath({
@@ -155,7 +184,10 @@ export function workItemsCachePath({
   tenantSegments: string[];
   project: string;
 }): string {
-  return join(root, ".dev", "cache", "workitems", ...tenantSegments, `${project}.jsonl`);
+  return assertInside(
+    root,
+    join(root, ".dev", "cache", "workitems", ...tenantSegments, `${project}.jsonl`),
+  );
 }
 
 // --- URL to path semantics ---

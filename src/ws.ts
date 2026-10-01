@@ -225,6 +225,14 @@ export async function loadWorkspaceContext(
   /** Mounts whose admin repository could not be rebuilt; the handler shows them. */
   healWarnings: string[];
 }> {
+  const validation = validateWorkspaceName(workspaceName);
+  if (!validation.valid) {
+    throw new WorkspaceError(
+      "INVALID_WORKSPACE_NAME",
+      validation.error ?? "Invalid workspace name",
+      { name: workspaceName },
+    );
+  }
   const workspacePath = deriveWorkspacePath(root, workspaceName, workspacePrefix);
   if (!deps.fs.exists(workspacePath)) {
     throw new WorkspaceError(
@@ -2175,6 +2183,14 @@ export async function duplicate(
   input: WorkspaceDuplicateInput,
   deps: WorkspaceDeps = defaultDeps,
 ): Promise<WorkspaceDuplicateResult> {
+  const sourceValidation = validateWorkspaceName(input.sourceName);
+  if (!sourceValidation.valid) {
+    throw new WorkspaceError(
+      "INVALID_WORKSPACE_NAME",
+      sourceValidation.error ?? "Invalid workspace name",
+      { name: input.sourceName },
+    );
+  }
   const sourcePath = deriveWorkspacePath(input.root, input.sourceName, input.workspacePrefix);
   const sourceManifestPath = join(sourcePath, "ws.md");
   if (!deps.fs.exists(sourceManifestPath)) {

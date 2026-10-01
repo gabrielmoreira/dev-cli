@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cpus } from "node:os";
 import pLimit from "p-limit";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import * as fs from "./fs.ts";
 import * as git from "./git.ts";
 export {
@@ -12,6 +12,7 @@ export {
 } from "./paths.ts";
 export type { CanonicalParts } from "./paths.ts";
 import {
+  assertInside,
   canonicalAdminRepoPath,
   deriveCanonicalParts,
   checkoutsDir,
@@ -91,7 +92,10 @@ export function planCanonicalCheckout(input: PlanCanonicalCheckoutInput): Canoni
   }
 
   const relativePath = join(parts.relativeBaseDir, folderName);
-  const absolutePath = join(input.root, relativePath);
+  const absolutePath = assertInside(
+    input.root,
+    isAbsolute(relativePath) ? relativePath : join(input.root, relativePath),
+  );
   const adminRepoPath = canonicalAdminRepoPath({ root: input.root, sourceKey });
 
   return {
