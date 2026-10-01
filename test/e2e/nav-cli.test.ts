@@ -109,6 +109,18 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
     const pathOutput = (await new Response(pathProc.stdout).text()).trim();
     expect(pathOutput.replace(/\\/g, "/")).toContain("ws/nav-target");
 
+    const recentPath = join(tempRoot, ".dev", "state", "recent.json");
+    const goProc = Bun.spawn(["bun", "run", cliPath, "go", "nav-target", "--root", tempRoot], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(await goProc.exited).toBe(0);
+    const goOutput = (await new Response(goProc.stdout).text()).trim();
+    expect(goOutput.replace(/\\/g, "/")).toContain("ws/nav-target");
+    const goRecent = fs.exists(recentPath) ? JSON.parse(await fs.readText(recentPath)) : {};
+    expect(Number.isFinite(Date.parse(goRecent["nav-target"]))).toBe(true);
+    await fs.writeTextAtomic(recentPath, "{}");
+
     // 3. dev ws jump nav-target
     const jumpProc = Bun.spawn(
       ["bun", "run", cliPath, "ws", "jump", "nav-target", "--root", tempRoot],
@@ -117,6 +129,58 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
     expect(await jumpProc.exited).toBe(0);
     const jumpOutput = (await new Response(jumpProc.stdout).text()).trim();
     expect(jumpOutput.replace(/\\/g, "/")).toContain("ws/nav-target");
+    const jumpRecent = fs.exists(recentPath) ? JSON.parse(await fs.readText(recentPath)) : {};
+    expect(Number.isFinite(Date.parse(jumpRecent["nav-target"]))).toBe(true);
+  });
+
+  it("lists the workspace used last first and ignores corrupt history", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dev-cli-e2e-recent-"));
+    try {
+      for (const name of ["z-recent", "a-other"]) {
+        const init = Bun.spawn([process.execPath, cliPath, "ws", "init", name, "--root", root], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(await init.exited).toBe(0);
+      }
+      for (const name of ["a-other", "z-recent"]) {
+        const go = Bun.spawn([process.execPath, cliPath, "go", name, "--root", root], {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        expect(await go.exited).toBe(0);
+        expect((await new Response(go.stdout).text()).trim()).toBe(join(root, "ws", name));
+      }
+      const listed = Bun.spawn([process.execPath, cliPath, "ls", "--root", root, "--json"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await listed.exited).toBe(0);
+      const items = JSON.parse(await new Response(listed.stdout).text());
+      expect(items.map((item: { name: string }) => item.name)).toEqual(["z-recent", "a-other"]);
+      const recentPath = join(root, ".dev", "state", "recent.json");
+      const recent = fs.exists(recentPath) ? JSON.parse(await fs.readText(recentPath)) : {};
+      expect(Number.isFinite(Date.parse(recent["a-other"]))).toBe(true);
+      expect(Number.isFinite(Date.parse(recent["z-recent"]))).toBe(true);
+
+      await fs.writeTextAtomic(recentPath, "{}");
+      const noHistory = Bun.spawn([process.execPath, cliPath, "ls", "--root", root, "--json"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await noHistory.exited).toBe(0);
+      const fallback = JSON.parse(await new Response(noHistory.stdout).text());
+      await fs.writeTextAtomic(recentPath, "{broken");
+      const corrupt = Bun.spawn([process.execPath, cliPath, "ls", "--root", root, "--json"], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(await corrupt.exited).toBe(0);
+      expect(JSON.parse(await new Response(corrupt.stdout).text())).toEqual(fallback);
+      expect(await new Response(corrupt.stderr).text()).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 
   it("supports dev ws pick and dev ws default contextual behavior", async () => {

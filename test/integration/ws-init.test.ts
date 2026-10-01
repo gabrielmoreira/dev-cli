@@ -89,4 +89,28 @@ describe("Workspace initialization integration (Phase 1)", () => {
       code: "WORKSPACE_ALREADY_EXISTS",
     });
   });
+  it("sorts recently used workspaces first and falls back to creation time", async () => {
+    const used = await ws.init({ root: tempRoot, name: "z-recent" });
+    const unusedNew = await ws.init({ root: tempRoot, name: "a-unused-new" });
+    const unusedOld = await ws.init({ root: tempRoot, name: "b-unused-old" });
+
+    const newerDoc = await manifest.readWorkspace(unusedNew.manifestPath);
+    newerDoc.manifest.created_at = "2026-09-30T00:00:00.000Z";
+    await manifest.writeWorkspace(unusedNew.manifestPath, newerDoc.manifest, newerDoc.body);
+    const olderDoc = await manifest.readWorkspace(unusedOld.manifestPath);
+    olderDoc.manifest.created_at = "2026-09-29T00:00:00.000Z";
+    await manifest.writeWorkspace(unusedOld.manifestPath, olderDoc.manifest, olderDoc.body);
+
+    const recentPath = join(tempRoot, ".dev", "state", "recent.json");
+    await fs.writeTextAtomic(
+      recentPath,
+      JSON.stringify({ "z-recent": "2026-10-01T00:00:00.000Z" }, null, 2),
+    );
+
+    const items = await ws.list({ root: tempRoot });
+    expect(items.map((item) => item.name)).toEqual(["z-recent", "a-unused-new", "b-unused-old"]);
+    expect(items[0]?.lastUsedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(items[1]?.lastUsedAt).toBeUndefined();
+    expect(items[0]?.path).toBe(used.path);
+  });
 });

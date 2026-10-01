@@ -3,6 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import * as ws from "../../src/ws.ts";
+import * as fs from "../../src/fs.ts";
 
 const fakeHerdr = `#!/usr/bin/env bun
 import { appendFile, readFile } from "node:fs/promises";
@@ -146,6 +147,9 @@ describe("dev ws start CLI", () => {
     const result = await runStart({ insideHerdr: true, scenario: "create" });
 
     expect(result.exitCode).toBe(0);
+    const recentPath = join(tempRoot, ".dev", "state", "recent.json");
+    const recent = fs.exists(recentPath) ? JSON.parse(await fs.readText(recentPath)) : {};
+    expect(Number.isFinite(Date.parse(recent["payment-fix"]))).toBe(true);
     expect(JSON.parse(result.stdout)).toEqual({
       workspace: "payment-fix",
       path: workspacePath,

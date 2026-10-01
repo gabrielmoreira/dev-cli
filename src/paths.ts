@@ -44,6 +44,10 @@ export function devDir({ root }: { root: string }): string {
   return join(root, ".dev");
 }
 
+export function recentWorkspacesPath({ root }: { root: string }): string {
+  return join(devDir({ root }), "state", "recent.json");
+}
+
 export function configFilePath({ root }: { root: string }): string {
   return join(root, "dev.yaml");
 }

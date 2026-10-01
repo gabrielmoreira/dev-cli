@@ -1356,14 +1356,11 @@ export const wsListCommand = defineCommand({
           if (items.length === 0) {
             return "No workspaces found.";
           }
-          let out = `Workspaces in ${config.root}:\n`;
+          let out = `Workspaces in ${config.root}:\nWorkspace | Mounts | Last used | Path\n`;
           for (const item of items) {
             const desc = item.description ? ` - ${item.description}` : "";
-            const state = item.error
-              ? `invalid: ${item.error.message}`
-              : `${item.mountCount} mounts`;
-            out += `  ${item.name} (${state})${desc}\n`;
-            out += `    path: ${item.path}\n`;
+            const state = item.error ? `invalid: ${item.error.message}` : `${item.mountCount}`;
+            out += `${item.name}${desc} | ${state} | ${item.lastUsedAt ?? "never"} | ${item.path}\n`;
           }
           return out.trimEnd();
         },
@@ -1541,6 +1538,8 @@ export const wsGoCommand = defineCommand({
       return reportError("Selected workspace is unavailable.", args.json);
     }
 
+    await ws.recordUse({ root: config.root, workspaceName: selected.name });
+
     ui.result({
       data: selected,
       json: args.json,
@@ -1576,6 +1575,7 @@ export const wsJumpCommand = defineCommand({
         root: config.root,
         workspaceName: workspace.value,
       });
+      await ws.recordUse({ root: config.root, workspaceName: target.name });
 
       ui.result({
         data: target,
@@ -1737,6 +1737,7 @@ export const wsStartCommand = defineCommand({
             }
           : undefined,
       );
+      await ws.recordUse({ root: config.root, workspaceName: result.workspace });
       ui.result({
         data: result,
         json: args.json,
