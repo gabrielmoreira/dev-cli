@@ -869,8 +869,8 @@ describe("smart CLI input", () => {
   });
 
   test("selects a registered root when dev use has no target", async () => {
-    const first = join(root, "first-root");
-    const second = join(root, "second-root");
+    const first = join(root, "first-root").replace(/\\/g, "/");
+    const second = join(root, "second-root").replace(/\\/g, "/");
     await writeFile(
       join(root, ".dev.toml"),
       ["[roots.first]", `path = "${first}"`, "", "[roots.second]", `path = "${second}"`, ""].join(
