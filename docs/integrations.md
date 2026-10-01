@@ -67,6 +67,45 @@ plugins:
 
 Everything after `dev qmd x` is passed to QMD unchanged. Run `qmd --help` for the installed command reference and `qmd mcp` for the stdio server.
 
+## Run your code after a sync or label change
+
+You load a local plugin by setting `plugins.<name>.module` in your root's `dev.yaml`:
+
+```yaml
+plugins:
+  recorder:
+    module: ./record-sync.mjs
+```
+
+You resolve a relative module path from the directory containing `dev.yaml`, not your current directory. You can also use an absolute path. Only plugins with a string `module` value load; `dev` does not scan directories. Your module loads when hooks are dispatched, not when you open help or build the built-in integration list.
+
+You default-export an `IntegrationFactory` with the signature `(base: PluginBase) => Integration`. Your integration's `name` matches the config key, `run(args)` returns a promise, and `hooks` holds optional event handlers. You read your remaining configuration through `base.config.plugins.<name>`; `base` also gives you the root, active workspace, UI, filesystem, and shell capabilities. Save this 10-line example as `record-sync.mjs`:
+
+```js
+import { join } from "node:path";
+export default (base) => ({
+  name: "recorder",
+  run: async () => {},
+  hooks: {
+    "mirror:sync:after": async (_ctx, { updated }) => {
+      await base.fs.writeText(join(base.root, "last-sync.json"), JSON.stringify(updated));
+    },
+  },
+});
+```
+
+You receive these events after the corresponding command finishes its work:
+
+| Event               | Hook data                                                 |
+| ------------------- | --------------------------------------------------------- |
+| `mirror:sync:after` | `root`, `updated` entries with `sourceKey` and `revision` |
+| `label:add:after`   | `root`, `sourceKey`, `label`, `meta`                      |
+| `label:rm:after`    | `root`, `sourceKey`, `label`                              |
+
+You see a warning naming the plugin if its file is missing, import fails, default export is not a function, factory throws, or returned name differs from the config key. A built-in with the same name wins, and you see a warning instead of loading the external module. Hook failures also warn; neither loading failures nor hook failures stop your command or other plugins.
+
+Your module runs with your user's permissions, including access to files, processes, and credentials available to that user. You only configure code you trust in your own `dev.yaml`; `dev` does not ask for a separate trust confirmation.
+
 ## Labels
 
 A label names a set of repositories. Each one carries the label on its default branch or on a branch you choose, and the labels live on the `sources:` entries of `dev.yaml`. `dev label` shows every label and then asks what to do: add, edit fields, rename, or remove. Every step also has a scripted form:

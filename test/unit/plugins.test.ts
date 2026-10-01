@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveConfig } from "../../src/config.ts";
 import {
   builtinFactories,
   buildIntegrations,
@@ -18,7 +19,7 @@ afterEach(() => {
 
 function makeBase(): PluginBase {
   const root = mkdtempSync(join(tmpdir(), "dev-cli-plugins-"));
-  return createPluginBase(root);
+  return createPluginBase(root, resolveConfig({ rootFlag: root, cwd: root, env: {} }));
 }
 
 /** Registers temporary factories, restoring the built-in list afterwards. */
@@ -146,5 +147,136 @@ describe("emit", () => {
     await emit(base, "label:rm:after", { root: base.root, sourceKey: "k", label: "x" });
     expect(ran).toBe(false);
     rmSync(base.root, { recursive: true, force: true });
+  });
+});
+
+describe("external plugins", () => {
+  let base: PluginBase;
+  let warnings: string[];
+
+  beforeEach(() => {
+    base = makeBase();
+    cleanups.push(() => rmSync(base.root, { recursive: true, force: true }));
+    withFactories([]);
+    warnings = [];
+    const warn = spyOn(base.ui, "warn").mockImplementation((message) => {
+      warnings.push(String(message));
+    });
+    cleanups.push(() => warn.mockRestore());
+  });
+
+  it.each(["relative", "absolute"])("loads a configured factory from a %s path", async (kind) => {
+    const module = join(base.root, "record #%.mjs");
+    await Bun.write(
+      module,
+      `
+      import { join } from "node:path";
+      export default (base) => ({
+        name: "recorder",
+        run: async () => {},
+        hooks: {
+          "mirror:sync:after": async (_ctx, data) => {
+            await base.fs.writeText(join(base.root, "calls.json"), JSON.stringify({
+              updated: data.updated,
+              message: base.config.plugins.recorder.message,
+            }));
+          },
+        },
+      });
+    `,
+    );
+    base.config.plugins.recorder = {
+      module: kind === "absolute" ? module : "record #%.mjs",
+      message: "synced",
+    };
+
+    await emit(base, "mirror:sync:after", {
+      root: base.root,
+      updated: [{ sourceKey: "sample-api", revision: "main" }],
+    });
+
+    expect(await Bun.file(join(base.root, "calls.json")).exists()).toBe(true);
+    expect(await Bun.file(join(base.root, "calls.json")).json()).toEqual({
+      updated: [{ sourceKey: "sample-api", revision: "main" }],
+      message: "synced",
+    });
+    expect(warnings).toEqual([]);
+  });
+
+  it.each([
+    ["missing file", null],
+    ["non-function default", "export default 42;"],
+    ["import error", 'throw new Error("import exploded");'],
+    ["factory error", 'export default () => { throw new Error("factory exploded"); };'],
+    ["wrong integration name", 'export default () => ({ name: "other", run: async () => {} });'],
+  ])("warns once for a %s and runs other plugins", async (_kind, source) => {
+    if (source !== null) await Bun.write(join(base.root, "broken.mjs"), source);
+    await Bun.write(
+      join(base.root, "survivor.mjs"),
+      `
+      import { join } from "node:path";
+      export default (base) => ({
+        name: "survivor",
+        run: async () => {},
+        hooks: { "mirror:sync:after": () => base.fs.writeText(join(base.root, "survived"), "yes") },
+      });
+    `,
+    );
+    base.config.plugins.broken = { module: "broken.mjs" };
+    base.config.plugins.survivor = { module: "survivor.mjs" };
+
+    await emit(base, "mirror:sync:after", { root: base.root, updated: [] });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Plugin 'broken'");
+    expect(await Bun.file(join(base.root, "survived")).text()).toBe("yes");
+  });
+
+  it("does not import unconfigured modules or plugins without module", async () => {
+    await Bun.write(
+      join(base.root, "ignored.mjs"),
+      `
+      import { join } from "node:path";
+      await Bun.write(join(import.meta.dirname, "imported"), "yes");
+      throw new Error("must not load");
+    `,
+    );
+    base.config.plugins.ignored = { message: "not a module" };
+
+    await emit(base, "mirror:sync:after", { root: base.root, updated: [] });
+
+    expect(await Bun.file(join(base.root, "imported")).exists()).toBe(false);
+    expect(warnings).toEqual([]);
+  });
+
+  it("skips an external module when a built-in owns its name", async () => {
+    let builtInRan = false;
+    withFactories([
+      () => ({
+        name: "recorder",
+        run: async () => {},
+        hooks: {
+          "mirror:sync:after": () => {
+            builtInRan = true;
+          },
+        },
+      }),
+    ]);
+    await Bun.write(
+      join(base.root, "collision.mjs"),
+      `
+      await Bun.write(new URL("./imported", import.meta.url), "yes");
+      export default () => ({ name: "recorder", run: async () => {} });
+    `,
+    );
+    base.config.plugins.recorder = { module: "collision.mjs" };
+
+    await emit(base, "mirror:sync:after", { root: base.root, updated: [] });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("Plugin 'recorder'");
+    expect(warnings[0]).toContain("built-in");
+    expect(await Bun.file(join(base.root, "imported")).exists()).toBe(false);
+    expect(builtInRan).toBe(true);
   });
 });
