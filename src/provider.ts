@@ -1,6 +1,7 @@
-import { join } from "node:path";
+import { updateConfig } from "./config.ts";
 import yaml from "yaml";
 import * as fs from "./fs.ts";
+import { configFilePath } from "./paths.ts";
 
 export type ProviderType = "azure_devops" | "github";
 
@@ -20,59 +21,45 @@ export interface GitHubProviderConfig {
 export type ProviderConfig = AzureDevOpsProviderConfig | GitHubProviderConfig;
 
 export async function addProvider(root: string, provider: ProviderConfig): Promise<void> {
-  const devYamlPath = join(root, "dev.yaml");
-  let content = "";
-  if (fs.exists(devYamlPath)) {
-    content = await fs.readText(devYamlPath);
-  }
-
-  const doc = yaml.parseDocument(content || "sync_strategy: ff-only\n");
-  const existing = doc.get("providers") as any;
-
-  let items: any[] = [];
-  if (existing && typeof existing.toJSON === "function") {
-    items = existing.toJSON();
-  } else if (Array.isArray(existing)) {
-    items = existing;
-  }
-
-  const filtered = items.filter((p: any) => p && p.id !== provider.id);
-  filtered.push(provider);
-
-  doc.set("providers", filtered);
-  await fs.writeTextAtomic(devYamlPath, doc.toString());
+  await updateConfig(configFilePath({ root }), (doc) => {
+    const existing = doc.get("providers");
+    const items: unknown[] = yaml.isSeq(existing)
+      ? existing.toJSON()
+      : Array.isArray(existing)
+        ? existing
+        : [];
+    const filtered = items.filter(
+      (p) => p && !(typeof p === "object" && "id" in p && p.id === provider.id),
+    );
+    filtered.push(provider);
+    doc.set("providers", filtered);
+  });
 }
 
 export async function removeProvider(root: string, id: string): Promise<boolean> {
-  const devYamlPath = join(root, "dev.yaml");
+  const devYamlPath = configFilePath({ root });
   if (!fs.exists(devYamlPath)) {
     return false;
   }
 
-  const content = await fs.readText(devYamlPath);
-  const doc = yaml.parseDocument(content);
-  const existing = doc.get("providers") as any;
-
-  let items: any[] = [];
-  if (existing && typeof existing.toJSON === "function") {
-    items = existing.toJSON();
-  } else if (Array.isArray(existing)) {
-    items = existing;
-  }
-
-  const initialLength = items.length;
-  const filtered = items.filter((p: any) => p && p.id !== id);
-  if (filtered.length === initialLength) {
-    return false;
-  }
-
-  doc.set("providers", filtered);
-  await fs.writeTextAtomic(devYamlPath, doc.toString());
-  return true;
+  let removed = false;
+  await updateConfig(devYamlPath, (doc) => {
+    const existing = doc.get("providers");
+    const items: unknown[] = yaml.isSeq(existing)
+      ? existing.toJSON()
+      : Array.isArray(existing)
+        ? existing
+        : [];
+    const filtered = items.filter((p) => p && !(typeof p === "object" && "id" in p && p.id === id));
+    if (filtered.length === items.length) return;
+    doc.set("providers", filtered);
+    removed = true;
+  });
+  return removed;
 }
 
 export async function listProviders(root: string): Promise<ProviderConfig[]> {
-  const devYamlPath = join(root, "dev.yaml");
+  const devYamlPath = configFilePath({ root });
   if (!fs.exists(devYamlPath)) {
     return [];
   }

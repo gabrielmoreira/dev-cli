@@ -597,7 +597,6 @@ export async function add(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
@@ -795,9 +794,17 @@ export async function add(
         hooks: input.hooks,
       };
 
-      currentManifest.mounts.push(newMount);
       try {
-        await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+        await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+          if (doc.manifest.mounts.some((m) => m.path === newMount.path)) {
+            throw new WorkspaceError(
+              "MOUNT_ALREADY_DECLARED",
+              `Mount '${newMount.path}' was declared by another update`,
+              { path: newMount.path },
+            );
+          }
+          doc.manifest.mounts.push(newMount);
+        });
       } catch (error) {
         // The worktree exists but the manifest does not mention it. Remove the one
         // this run created, so the next `dev ws add` starts from a clean state.
@@ -1696,11 +1703,10 @@ export async function track(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
-    const { index: mountIndex } = findMountOrThrow(currentManifest, input.mountPath);
+    findMountOrThrow(currentManifest, input.mountPath);
 
     const worktreePath = join(workspacePath, input.mountPath);
     let worktreeSwitched = false;
@@ -1717,12 +1723,13 @@ export async function track(
       worktreeSwitched = true;
     }
 
-    currentManifest.mounts[mountIndex] = transitionRevision(currentManifest.mounts[mountIndex], {
-      mode: "track",
-      branch: input.branch,
+    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+      const { mount, index } = findMountOrThrow(doc.manifest, input.mountPath);
+      doc.manifest.mounts[index] = transitionRevision(mount, {
+        mode: "track",
+        branch: input.branch,
+      });
     });
-
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
 
     return {
       path: input.mountPath,
@@ -1752,7 +1759,6 @@ export async function lock(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
@@ -1776,15 +1782,18 @@ export async function lock(
         }
       }
 
-      const idx = currentManifest.mounts.findIndex((m) => m.path === mount.path);
-      currentManifest.mounts[idx] = transitionRevision(mount, {
-        mode: "lock",
-        commit: commitSha,
-      });
       lockedResults.push({ path: mount.path, commit: commitSha });
     }
 
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+      for (const locked of lockedResults) {
+        const { mount, index } = findMountOrThrow(doc.manifest, locked.path);
+        doc.manifest.mounts[index] = transitionRevision(mount, {
+          mode: "lock",
+          commit: locked.commit,
+        });
+      }
+    });
     return { lockedMounts: lockedResults, healWarnings };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
@@ -1807,7 +1816,6 @@ export async function unlock(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
@@ -1829,15 +1837,18 @@ export async function unlock(
         await deps.git.switchBranch(worktreePath, targetBranch);
       }
 
-      const idx = currentManifest.mounts.findIndex((m) => m.path === mount.path);
-      currentManifest.mounts[idx] = transitionRevision(mount, {
-        mode: "track",
-        branch: targetBranch,
-      });
       unlockedResults.push({ path: mount.path, branch: targetBranch });
     }
 
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+      for (const unlocked of unlockedResults) {
+        const { mount, index } = findMountOrThrow(doc.manifest, unlocked.path);
+        doc.manifest.mounts[index] = transitionRevision(mount, {
+          mode: "track",
+          branch: unlocked.branch,
+        });
+      }
+    });
     return { unlockedMounts: unlockedResults, healWarnings };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
@@ -1860,11 +1871,10 @@ export async function tag(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
-    const { index: mountIndex } = findMountOrThrow(currentManifest, input.mountPath);
+    findMountOrThrow(currentManifest, input.mountPath);
 
     const worktreePath = join(workspacePath, input.mountPath);
     if (deps.fs.exists(worktreePath)) {
@@ -1878,12 +1888,13 @@ export async function tag(
       await deps.git.checkoutRevision(worktreePath, input.tag);
     }
 
-    currentManifest.mounts[mountIndex] = transitionRevision(currentManifest.mounts[mountIndex], {
-      mode: "tag",
-      tag: input.tag,
+    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+      const { mount, index } = findMountOrThrow(doc.manifest, input.mountPath);
+      doc.manifest.mounts[index] = transitionRevision(mount, {
+        mode: "tag",
+        tag: input.tag,
+      });
     });
-
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
     return { path: input.mountPath, tag: input.tag, healWarnings };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
@@ -1905,7 +1916,6 @@ export async function remove(
     workspacePath,
     manifestPath,
     manifest: currentManifest,
-    body,
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
@@ -1953,8 +1963,10 @@ export async function remove(
       }
     }
 
-    currentManifest.mounts.splice(mountIndex, 1);
-    await deps.manifest.writeWorkspace(manifestPath, currentManifest, body);
+    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+      const index = doc.manifest.mounts.findIndex((m) => m.path === mount.path);
+      if (index >= 0) doc.manifest.mounts.splice(index, 1);
+    });
 
     return { path: wanted, removed: true, healWarnings };
   } catch (error) {

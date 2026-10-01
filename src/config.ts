@@ -8,6 +8,27 @@ import * as fs from "./fs.ts";
 export const CONFIG_FILE_NAME = "dev.yaml";
 import { parseGlobalToml } from "./global.ts";
 
+export async function updateConfig(
+  configPath: string,
+  mutate: (doc: yaml.Document) => void | Promise<void>,
+): Promise<void> {
+  await fs.withFileLock(configPath, async () => {
+    let content: string;
+    try {
+      content = await fs.readText(configPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      content = "sync_strategy: ff-only\n";
+    }
+    const doc = yaml.parseDocument(content);
+    if (doc.errors.length > 0) {
+      throw new Error(doc.errors.map((error) => error.message).join("; "));
+    }
+    await mutate(doc);
+    await fs.writeTextAtomic(configPath, String(doc));
+  });
+}
+
 export type RootSource = "flag" | "env" | "file" | "global" | "default";
 
 export interface ResolveConfigOptions {
