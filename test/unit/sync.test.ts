@@ -136,6 +136,83 @@ describe("Combined Offline Data Sync Pure Orchestration (Phase 14)", () => {
     expect(result.timestamp).toBeDefined();
   });
 
+  test("starts per-repository PR syncs concurrently and preserves outcome order", async () => {
+    const repoNames = ["sample-api-a", "failing-api-a", "sample-api-b", "failing-api-b"];
+    const gates = repoNames.map(() => Promise.withResolvers<void>());
+    const completed: string[] = [];
+    let started = 0;
+
+    const mockDeps: SyncDataDeps = {
+      inventory: {
+        syncInventory: async (input) =>
+          withFetched({
+            tenant: input.tenant,
+            cachePath: "inventory.jsonl",
+            total: repoNames.length,
+            added: repoNames.length,
+            updated: 0,
+            repositories: repoNames.map((name, index) => ({
+              id: String(index + 1),
+              name,
+              url: `https://example.org/${name}`,
+              default_branch: "main",
+              description: "",
+              last_changed: "",
+              syncedAt: "2026-10-01T00:00:00Z",
+            })),
+          }),
+      },
+      workitem: {
+        syncWorkItems: async () => ({
+          tenant: "sample-tenant",
+          project: "sample-project",
+          cachePath: "workitems.jsonl",
+          total: 0,
+          added: 0,
+          updated: 0,
+          items: [],
+        }),
+      },
+      pr: {
+        syncPullRequests: async (input) => {
+          const index = repoNames.indexOf(input.repo);
+          started += 1;
+          if (started === repoNames.length) gates[repoNames.length - 1].resolve();
+          // Every sync must start before any can finish, then finish in reverse order.
+          await gates[index].promise;
+          completed.push(input.repo);
+          if (index > 0) gates[index - 1].resolve();
+          if (input.repo.startsWith("failing-")) throw new Error(`Unavailable ${input.repo}`);
+          return {
+            tenant: input.tenant,
+            repo: input.repo,
+            cachePath: `${input.repo}.jsonl`,
+            total: 0,
+            added: 0,
+            updated: 0,
+            prs: [],
+            truncated: false,
+          };
+        },
+      },
+    };
+
+    const result = await syncData(
+      { root: tempRoot, tenant: "sample-tenant", client: {} as AzureDevOpsClient },
+      mockDeps,
+    );
+
+    expect(completed).toEqual([...repoNames].reverse());
+    expect(result.pullRequests.map((entry) => entry.repo)).toEqual([
+      "sample-api-a",
+      "sample-api-b",
+    ]);
+    expect(result.errors).toEqual([
+      "Pull request sync error for failing-api-a: Unavailable failing-api-a",
+      "Pull request sync error for failing-api-b: Unavailable failing-api-b",
+    ]);
+  }, 500);
+
   test("syncData respects explicit repos filter for pull request syncing", async () => {
     const fakeClient = {} as AzureDevOpsClient;
     const syncedPrRepos: string[] = [];
