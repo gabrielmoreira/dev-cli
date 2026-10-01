@@ -585,28 +585,33 @@ export async function init(
     );
   }
 
-  await deps.fs.ensureDir(workspacePath);
-  await deps.fs.ensureDir(localPath);
+  try {
+    await deps.fs.ensureDir(workspacePath);
+    await deps.fs.ensureDir(localPath);
 
-  const createdAt = new Date().toISOString();
-  const initialManifest: manifest.WorkspaceManifest = {
-    version: 1,
-    name,
-    created_at: createdAt,
-    description: input.description,
-    mounts: [],
-  };
+    const createdAt = new Date().toISOString();
+    const initialManifest: manifest.WorkspaceManifest = {
+      version: 1,
+      name,
+      created_at: createdAt,
+      description: input.description,
+      mounts: [],
+    };
 
-  await deps.manifest.writeWorkspace(manifestPath, initialManifest);
+    await deps.manifest.writeWorkspace(manifestPath, initialManifest);
 
-  return {
-    name,
-    path: workspacePath,
-    manifestPath,
-    localPath,
-    createdAt,
-    created: true,
-  };
+    return {
+      name,
+      path: workspacePath,
+      manifestPath,
+      localPath,
+      createdAt,
+      created: true,
+    };
+  } catch (error) {
+    await deps.fs.removeDir(workspacePath).catch(() => {});
+    throw error;
+  }
 }
 
 export async function add(
@@ -2223,39 +2228,51 @@ export async function duplicate(
   assertSafeManifestMountPaths(sourceManifest);
   const targetManifest = planDuplication(sourceManifest, input.targetName);
 
-  await deps.fs.ensureDir(targetPath);
-  await deps.fs.ensureDir(join(targetPath, ".local"));
+  const createdWorktrees: Array<{ adminRepoPath: string; mountPath: string }> = [];
+  try {
+    await deps.fs.ensureDir(targetPath);
+    await deps.fs.ensureDir(join(targetPath, ".local"));
 
-  for (const mount of targetManifest.mounts) {
-    const mountPath = join(targetPath, mount.path);
-    const { mirrorPath, sourceKey } = await deps.git.ensureMirror({
-      root: input.root,
-      source: mount.source,
-      extraHeader: await input.resolveExtraHeader?.(mount.source),
-    });
+    for (const mount of targetManifest.mounts) {
+      const mountPath = join(targetPath, mount.path);
+      const { mirrorPath, sourceKey } = await deps.git.ensureMirror({
+        root: input.root,
+        source: mount.source,
+        extraHeader: await input.resolveExtraHeader?.(mount.source),
+      });
 
-    const { adminRepoPath } = await deps.git.ensureWorkspaceRepo({
-      root: input.root,
-      workspaceName: targetManifest.name,
-      sourceKey,
-      canonicalUrl: mount.source,
-      mirrorPath,
-    });
+      const { adminRepoPath } = await deps.git.ensureWorkspaceRepo({
+        root: input.root,
+        workspaceName: targetManifest.name,
+        sourceKey,
+        canonicalUrl: mount.source,
+        mirrorPath,
+      });
 
-    await deps.git.addWorktree({
-      adminRepoPath,
-      mountPath,
-      revision: mount.revision,
-    });
+      await deps.git.addWorktree({
+        adminRepoPath,
+        mountPath,
+        revision: mount.revision,
+      });
+      createdWorktrees.push({ adminRepoPath, mountPath });
+    }
+
+    const targetManifestPath = join(targetPath, "ws.md");
+    await deps.manifest.writeWorkspace(targetManifestPath, targetManifest, body);
+
+    return {
+      sourceName: input.sourceName,
+      targetName: targetManifest.name,
+      path: targetPath,
+      mountsCount: targetManifest.mounts.length,
+    };
+  } catch (error) {
+    for (const worktree of createdWorktrees.reverse()) {
+      await deps.git
+        .removeWorktree(worktree.adminRepoPath, worktree.mountPath, { force: true })
+        .catch(() => {});
+    }
+    await deps.fs.removeDir(targetPath).catch(() => {});
+    throw error;
   }
-
-  const targetManifestPath = join(targetPath, "ws.md");
-  await deps.manifest.writeWorkspace(targetManifestPath, targetManifest, body);
-
-  return {
-    sourceName: input.sourceName,
-    targetName: targetManifest.name,
-    path: targetPath,
-    mountsCount: targetManifest.mounts.length,
-  };
 }

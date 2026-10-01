@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
+import * as manifest from "../../src/manifest.ts";
+import * as shell from "../../src/shell.ts";
+import * as trust from "../../src/trust.ts";
 import * as ws from "../../src/ws.ts";
 
 describe("Workspace convenience operations integration (Phase 7)", () => {
@@ -106,5 +109,87 @@ describe("Workspace convenience operations integration (Phase 7)", () => {
       cwd: join(tempRoot, "ws", "alpha-ws", "app", "src"),
     });
     expect(fromCwd.replace(/\\/g, "/")).toBe(join(tempRoot, "ws", "alpha-ws").replace(/\\/g, "/"));
+  });
+
+  async function failureFrom(promise: Promise<unknown>): Promise<Error & { code?: string }> {
+    try {
+      await promise;
+    } catch (error) {
+      return error as Error & { code?: string };
+    }
+    throw new Error("expected rejection, got resolve");
+  }
+
+  it("rolls back failed init and duplicate attempts so both targets can be retried", async () => {
+    let failPath: string | undefined;
+    const deps: ws.WorkspaceDeps = {
+      fs,
+      git,
+      shell,
+      trust,
+      manifest: {
+        ...manifest,
+        async writeWorkspace(filePath, value, body) {
+          if (filePath === failPath) {
+            throw Object.assign(new Error("injected manifest failure"), {
+              code: "INJECTED_WRITE_FAILURE",
+            });
+          }
+          await manifest.writeWorkspace(filePath, value, body);
+        },
+      },
+    };
+
+    const sibling = await ws.init({ root: tempRoot, name: "rollback-sibling" });
+    const siblingManifest = await fs.readText(sibling.manifestPath);
+    const siblingNotes = join(sibling.localPath, "notes.txt");
+    await fs.writeText(siblingNotes, "keep existing workspace notes");
+
+    const initPath = join(tempRoot, "ws", "retry-init");
+    failPath = join(initPath, "ws.md");
+    expect((await failureFrom(ws.init({ root: tempRoot, name: "retry-init" }, deps))).code).toBe(
+      "INJECTED_WRITE_FAILURE",
+    );
+    expect(fs.exists(initPath)).toBe(false);
+    expect(await fs.readText(sibling.manifestPath)).toBe(siblingManifest);
+    expect(await fs.readText(siblingNotes)).toBe("keep existing workspace notes");
+    failPath = undefined;
+    expect((await ws.init({ root: tempRoot, name: "retry-init" }, deps)).created).toBe(true);
+
+    await ws.init({ root: tempRoot, name: "rollback-source" });
+    await ws.add({
+      root: tempRoot,
+      workspaceName: "rollback-source",
+      source: bareRemotePath,
+      path: "app",
+      branch: "main",
+    });
+    const sourceMount = join(tempRoot, "ws", "rollback-source", "app", "readme.txt");
+    expect(fs.exists(sourceMount)).toBe(true);
+
+    const targetPath = join(tempRoot, "ws", "retry-copy");
+    failPath = join(targetPath, "ws.md");
+    expect(
+      (
+        await failureFrom(
+          ws.duplicate(
+            { root: tempRoot, sourceName: "rollback-source", targetName: "retry-copy" },
+            deps,
+          ),
+        )
+      ).code,
+    ).toBe("INJECTED_WRITE_FAILURE");
+    expect(fs.exists(targetPath)).toBe(false);
+    expect(fs.exists(sourceMount)).toBe(true);
+    expect(await fs.readText(sibling.manifestPath)).toBe(siblingManifest);
+    expect(await fs.readText(siblingNotes)).toBe("keep existing workspace notes");
+
+    failPath = undefined;
+    const retried = await ws.duplicate(
+      { root: tempRoot, sourceName: "rollback-source", targetName: "retry-copy" },
+      deps,
+    );
+    expect(retried.targetName).toBe("retry-copy");
+    expect(fs.exists(join(targetPath, "app", "readme.txt"))).toBe(true);
   });
 });
