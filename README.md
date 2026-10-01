@@ -119,10 +119,10 @@ dev pr --label team:checkout
 dev wi
 ```
 
-Most reviews end there. When you do need the code, the PR URL becomes a workspace on the PR's source branch, forks included, while your own work on that repository stays where it is:
+Most reviews end there. When you do need the code, the PR URL becomes a workspace on the PR's source branch, forks included, while your own work on that repository stays where it is. The source branch must still exist, even for a merged PR. If the example's branch has been deleted, choose a current PR with `dev pr -i` above instead:
 
 ```bash
-dev ws init https://github.com/gabrielmoreira/tiny-asl-machine/pull/52
+dev ws init https://github.com/cli/go-gh/pull/309
 ```
 
 ## One task, four repositories
