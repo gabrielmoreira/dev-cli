@@ -79,14 +79,14 @@ export async function resolveWorkspaceInput(
     options.workspacePrefix,
   );
   const choices = async () =>
-    (await ws.list({ root: options.root, workspacePrefix: options.workspacePrefix })).map(
-      (workspace) => ({
+    (await ws.list({ root: options.root, workspacePrefix: options.workspacePrefix }))
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map((workspace) => ({
         label: workspace.description
           ? `${workspace.name} — ${workspace.description}`
           : workspace.name,
         value: workspace.name,
-      }),
-    );
+      }));
 
   if (options.fuzzyValue && options.value) {
     const query = options.value.trim();
