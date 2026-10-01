@@ -26,6 +26,14 @@ describe("Global Configuration (~/.dev.toml) (Phase 2.4)", () => {
     expect(config.roots).toEqual({});
   });
 
+  it("parses a quoted default root with a TOML inline comment", () => {
+    expect(parseGlobalToml('default_root = "work" # active root')).toEqual({
+      default_root: "work",
+      roots: {},
+    });
+    expect(parseGlobalToml('default_root = "work"').default_root).toBe("work");
+  });
+
   it("parses and serializes TOML with default root and named roots roundtrip", () => {
     const toml = `default_root = "work"
 
@@ -42,14 +50,32 @@ path = "C:/Users/ExampleUser/Projects/Work"
     expect(parsed.roots.work?.path).toBe("C:/Users/ExampleUser/Projects/Work");
 
     const serialized = serializeGlobalToml(parsed);
-    expect(serialized).toContain('default_root = "work"');
-    expect(serialized).toContain("[roots.personal]");
-    expect(serialized).toContain('path = "C:/Users/ExampleUser/dev"');
-    expect(serialized).toContain("[roots.work]");
-    expect(serialized).toContain('path = "C:/Users/ExampleUser/Projects/Work"');
 
     const reparsed = parseGlobalToml(serialized);
     expect(reparsed).toEqual(parsed);
+  });
+
+  it("roundtrips escaped registry strings while normalizing Windows paths", () => {
+    const config: GlobalConfig = {
+      default_root: 'work"archive\\backup',
+      roots: {
+        work: { path: 'C:\\Projects\\"sample"\\workspace' },
+      },
+    };
+
+    expect(parseGlobalToml(serializeGlobalToml(config))).toEqual({
+      default_root: config.default_root,
+      roots: { work: { path: 'C:/Projects/"sample"/workspace' } },
+    });
+  });
+
+  it("roundtrips dotted root aliases as literal registry keys", () => {
+    const config: GlobalConfig = {
+      default_root: "sample.root",
+      roots: { "sample.root": { path: "/tmp/sample-root" } },
+    };
+
+    expect(parseGlobalToml(serializeGlobalToml(config))).toEqual(config);
   });
 
   it("loads and saves config to disk atomically", async () => {

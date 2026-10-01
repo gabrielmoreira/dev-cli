@@ -24,70 +24,26 @@ export function getGlobalConfigPath(homeDir?: string): string {
 }
 
 export function parseGlobalToml(content: string): GlobalConfig {
-  const config: GlobalConfig = {
-    roots: {},
+  const parsed = (Bun.TOML.parse(content) ?? {}) as Partial<GlobalConfig>;
+  return {
+    default_root: parsed.default_root,
+    roots: parsed.roots ?? {},
   };
-
-  if (!content || !content.trim()) {
-    return config;
-  }
-
-  const lines = content.split(/\r?\n/);
-  let currentSection: string | undefined;
-
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) {
-      continue;
-    }
-
-    if (line.startsWith("[") && line.endsWith("]")) {
-      currentSection = line.slice(1, -1).trim();
-      continue;
-    }
-
-    const eqIdx = line.indexOf("=");
-    if (eqIdx === -1) {
-      continue;
-    }
-
-    const key = line.slice(0, eqIdx).trim();
-    let val = line.slice(eqIdx + 1).trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-
-    if (!currentSection) {
-      if (key === "default_root") {
-        config.default_root = val;
-      }
-    } else if (currentSection.startsWith("roots.")) {
-      const alias = currentSection.slice("roots.".length).trim();
-      if (!config.roots[alias]) {
-        config.roots[alias] = { path: "" };
-      }
-      if (key === "path") {
-        config.roots[alias].path = val;
-      }
-    }
-  }
-
-  return config;
 }
 
 export function serializeGlobalToml(config: GlobalConfig): string {
   const lines: string[] = [];
 
   if (config.default_root) {
-    lines.push(`default_root = "${config.default_root}"`);
+    lines.push(`default_root = ${JSON.stringify(config.default_root)}`);
     lines.push("");
   }
 
   const aliases = Object.keys(config.roots || {}).sort();
   for (const alias of aliases) {
     const entry = config.roots[alias];
-    lines.push(`[roots.${alias}]`);
-    lines.push(`path = "${(entry.path || "").replace(/\\/g, "/")}"`);
+    lines.push(`[roots.${JSON.stringify(alias)}]`);
+    lines.push(`path = ${JSON.stringify((entry.path || "").replace(/\\/g, "/"))}`);
     lines.push("");
   }
 
