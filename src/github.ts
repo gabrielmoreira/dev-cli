@@ -2,6 +2,27 @@ import { withHostLimit } from "./host-limit";
 import type { InventoryRecord } from "./cache";
 import type { InventorySyncResult } from "./inventory";
 import * as cache from "./cache";
+import { redactCredentials } from "./git";
+
+export type GitHubErrorCode = "AUTH_FAILED" | "NOT_FOUND" | "RATE_LIMITED" | "NETWORK" | "FAILED";
+
+export class GitHubError extends Error {
+  readonly code: GitHubErrorCode;
+  readonly status: number;
+  readonly details: { body: string };
+
+  constructor(
+    code: GitHubErrorCode,
+    message: string,
+    options: { status: number; details: { body: string } },
+  ) {
+    super(message);
+    this.name = "GitHubError";
+    this.code = code;
+    this.status = options.status;
+    this.details = { body: redactCredentials(options.details.body) };
+  }
+}
 
 export interface GitHubRawRepository {
   id: number;
@@ -76,16 +97,36 @@ export function createGitHubClient(options: GitHubClientOptions): GitHubClient {
 
   async function request<T>(endpoint: string): Promise<T> {
     const url = endpoint.startsWith("http") ? endpoint : `${baseUrl}${endpoint}`;
-    const res = await withHostLimit(url, () =>
-      fetchFn(url, {
-        method: "GET",
-        headers: getHeaders(),
-      }),
-    );
+    const res = await withHostLimit(url, async () => {
+      try {
+        return await fetchFn(url, {
+          method: "GET",
+          headers: getHeaders(),
+        });
+      } catch {
+        throw new GitHubError("NETWORK", "GitHub: network request failed.", {
+          status: 0,
+          details: { body: "" },
+        });
+      }
+    });
 
     if (!res.ok) {
       const bodyText = await res.text();
-      throw new Error(`GitHub API error (${res.status}): ${bodyText}`);
+      let code: GitHubErrorCode = "FAILED";
+      if (res.status === 401) code = "AUTH_FAILED";
+      else if (res.status === 404) code = "NOT_FOUND";
+      else if (
+        res.status === 429 ||
+        (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0")
+      )
+        code = "RATE_LIMITED";
+      else if (res.status >= 500 && res.status < 600) code = "NETWORK";
+      const token = options.token?.trim();
+      throw new GitHubError(code, `GitHub API error (${res.status}).`, {
+        status: res.status,
+        details: { body: token ? bodyText.split(token).join("[REDACTED]") : bodyText },
+      });
     }
 
     return (await res.json()) as T;

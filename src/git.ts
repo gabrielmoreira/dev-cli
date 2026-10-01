@@ -13,6 +13,55 @@ export type { CanonicalParts } from "./paths.ts";
 import * as fs from "./fs.ts";
 import type { MountRevision } from "./manifest.ts";
 
+export type GitErrorCode = "AUTH_FAILED" | "NOT_FOUND" | "REF_NOT_FOUND" | "NETWORK" | "FAILED";
+
+export class GitError extends Error {
+  readonly code: GitErrorCode;
+  readonly details: { args: string[]; stderr: string };
+
+  constructor(code: GitErrorCode, message: string, details: { args: string[]; stderr: string }) {
+    super(message);
+    this.name = "GitError";
+    this.code = code;
+    this.details = {
+      args: details.args.map(redactCredentials),
+      stderr: redactCredentials(details.stderr),
+    };
+  }
+}
+
+function classifyGitError(stderr: string): GitErrorCode {
+  if (
+    /authentication failed|authorization failed|permission denied|access denied|could not read (?:username|password)|requested URL returned error: (?:401|403)/i.test(
+      stderr,
+    )
+  ) {
+    return "AUTH_FAILED";
+  }
+  if (
+    /repository .*?(?:not found|does not exist)|does not appear to be a git repository|not a git repository|cannot change to .*?:|no such file or directory/i.test(
+      stderr,
+    )
+  ) {
+    return "NOT_FOUND";
+  }
+  if (
+    /pathspec .*?did not match|invalid reference|not a valid object name|unknown revision|couldn't find remote ref|invalid (?:ref|object name)/i.test(
+      stderr,
+    )
+  ) {
+    return "REF_NOT_FOUND";
+  }
+  if (
+    /could not resolve|failed to connect|couldn't connect|connection (?:refused|reset|timed out)|timed? ?out|network (?:is unreachable|error)|unable to access|remote end hung up|early EOF/i.test(
+      stderr,
+    )
+  ) {
+    return "NETWORK";
+  }
+  return "FAILED";
+}
+
 export interface GitExecResult {
   stdout: string;
   stderr: string;
@@ -104,7 +153,9 @@ export function stripCredentialsFromUrl(url: string): string {
  * sentence, and it is safe to apply to text that contains no URL at all.
  */
 export function redactCredentials(text: string): string {
-  return text.replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@\s/]+@/gi, "$1");
+  return text
+    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@\s/]+@/gi, "$1")
+    .replace(/(\bauthorization["']?\s*:\s*["']?)[^\r\n"']*/gi, "$1[REDACTED]");
 }
 
 export function normalizeSourceKey(url: string): string {
@@ -188,11 +239,10 @@ export async function ensureMirror(options: EnsureMirrorOptions): Promise<Ensure
 
   const res = await runGit(cloneArgs, { source: options.source });
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(
-        `Failed to create mirror for ${options.source}: ${res.stderr || res.stdout}`,
-      ),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git mirror clone failed.", {
+      args: cloneArgs,
+      stderr: res.stderr,
+    });
   }
 
   // Configure gc invariants
@@ -233,11 +283,10 @@ async function fetchMirrorNow(options: FetchMirrorOptions): Promise<void> {
 
   const res = await runGit(args, { source });
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(
-        `Failed to fetch mirror at ${options.mirrorPath}: ${res.stderr || res.stdout}`,
-      ),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git mirror fetch failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
 }
 
@@ -255,11 +304,10 @@ export async function fetchAdminRepo(adminRepoPath: string, mirrorPath?: string)
     source: mirrorPath ?? (origin?.exitCode === 0 ? origin.stdout : undefined),
   });
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(
-        `Failed to fetch admin repo at ${adminRepoPath}: ${res.stderr || res.stdout}`,
-      ),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git admin fetch failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
 }
 
@@ -294,17 +342,21 @@ export async function ensureWorkspaceRepo(
   // Objects stay in the central pool (.dev/git): local clone hardlinks
   // them instead of copying, so this admin bare holds refs and worktree
   // metadata only. The CLI never gc-prunes mirrors, keeping the links valid.
-  const cloneRes = await runGit([
+  const cloneArgs = [
     "clone",
     "--bare",
     "--reference",
     options.mirrorPath,
     options.mirrorPath,
     adminRepoPath,
-  ]);
+  ];
+  const cloneRes = await runGit(cloneArgs);
 
   if (cloneRes.exitCode !== 0) {
-    throw new Error(`Failed to create workspace admin repo: ${cloneRes.stderr || cloneRes.stdout}`);
+    throw new GitError(classifyGitError(cloneRes.stderr), "Git workspace admin clone failed.", {
+      args: cloneArgs,
+      stderr: cloneRes.stderr,
+    });
   }
 
   await runGit(["-C", adminRepoPath, "remote", "set-url", "origin", options.canonicalUrl]);
@@ -446,7 +498,7 @@ export async function addWorktree(options: AddWorktreeOptions): Promise<{ commit
   await fs.ensureDir(join(options.mountPath, ".."));
   await runGit(["-C", options.adminRepoPath, "worktree", "prune"]);
 
-  const args = ["-C", options.adminRepoPath, "worktree", "add"];
+  let args = ["-C", options.adminRepoPath, "worktree", "add"];
 
   if (options.revision.mode === "track") {
     if (options.revision.upstream && options.revision.upstream !== options.revision.branch) {
@@ -485,13 +537,15 @@ export async function addWorktree(options: AddWorktreeOptions): Promise<{ commit
     } else if (options.revision.mode === "tag") {
       forceArgs.push("--detach", options.mountPath, options.revision.tag);
     }
-    res = await runGit(forceArgs);
+    args = forceArgs;
+    res = await runGit(args);
   }
 
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(`Failed to create worktree mount: ${res.stderr || res.stdout}`),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git worktree checkout failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
 
   if (options.revision.mode === "track") {
@@ -762,24 +816,24 @@ export async function fastForward(options: FastForwardOptions): Promise<void> {
 }
 
 export async function switchBranch(worktreePath: string, branch: string): Promise<void> {
-  const res = await runGit(["-C", worktreePath, "checkout", branch]);
+  const args = ["-C", worktreePath, "checkout", branch];
+  const res = await runGit(args);
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(
-        `Failed to switch worktree at ${worktreePath} to branch '${branch}': ${res.stderr || res.stdout}`,
-      ),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git branch checkout failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
 }
 
 export async function checkoutRevision(worktreePath: string, target: string): Promise<void> {
-  const res = await runGit(["-C", worktreePath, "checkout", target]);
+  const args = ["-C", worktreePath, "checkout", target];
+  const res = await runGit(args);
   if (res.exitCode !== 0) {
-    throw new Error(
-      redactCredentials(
-        `Failed to checkout '${target}' in worktree at ${worktreePath}: ${res.stderr || res.stdout}`,
-      ),
-    );
+    throw new GitError(classifyGitError(res.stderr), "Git revision checkout failed.", {
+      args,
+      stderr: res.stderr,
+    });
   }
 }
 
@@ -879,17 +933,21 @@ export async function ensureCanonicalRepo(
 
   await fs.ensureDir(reposDir({ root: options.root }));
 
-  const cloneRes = await runGit([
+  const cloneArgs = [
     "clone",
     "--bare",
     "--reference",
     options.mirrorPath,
     options.mirrorPath,
     adminRepoPath,
-  ]);
+  ];
+  const cloneRes = await runGit(cloneArgs);
 
   if (cloneRes.exitCode !== 0) {
-    throw new Error(`Failed to create canonical admin repo: ${cloneRes.stderr || cloneRes.stdout}`);
+    throw new GitError(classifyGitError(cloneRes.stderr), "Git canonical admin clone failed.", {
+      args: cloneArgs,
+      stderr: cloneRes.stderr,
+    });
   }
 
   await runGit(["-C", adminRepoPath, "remote", "set-url", "origin", options.canonicalUrl]);

@@ -324,13 +324,18 @@ export async function syncProvidersWithData(
   };
 }
 
-export type RootSyncStep<T> = { ok: true; result: T } | { ok: false; error: string };
+export type RootSyncStep<T> = { ok: true; result: T } | { ok: false; error: string; code: string };
 
 async function step<T>(run: () => Promise<T>): Promise<RootSyncStep<T>> {
   try {
     return { ok: true, result: await run() };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      code:
+        err instanceof Error && "code" in err && typeof err.code === "string" ? err.code : "FAILED",
+    };
   }
 }
 
@@ -346,7 +351,7 @@ export interface SyncRootResult {
     mirrors: RootSyncStep<RootMirrorResult>;
     workspaces: Array<{ name: string } & RootSyncStep<ws.WorkspaceUpdateResult>>;
   };
-  failures: string[];
+  failures: { component: string; code: string; message: string }[];
 }
 
 export type SyncRootProgress =
@@ -427,17 +432,37 @@ export async function syncRoot(
       return { name, ...outcome };
     });
 
-  const failures = [
-    ...(providers && !providers.ok ? [`providers: ${providers.error}`] : []),
-    ...(providers?.ok ? providers.result.errors.map((error) => `providers: ${error}`) : []),
-    ...(!mirrors.ok ? [`mirrors: ${mirrors.error}`] : []),
+  const failures: SyncRootResult["failures"] = [
+    ...(providers && !providers.ok
+      ? [{ component: "providers", code: providers.code, message: providers.error }]
+      : []),
+    ...(providers?.ok
+      ? providers.result.errors.map((error) => ({
+          component: "providers",
+          code: "FAILED",
+          message: error,
+        }))
+      : []),
+    ...(!mirrors.ok ? [{ component: "mirrors", code: mirrors.code, message: mirrors.error }] : []),
     ...(mirrors.ok
-      ? mirrors.result.refreshFailures.map(({ path, reason }) => `mirrors: ${path}: ${reason}`)
+      ? mirrors.result.refreshFailures.map(({ path, reason }) => ({
+          component: "mirrors",
+          code: "FAILED",
+          message: `${path}: ${reason}`,
+        }))
       : []),
     ...(mirrors.ok
-      ? mirrors.result.labelMirrors.failures.map(({ url, reason }) => `mirrors: ${url}: ${reason}`)
+      ? mirrors.result.labelMirrors.failures.map(({ url, reason }) => ({
+          component: "mirrors",
+          code: "FAILED",
+          message: `${url}: ${reason}`,
+        }))
       : []),
-    ...workspaces.flatMap((item) => (item.ok ? [] : [`workspace ${item.name}: ${item.error}`])),
-  ];
+    ...workspaces.flatMap((item) =>
+      item.ok
+        ? []
+        : [{ component: `workspace ${item.name}`, code: item.code, message: item.error }],
+    ),
+  ].map((failure) => ({ ...failure, message: failure.message.split(/\r?\n/)[0]! }));
   return { phases: { providers, mirrors, workspaces }, failures };
 }
