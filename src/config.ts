@@ -5,6 +5,7 @@ import yaml, { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml"
 import { z } from "zod";
 import * as fs from "./fs.ts";
 import { LabelError, type SourceSelector } from "./labels.ts";
+import { configFilePath } from "./paths.ts";
 
 export const CONFIG_FILE_NAME = "dev.yaml";
 import { parseGlobalToml } from "./global.ts";
@@ -460,7 +461,7 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
   }
 
   let configPath: string | undefined;
-  const yamlPath = join(root, CONFIG_FILE_NAME);
+  const yamlPath = configFilePath({ root });
   const tomlPath = join(root, "dev.toml");
   if (existsSync(yamlPath)) {
     configPath = yamlPath;
