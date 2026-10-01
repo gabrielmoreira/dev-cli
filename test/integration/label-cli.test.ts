@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "yaml";
@@ -201,6 +201,20 @@ sources:
     expect(code).toBe(0);
     expect(JSON.parse(logs.at(-1)!)).toMatchObject({ sources: 1, def: false });
     expect((await readConfig()).sources[2].labels).toEqual({ "team:writing": {} });
+  });
+
+  test("reports a zero-match rename without rewriting dev.yaml", async () => {
+    const configPath = join(root, "dev.yaml");
+    const content = await Bun.file(configPath).text();
+    await utimes(configPath, new Date(0), new Date(0));
+    const before = (await stat(configPath)).mtimeMs;
+
+    expect(await run(["label", "rename", "missing", "renamed", "--json"])).toBe(1);
+    expect(errors.join(" ")).toContain(
+      "No repository, label definition, or workset uses 'missing'",
+    );
+    expect(await Bun.file(configPath).text()).toBe(content);
+    expect((await stat(configPath)).mtimeMs).toBe(before);
   });
 
   test("lists labels with their repositories", async () => {

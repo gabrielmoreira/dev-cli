@@ -54,13 +54,10 @@ export const mirrorAddCommand = defineCommand({
         alias: args.name,
         extraHeader,
       });
-      if (config.configDoc) {
-        labels.upsertSourceDeclaration(config.configDoc, {
-          url: result.canonicalUrl,
-          branch: result.branch,
-        });
-        await config.writeConfig?.();
-      }
+      await labels.declareSource(config, {
+        url: result.canonicalUrl,
+        branch: result.branch,
+      });
 
       ui.result({
         data: result,

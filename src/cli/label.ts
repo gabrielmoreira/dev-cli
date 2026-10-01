@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import * as cache from "../cache.ts";
 import type { RuntimeConfig } from "../config.ts";
+import * as configFile from "../config.ts";
 import { resolveExtraHeader } from "../credentials.ts";
 import * as git from "../git.ts";
 import { resolveInputSource } from "../inventory.ts";
@@ -25,12 +26,11 @@ function describeSource(source: { url: string; branch?: string; pin?: string }):
 
 /** dev.yaml as it is after this command's edits, not as it was loaded. */
 function currentConfig(config: RuntimeConfig): RuntimeConfig {
-  const data = (config.configDoc?.toJS() ?? {}) as { sources?: RuntimeConfig["sources"] };
-  return { ...config, sources: data.sources ?? [] };
+  return configFile.resolveConfig({ rootFlag: config.root, cwd: config.root, env: process.env });
 }
 
 function requireDevYaml(config: RuntimeConfig): string | undefined {
-  return config.configPath && config.configDoc
+  return config.configPath?.endsWith(".yaml")
     ? undefined
     : "Labels live in dev.yaml, and this dev root has none. Run 'dev init' first.";
 }
@@ -301,13 +301,8 @@ export const labelAddCommand = defineCommand({
         return 0;
       }
 
-      const doc = config.configDoc!;
-      for (const target of targets) {
-        if (!target.declared) labels.upsertSourceDeclaration(doc, target.selector);
-        labels.setSourceLabel(doc, target.selector, label, target.meta);
-      }
-      await config.writeConfig?.();
-      const base = createPluginBase(config.root, config);
+      await labels.addLabel(config, label, targets);
+      const base = createPluginBase(config.root);
       for (const target of targets) {
         await emit(base, "label:add:after", {
           root: config.root,
@@ -421,11 +416,8 @@ export const labelRmCommand = defineCommand({
       const guidedRm = interactive && (given.length === 0 || !args.label);
       if (guidedRm && !args.yes && !(await ui.confirm("Remove this label?", true))) return 0;
 
-      for (const source of chosen) {
-        labels.setSourceLabel(config.configDoc!, labels.selectorOf(source), label, undefined);
-      }
-      await config.writeConfig?.();
-      const base = createPluginBase(config.root, config);
+      await labels.removeLabel(config, label, chosen);
+      const base = createPluginBase(config.root);
       for (const source of chosen) {
         await emit(base, "label:rm:after", {
           root: config.root,
@@ -496,14 +488,13 @@ export const labelRenameCommand = defineCommand({
         });
         return 0;
       }
-      const renamed = labels.renameLabel(config.configDoc!, from, to);
+      const renamed = await labels.renameLabel(config, from, to);
       if (renamed.sources === 0 && !renamed.def && renamed.worksetMembers === 0) {
         return reportError(
           `No repository, label definition, or workset uses '${from}'.`,
           args.json,
         );
       }
-      await config.writeConfig?.();
       ui.result({
         data: { from, to, ...renamed },
         json: args.json,

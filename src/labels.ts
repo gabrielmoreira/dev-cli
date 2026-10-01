@@ -1,3 +1,4 @@
+import * as configFile from "./config.ts";
 import type { RuntimeConfig } from "./config.ts";
 import { normalizeSourceKey } from "./git.ts";
 import * as mirror from "./mirror.ts";
@@ -41,6 +42,62 @@ export interface SourceSelector {
   branch?: string;
   pin?: string;
   path?: string;
+}
+
+export async function declareSource(
+  config: RuntimeConfig,
+  selector: SourceSelector,
+): Promise<void> {
+  if (!config.configPath?.endsWith(".yaml")) return;
+  await configFile.updateConfig(config.configPath, (doc) => {
+    configFile.upsertSourceDeclaration(doc, selector);
+  });
+}
+
+export async function addLabel(
+  config: RuntimeConfig,
+  label: string,
+  targets: Array<{ selector: SourceSelector; declared: boolean; meta: Record<string, unknown> }>,
+): Promise<void> {
+  if (!config.configPath?.endsWith(".yaml")) {
+    throw new LabelError("LABEL_VALIDATION", "Labels require a dev.yaml configuration.");
+  }
+  await configFile.updateConfig(config.configPath, (doc) => {
+    for (const target of targets) {
+      if (!target.declared) configFile.upsertSourceDeclaration(doc, target.selector);
+      configFile.setSourceLabel(doc, target.selector, label, target.meta);
+    }
+  });
+}
+
+export async function removeLabel(
+  config: RuntimeConfig,
+  label: string,
+  sources: SourceDeclaration[],
+): Promise<void> {
+  if (!config.configPath?.endsWith(".yaml")) {
+    throw new LabelError("LABEL_VALIDATION", "Labels require a dev.yaml configuration.");
+  }
+  await configFile.updateConfig(config.configPath, (doc) => {
+    for (const source of sources) {
+      configFile.setSourceLabel(doc, selectorOf(source), label, undefined);
+    }
+  });
+}
+
+export async function renameLabel(
+  config: RuntimeConfig,
+  from: string,
+  to: string,
+): Promise<ReturnType<typeof configFile.renameLabel>> {
+  if (!config.configPath?.endsWith(".yaml")) {
+    throw new LabelError("LABEL_VALIDATION", "Labels require a dev.yaml configuration.");
+  }
+  let renamed!: ReturnType<typeof configFile.renameLabel>;
+  await configFile.updateConfig(config.configPath, (doc) => {
+    renamed = configFile.renameLabel(doc, from, to);
+  });
+  return renamed;
 }
 export interface SourceDeclaration {
   url: string;
@@ -334,90 +391,6 @@ export async function resolveLabeledSources(
   return { sources, warnings };
 }
 
-// --- dev.yaml source declaration editing (AST-preserving) ---
-
-import { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml";
-
-function findSourceNode(
-  doc: ReturnType<typeof parseDocument>,
-  selector: SourceSelector,
-): YAMLMap | undefined {
-  const seq = doc.get("sources");
-  if (!isSeq(seq)) return undefined;
-  const matches: YAMLMap[] = [];
-  for (const item of seq.items) {
-    if (!isMap(item) || item.get("url") !== selector.url) continue;
-    if (selector.branch !== undefined && item.get("branch") !== selector.branch) continue;
-    if (selector.pin !== undefined && item.get("pin") !== selector.pin) continue;
-    if (selector.path !== undefined && item.get("path") !== selector.path) continue;
-    matches.push(item);
-  }
-  const qualified =
-    selector.branch !== undefined || selector.pin !== undefined || selector.path !== undefined;
-  return qualified || matches.length === 1 ? matches[0] : undefined;
-}
-
-/** Inserts or updates a `sources:` entry for the URL. Mutates the caller's
- * parsed document in place (comments preserved); persistence belongs to
- * config.writeConfig(). Only url/branch are touched. */
-export function upsertSourceDeclaration(
-  doc: ReturnType<typeof parseDocument>,
-  upsert: SourceSelector,
-): { changed: boolean } {
-  const existing = findSourceNode(doc, upsert);
-  if (existing) {
-    const before = String(existing);
-    if (upsert.branch !== undefined) existing.set("branch", upsert.branch);
-    if (upsert.pin !== undefined) existing.set("pin", upsert.pin);
-    if (upsert.path !== undefined) existing.set("path", upsert.path);
-    return { changed: String(existing) !== before };
-  }
-  const existingSeq = doc.get("sources");
-  const seq = isSeq(existingSeq)
-    ? existingSeq
-    : (() => {
-        const created = doc.createNode([]);
-        doc.set("sources", created);
-        return created;
-      })();
-  seq.add(doc.createNode(upsert));
-  return { changed: true };
-}
-
-/** Sets (meta given) or removes (meta undefined) one label on a declared
- * source. Mutates the caller's parsed document in place; persistence belongs
- * to config.writeConfig(). Returns found: false when the source is not
- * declared. */
-export function setSourceLabel(
-  doc: ReturnType<typeof parseDocument>,
-  selector: SourceSelector,
-  label: string,
-  meta: Record<string, unknown> | undefined,
-): { changed: boolean; found: boolean } {
-  const source = findSourceNode(doc, selector);
-  if (!source) return { changed: false, found: false };
-
-  const rawLabels = source.get("labels");
-  const currentLabels: Record<string, unknown> =
-    typeof rawLabels === "object" && rawLabels !== null
-      ? ((rawLabels as { toJS(d: unknown): unknown }).toJS(doc) as Record<string, unknown>)
-      : {};
-
-  if (meta === undefined) {
-    if (!(label in currentLabels)) return { changed: false, found: true };
-    delete currentLabels[label];
-  } else {
-    currentLabels[label] = meta;
-  }
-
-  if (Object.keys(currentLabels).length === 0) {
-    source.delete("labels");
-  } else {
-    source.set("labels", doc.createNode(currentLabels));
-  }
-  return { changed: true, found: true };
-}
-
 /** A label def key matches exactly, or as a prefix when it ends in `*` (`index:*`). */
 function defMatches(key: string, label: string): boolean {
   return key.endsWith("*") ? label.startsWith(key.slice(0, -1)) : key === label;
@@ -505,57 +478,6 @@ export function listLabels(
   return [...byLabel.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([label, sources]) => ({ label, mirror: labelMirrors(defs, label), sources }));
-}
-
-/**
- * Renames a label everywhere dev.yaml names it: on sources, as a label def key,
- * and as a workset member. Mutates the caller's document; persistence belongs to
- * config.writeConfig(). Refuses a target name already in use.
- */
-export function renameLabel(
-  doc: ReturnType<typeof parseDocument>,
-  from: string,
-  to: string,
-): { sources: number; def: boolean; worksetMembers: number } {
-  const renamed = { sources: 0, def: false, worksetMembers: 0 };
-  const sources = doc.get("sources");
-  if (isSeq(sources)) {
-    for (const item of sources.items) {
-      const itemLabels = isMap(item) ? item.get("labels") : undefined;
-      if (!isMap(itemLabels) || !itemLabels.has(from)) continue;
-      if (itemLabels.has(to)) {
-        throw new LabelError("LABEL_VALIDATION", `A source already carries label '${to}'.`);
-      }
-      renameMapKey(itemLabels, from, to);
-      renamed.sources += 1;
-    }
-  }
-  const defs = doc.get("label_defs");
-  if (isMap(defs) && defs.has(from)) {
-    if (defs.has(to)) throw new LabelError("LABEL_VALIDATION", `label_defs already has '${to}'.`);
-    renameMapKey(defs, from, to);
-    renamed.def = true;
-  }
-  const worksets = doc.get("worksets");
-  if (isMap(worksets)) {
-    for (const pair of worksets.items) {
-      const members = isMap(pair.value) ? pair.value.get("members") : undefined;
-      if (!isSeq(members)) continue;
-      for (const member of members.items) {
-        if (isMap(member) && member.get("label") === from) {
-          member.set("label", to);
-          renamed.worksetMembers += 1;
-        }
-      }
-    }
-  }
-  return renamed;
-}
-
-/** Renames a key in place, keeping its position, value, and comments. */
-function renameMapKey(map: YAMLMap, from: string, to: string): void {
-  const pair = map.items.find((candidate) => String(candidate.key) === from)!;
-  pair.key = isScalar(pair.key) ? Object.assign(pair.key, { value: to }) : to;
 }
 
 /**

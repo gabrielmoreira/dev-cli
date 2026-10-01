@@ -1,16 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
+import { parseDeclaredSources, planLabelTarget } from "../../src/labels.ts";
 import {
-  parseDeclaredSources,
-  planLabelTarget,
   renameLabel,
+  resolveConfig,
   setSourceLabel,
+  updateConfig,
   upsertSourceDeclaration,
-} from "../../src/labels.ts";
-import { resolveConfig } from "../../src/config.ts";
+} from "../../src/config.ts";
 
 const YAML_WITH_COMMENTS = `# dev root configuration
 sources:
@@ -121,22 +121,17 @@ describe("label source declaration editing", () => {
 });
 
 describe("config document round-trip", () => {
-  it("resolveConfig exposes the parsed doc and writeConfig persists edits atomically", async () => {
+  it("updateConfig persists a source declaration and keeps comments", async () => {
     const root = mkdtempSync(join(tmpdir(), "dev-cli-config-doc-"));
     try {
-      writeFileSync(join(root, "dev.yaml"), YAML_WITH_COMMENTS);
-      const config = resolveConfig({ cwd: root, env: {} });
-
-      expect(config.configDoc).toBeDefined();
-      expect(typeof config.writeConfig).toBe("function");
-
-      upsertSourceDeclaration(config.configDoc!, {
-        url: "https://github.com/org/wiki",
-        branch: "main",
+      const configPath = join(root, "dev.yaml");
+      writeFileSync(configPath, YAML_WITH_COMMENTS);
+      await updateConfig(configPath, (doc) => {
+        upsertSourceDeclaration(doc, {
+          url: "https://github.com/org/wiki",
+          branch: "main",
+        });
       });
-      const write = config.writeConfig!();
-      expect(write).toBeInstanceOf(Promise);
-      await write;
 
       const onDisk = readFileSync(join(root, "dev.yaml"), "utf8");
       expect(onDisk).toContain("# dev root configuration");
@@ -146,6 +141,54 @@ describe("config document round-trip", () => {
       const reloaded = resolveConfig({ cwd: root, env: {} });
       const urls = reloaded.sources.map((s) => s["url"]);
       expect(urls).toContain("https://github.com/org/wiki");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a label written by another process while this one edits", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dev-label-concurrent-"));
+    const configPath = join(root, "dev.yaml");
+    writeFileSync(
+      configPath,
+      "# root\nsources:\n  - url: https://example.org/sample-api.git\n  - url: https://example.org/sample-web.git\n",
+    );
+    try {
+      await Promise.all([
+        updateConfig(configPath, async (doc) => {
+          await Bun.sleep(50);
+          setSourceLabel(doc, { url: "https://example.org/sample-api.git" }, "team:a", {});
+        }),
+        updateConfig(configPath, async (doc) => {
+          await Bun.sleep(50);
+          setSourceLabel(doc, { url: "https://example.org/sample-web.git" }, "team:b", {});
+        }),
+      ]);
+      const text = readFileSync(configPath, "utf8");
+      expect(text).toContain("team:a");
+      expect(text).toContain("team:b");
+      expect(text).toContain("# root");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not rewrite a zero-match label rename", async () => {
+    const root = mkdtempSync(join(tmpdir(), "dev-label-no-match-"));
+    const configPath = join(root, "dev.yaml");
+    try {
+      writeFileSync(configPath, YAML_WITH_COMMENTS);
+      utimesSync(configPath, new Date(0), new Date(0));
+      const before = statSync(configPath).mtimeMs;
+      await updateConfig(configPath, (doc) => {
+        expect(renameLabel(doc, "missing", "renamed")).toEqual({
+          sources: 0,
+          def: false,
+          worksetMembers: 0,
+        });
+      });
+      expect(readFileSync(configPath, "utf8")).toBe(YAML_WITH_COMMENTS);
+      expect(statSync(configPath).mtimeMs).toBe(before);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
