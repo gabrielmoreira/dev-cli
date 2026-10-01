@@ -12,6 +12,7 @@ import {
 } from "../../src/pr";
 import { writePullRequests, readPullRequests, resolvePrCachePath } from "../../src/cache";
 import type { AdoPullRequest, AzureDevOpsClient } from "../../src/ado";
+import { prsCachePath } from "../../src/paths";
 
 describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
   let tempRoot: string;
@@ -65,6 +66,7 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
     expect(record.repository).toBe("alpha-service");
     expect(record.tenant).toBe("dev.azure.com/my-org");
     expect(record.syncedAt).toBe("2026-09-14T21:00:00Z");
+    expect(normalizeAdoPullRequest({ ...raw, targetRefName: "" }, "t", "r").targetBranch).toBe("");
   });
 
   test("a pull request links to its browser page, not the REST resource", () => {
@@ -196,6 +198,122 @@ describe("Pull Request Orchestration and Normalization (Phase 12)", () => {
 
     expect(read).toHaveLength(1);
     expect(read[0]).toEqual(records[0]);
+  });
+
+  test("keeps same-numbered pull requests from different projects", async () => {
+    const client: Pick<AzureDevOpsClient, "getCurrentUser" | "listProjectPullRequests"> = {
+      getCurrentUser: async () => ({ id: "sample-user", displayName: "Sample User" }),
+      listProjectPullRequests: async (project) => [
+        {
+          pullRequestId: 101,
+          status: "active",
+          title: `Change in ${project}`,
+          description: "",
+          sourceRefName: "refs/heads/feature",
+          targetRefName: "refs/heads/main",
+          creationDate: "2026-10-01T00:00:00Z",
+          url: `https://example.org/${project}/_apis/git/pullRequests/101`,
+          repository: {
+            id: "sample-api-id",
+            name: "sample-api",
+            project: { id: project!, name: project! },
+          },
+        },
+      ],
+    };
+
+    const result = await refreshProjectPullRequests({
+      root: tempRoot,
+      tenant: "sample-tenant",
+      projects: ["sample-project-a", "sample-project-b"],
+      mine: false,
+      client,
+      now: () => "2026-10-01T01:00:00Z",
+    });
+
+    expect(result.records.map((record) => record.project).sort()).toEqual([
+      "sample-project-a",
+      "sample-project-b",
+    ]);
+    const cacheA = resolvePrCachePath(tempRoot, "sample-tenant", "sample-api", "sample-project-a");
+    const cacheB = resolvePrCachePath(tempRoot, "sample-tenant", "sample-api", "sample-project-b");
+    expect(cacheA).not.toBe(cacheB);
+    for (const project of ["sample-project-a", "sample-project-b"]) {
+      expect(
+        (
+          await readPullRequests({
+            root: tempRoot,
+            tenant: "sample-tenant",
+            repo: "sample-api",
+            project,
+          })
+        ).map((record) => ({ id: record.id, project: record.project })),
+      ).toEqual([{ id: 101, project }]);
+    }
+
+    const legacyPath = prsCachePath({
+      root: tempRoot,
+      segments: ["sample-tenant"],
+      repo: "sample-api",
+    });
+    const legacyText = `${JSON.stringify({ ...result.records[0], id: 303, project: "legacy-project" })}\n`;
+    await Bun.write(legacyPath, legacyText);
+    const allProjects = await readPullRequests({
+      root: tempRoot,
+      tenant: "sample-tenant",
+      repo: "sample-api",
+    });
+    expect(allProjects.map((record) => record.project).sort()).toEqual([
+      "sample-project-a",
+      "sample-project-b",
+    ]);
+    expect(await Bun.file(legacyPath).text()).toBe(legacyText);
+
+    const withoutEmbeddedProject = normalizeAdoPullRequest(
+      {
+        pullRequestId: 202,
+        status: "active",
+        title: "Fallback project",
+        sourceRefName: "refs/heads/feature",
+        targetRefName: "refs/heads/main",
+        creationDate: "2026-10-01T00:00:00Z",
+        url: "https://example.org/sample-project-a/_apis/git/pullRequests/202",
+        repository: { id: "sample-api-id", name: "sample-api" },
+      },
+      "sample-tenant",
+      "sample-api",
+      undefined,
+      "sample-project-a",
+    );
+    expect(withoutEmbeddedProject.project).toBe("sample-project-a");
+  });
+
+  test("merges pull requests only within the same organization, project, and repository", () => {
+    const record = normalizeAdoPullRequest(
+      {
+        pullRequestId: 101,
+        status: "active",
+        title: "Original change",
+        sourceRefName: "refs/heads/feature",
+        targetRefName: "refs/heads/main",
+        creationDate: "2026-10-01T00:00:00Z",
+        url: "https://example.org/pullRequests/101",
+      },
+      "sample-tenant",
+      "sample-api",
+    );
+    const existing = [
+      { ...record, project: "sample-project-a" },
+      { ...record, project: "sample-project-b" },
+      { ...record, project: "sample-project-a", tenant: "other-tenant" },
+      { ...record, project: "sample-project-a", repository: "other-api" },
+    ];
+    const incoming = [{ ...existing[0], title: "Updated change" }];
+
+    expect(mergePullRequestRecords(existing, incoming)).toEqual([
+      incoming[0],
+      ...existing.slice(1),
+    ]);
   });
 
   test("syncPullRequests orchestrates fetch, merge, and cache persistence", async () => {

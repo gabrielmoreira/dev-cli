@@ -113,9 +113,10 @@ export function normalizeAdoPullRequest(
   tenant: string,
   repoName: string,
   syncedAt: string = new Date().toISOString(),
+  project?: string,
 ): PullRequestRecord {
   const sourceBranch = raw.sourceRefName ? raw.sourceRefName.replace(/^refs\/heads\//, "") : "";
-  const targetBranch = raw.targetRefName ? raw.targetRefName.replace(/^refs\/heads\//, "") : "main";
+  const targetBranch = raw.targetRefName ? raw.targetRefName.replace(/^refs\/heads\//, "") : "";
   const author = raw.createdBy?.displayName || raw.createdBy?.uniqueName || "unknown";
 
   return {
@@ -131,7 +132,7 @@ export function normalizeAdoPullRequest(
     updatedAt: raw.creationDate,
     isDraft: Boolean(raw.isDraft),
     repository: repoName,
-    project: raw.repository?.project?.name,
+    project: raw.repository?.project?.name ?? project,
     tenant,
     syncedAt,
   };
@@ -139,21 +140,22 @@ export function normalizeAdoPullRequest(
 
 /**
  * Merges existing and incoming PR records.
- * Updates matching by ID, appends new, sorts descending by ID.
+ * Updates matching tenant, project, repository, and ID; appends new; sorts descending by ID.
  */
 export function mergePullRequestRecords(
   existing: PullRequestRecord[],
   incoming: PullRequestRecord[],
 ): PullRequestRecord[] {
-  const map = new Map<number, PullRequestRecord>();
+  const map = new Map<string, PullRequestRecord>();
 
   for (const item of existing) {
-    map.set(item.id, item);
+    map.set(`${item.tenant}/${item.project ?? ""}/${item.repository}/${item.id}`, item);
   }
 
   for (const item of incoming) {
-    map.set(item.id, {
-      ...map.get(item.id),
+    const key = `${item.tenant}/${item.project ?? ""}/${item.repository}/${item.id}`;
+    map.set(key, {
+      ...map.get(key),
       ...item,
     });
   }
@@ -179,19 +181,27 @@ export async function syncPullRequests(
     limit: PULL_REQUEST_LIMIT,
   });
 
-  const incoming = rawPrs.map((pr) => normalizeAdoPullRequest(pr, input.tenant, input.repo, now));
+  const incoming = rawPrs.map((raw) =>
+    normalizeAdoPullRequest(raw, input.tenant, input.repo, now, input.project),
+  );
+  const cacheProject = input.project ?? incoming[0]?.project ?? "unknown";
   const existing = await deps.cache.readPullRequests({
     root: input.root,
     tenant: input.tenant,
     repo: input.repo,
+    project: cacheProject,
   });
 
-  const existingIds = new Set(existing.map((p) => p.id));
+  const existingIds = new Set(
+    existing.map(
+      (record) => `${record.tenant}/${record.project ?? ""}/${record.repository}/${record.id}`,
+    ),
+  );
   let added = 0;
   let updated = 0;
 
   for (const item of incoming) {
-    if (existingIds.has(item.id)) {
+    if (existingIds.has(`${item.tenant}/${item.project ?? ""}/${item.repository}/${item.id}`)) {
       updated++;
     } else {
       added++;
@@ -200,14 +210,25 @@ export async function syncPullRequests(
 
   // A pull request cached as open that an open-only query no longer returns was
   // completed or abandoned since; it stays out of every open listing. Only this
-  // project's records: a same-named repository in another project shares the file.
+  // project's repository cache is updated.
   const complete = rawPrs.length < PULL_REQUEST_LIMIT;
-  const inQuery = (p: PullRequestRecord) =>
-    !input.project || (p.project ?? input.project).toLowerCase() === input.project.toLowerCase();
+  const inQuery = (record: PullRequestRecord) =>
+    record.tenant === input.tenant &&
+    record.repository === input.repo &&
+    (record.project ?? cacheProject).toLowerCase() === cacheProject.toLowerCase();
   const kept =
     adoStatus === "active" && complete
       ? existing.filter(
-          (p) => p.status !== "open" || !inQuery(p) || incoming.some((i) => i.id === p.id),
+          (record) =>
+            record.status !== "open" ||
+            !inQuery(record) ||
+            incoming.some(
+              (item) =>
+                item.tenant === record.tenant &&
+                item.project === record.project &&
+                item.repository === record.repository &&
+                item.id === record.id,
+            ),
         )
       : existing;
   const merged = mergePullRequestRecords(kept, incoming);
@@ -215,6 +236,7 @@ export async function syncPullRequests(
     root: input.root,
     tenant: input.tenant,
     repo: input.repo,
+    project: cacheProject,
     records: merged,
   });
 
@@ -264,15 +286,19 @@ export async function refreshProjectPullRequests(
       ),
     ),
   );
-  const seen = new Set<number>();
-  const records = batches.flatMap((batch) =>
-    batch.flatMap((raw) => {
+  const seen = new Set<string>();
+  const records = batches.flatMap((batch, batchIndex) => {
+    const project = scopes[Math.floor(batchIndex / filters.length)];
+    return batch.flatMap((raw) => {
       const repository = raw.repository?.name;
-      if (!repository || seen.has(raw.pullRequestId)) return [];
-      seen.add(raw.pullRequestId);
-      return [normalizeAdoPullRequest(raw, input.tenant, repository, syncedAt)];
-    }),
-  );
+      if (!repository) return [];
+      const record = normalizeAdoPullRequest(raw, input.tenant, repository, syncedAt, project);
+      const key = `${record.tenant}/${record.project ?? ""}/${record.repository}/${record.id}`;
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [record];
+    });
+  });
   const truncatedProjects = [
     ...new Set(
       batches.flatMap((batch, index) =>
@@ -281,22 +307,30 @@ export async function refreshProjectPullRequests(
     ),
   ];
 
-  const byRepository = new Map<string, PullRequestRecord[]>();
+  const byProjectRepository = new Map<
+    string,
+    { project: string; repository: string; records: PullRequestRecord[] }
+  >();
   for (const record of records) {
-    const group = byRepository.get(record.repository);
-    if (group) group.push(record);
-    else byRepository.set(record.repository, [record]);
+    const project = record.project ?? "unknown";
+    const key = `${record.tenant}/${project}/${record.repository}`;
+    const group = byProjectRepository.get(key);
+    if (group) group.records.push(record);
+    else
+      byProjectRepository.set(key, { project, repository: record.repository, records: [record] });
   }
-  for (const [repository, incoming] of byRepository) {
+  for (const { project, repository, records: incoming } of byProjectRepository.values()) {
     const existing = await deps.cache.readPullRequests({
       root: input.root,
       tenant: input.tenant,
       repo: repository,
+      project,
     });
     await deps.cache.writePullRequests({
       root: input.root,
       tenant: input.tenant,
       repo: repository,
+      project,
       records: mergePullRequestRecords(existing, incoming),
     });
   }
@@ -341,6 +375,7 @@ export async function listPullRequests(
       root: input.root,
       tenant: input.tenant,
       repo: input.repo,
+      project: input.project,
     });
   } else {
     records = await deps.cache.loadAllCachedPullRequests(input.root);
@@ -376,7 +411,7 @@ export async function getPullRequest(
       const raw = await input.client.getPullRequest(input.repo, input.id, {
         project: input.project,
       });
-      return normalizeAdoPullRequest(raw, input.tenant, input.repo);
+      return normalizeAdoPullRequest(raw, input.tenant, input.repo, undefined, input.project);
     } catch {
       // Fallback to cache if remote fails
     }
@@ -388,6 +423,7 @@ export async function getPullRequest(
           root: input.root,
           tenant: input.tenant,
           repo: input.repo,
+          project: input.project,
         })
       : await deps.cache.loadAllCachedPullRequests(input.root);
 
