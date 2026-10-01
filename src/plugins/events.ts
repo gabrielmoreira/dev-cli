@@ -6,7 +6,7 @@ import type { ui } from "../ui.ts";
 /** Event map for plugin hooks. A stage exists only once a core emit() call
  * site produces it. After-only by design: no veto, no wildcards, no
  * priorities. Hook failure is a warning, never a blocker. */
-export interface IntegrationEvents {
+export interface PluginEvents {
   "mirror:sync:after": {
     root: string;
     updated: Array<{ sourceKey: string; revision: string }>;
@@ -24,7 +24,7 @@ export interface IntegrationEvents {
   };
 }
 
-export type IntegrationEventName = keyof IntegrationEvents;
+export type PluginEventName = keyof PluginEvents;
 
 /** Context handed to plugin factories once per invocation. Config is per-run,
  * exactly like core commands; plugins own their config slice
@@ -39,15 +39,12 @@ export interface PluginBase {
   shell: typeof shell;
 }
 
-export interface Integration {
+export interface Plugin {
   name: string;
   run(args: Record<string, unknown>): Promise<number | void>;
   hooks?: {
-    [E in IntegrationEventName]?: (
-      ctx: PluginBase,
-      data: IntegrationEvents[E],
-    ) => void | Promise<void>;
+    [E in PluginEventName]?: (ctx: PluginBase, data: PluginEvents[E]) => void | Promise<void>;
   };
 }
 
-export type IntegrationFactory = (base: PluginBase) => Integration;
+export type PluginFactory = (base: PluginBase) => Plugin;

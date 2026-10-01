@@ -77,9 +77,9 @@ plugins:
     module: ./record-sync.mjs
 ```
 
-You resolve a relative module path from the directory containing `dev.yaml`, not your current directory. You can also use an absolute path. Only plugins with a string `module` value load; `dev` does not scan directories. Your module loads when hooks are dispatched, not when you open help or build the built-in integration list.
+You resolve a relative module path from the directory containing `dev.yaml`, not your current directory. You can also use an absolute path. Only plugins with a string `module` value load; `dev` does not scan directories. Your module loads when hooks are dispatched, not when you open help or build the built-in plugin list.
 
-You default-export an `IntegrationFactory` with the signature `(base: PluginBase) => Integration`. Your integration's `name` matches the config key, `run(args)` returns a promise, and `hooks` holds optional event handlers. You read your remaining configuration through `base.config.plugins.<name>`; `base` also gives you the root, active workspace, UI, filesystem, and shell capabilities. Save this 10-line example as `record-sync.mjs`:
+You default-export a `PluginFactory` with the signature `(base: PluginBase) => Plugin`. Your plugin's `name` matches the config key, `run(args)` returns a promise, and `hooks` holds optional event handlers. You read your remaining configuration through `base.config.plugins.<name>`; `base` also gives you the root, active workspace, UI, filesystem, and shell capabilities. Save this 10-line example as `record-sync.mjs`:
 
 ```js
 import { join } from "node:path";
