@@ -1,10 +1,24 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   defaultWorkspaceBody,
   parseWorkspace,
+  readWorkspace,
   serializeWorkspace,
+  updateWorkspace,
   type WorkspaceManifest,
 } from "../../src/manifest.ts";
+
+async function failureFrom(p: Promise<unknown>): Promise<Error & { code?: string }> {
+  try {
+    await p;
+  } catch (e) {
+    return e as Error & { code?: string };
+  }
+  throw new Error("expected rejection, got resolve");
+}
 
 describe("Manifest serialization & parsing (Phase 1)", () => {
   it("serializes and parses back an initial empty workspace manifest", () => {
@@ -86,6 +100,56 @@ describe("Manifest serialization & parsing (Phase 1)", () => {
     expect(parsed.manifest.mounts[0].hooks?.post_checkout).toBe("mise install");
     expect(parsed.manifest.mounts[1].readonly).toBe(true);
     expect(parsed.manifest.mounts[1].revision.mode).toBe("lock");
+  });
+
+  it.each(["invalid", "{}", "null"])(
+    "rejects a present non-array mounts field: %s",
+    async (mounts) => {
+      const malformed = [
+        "---",
+        "version: 1",
+        "name: sample-project",
+        "created_at: 2026-10-01T00:00:00Z",
+        `mounts: ${mounts}`,
+        "---",
+        "# sample-project",
+      ].join("\n");
+      const error = await failureFrom(Promise.resolve().then(() => parseWorkspace(malformed)));
+      expect(error.code).toBe("INVALID_MANIFEST");
+      expect((error as Error & { details?: unknown }).details).toEqual({
+        filePath: "ws.md",
+        field: "mounts",
+      });
+
+      const legacy = parseWorkspace(["---", "name: sample-project", "---", "# body"].join("\n"));
+      expect(legacy.manifest.mounts).toEqual([]);
+    },
+  );
+
+  it("rejects an invalid manifest before updating and leaves its content unchanged", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "dev-cli-invalid-manifest-"));
+    const filePath = join(dir, "ws.md");
+    const malformed = ["---", "name: sample-project", "mounts: invalid", "---", "# body"].join(
+      "\n",
+    );
+    try {
+      await Bun.write(filePath, malformed);
+      const updateError = await failureFrom(
+        updateWorkspace(filePath, (doc) => {
+          doc.body = "# replaced";
+        }),
+      );
+      expect(updateError.code).toBe("INVALID_MANIFEST");
+      expect(await Bun.file(filePath).text()).toBe(malformed);
+      const readError = await failureFrom(readWorkspace(filePath));
+      expect(readError.code).toBe("INVALID_MANIFEST");
+      expect((readError as Error & { details?: unknown }).details).toEqual({
+        filePath,
+        field: "mounts",
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
   });
 
   it("fails cleanly when frontmatter is missing", () => {

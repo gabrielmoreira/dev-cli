@@ -1325,7 +1325,10 @@ export const wsListCommand = defineCommand({
           let out = `Workspaces in ${config.root}:\n`;
           for (const item of items) {
             const desc = item.description ? ` - ${item.description}` : "";
-            out += `  ${item.name} (${item.mountCount} mounts)${desc}\n`;
+            const state = item.error
+              ? `invalid: ${item.error.message}`
+              : `${item.mountCount} mounts`;
+            out += `  ${item.name} (${state})${desc}\n`;
             out += `    path: ${item.path}\n`;
           }
           return out.trimEnd();
@@ -1629,7 +1632,10 @@ export const wsPickCommand = defineCommand({
         text: () => {
           let out = "Workspaces:\n";
           for (const item of items) {
-            out += `  - ${item.name} (${item.mountCount} mounts) -> ${item.path}\n`;
+            const state = item.error
+              ? `invalid: ${item.error.message}`
+              : `${item.mountCount} mounts`;
+            out += `  - ${item.name} (${state}) -> ${item.path}\n`;
           }
           return out.trimEnd();
         },

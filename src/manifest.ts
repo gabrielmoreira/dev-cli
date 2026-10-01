@@ -85,7 +85,10 @@ export function serializeWorkspace(manifest: WorkspaceManifest, body?: string): 
   return `---\n${yamlStr}\n---\n\n${markdown.trim()}\n`;
 }
 
-export function parseWorkspace(content: string): { manifest: WorkspaceManifest; body: string } {
+export function parseWorkspace(
+  content: string,
+  filePath = "ws.md",
+): { manifest: WorkspaceManifest; body: string } {
   const normalized = content.replace(/\r\n/g, "\n");
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
 
@@ -98,6 +101,13 @@ export function parseWorkspace(content: string): { manifest: WorkspaceManifest; 
 
   if (!parsed || typeof parsed !== "object") {
     throw new Error("Invalid ws.md format: frontmatter failed to parse as object");
+  }
+
+  if (parsed.mounts !== undefined && !Array.isArray(parsed.mounts)) {
+    throw Object.assign(new Error("Invalid ws.md format: mounts must be an array"), {
+      code: "INVALID_MANIFEST",
+      details: { filePath, field: "mounts" },
+    });
   }
 
   const manifest: WorkspaceManifest = {
@@ -118,7 +128,7 @@ export async function readWorkspace(
   filePath: string,
 ): Promise<{ manifest: WorkspaceManifest; body: string }> {
   const content = await readText(filePath);
-  return parseWorkspace(content);
+  return parseWorkspace(content, filePath);
 }
 
 export async function writeWorkspace(
