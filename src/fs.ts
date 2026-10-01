@@ -217,6 +217,9 @@ export async function removeDir(dirPath: string): Promise<void> {
       return;
     }
   }
+  if (existsSync(dirPath)) {
+    throw new Error(`Failed to remove directory: ${dirPath}`);
+  }
 }
 
 export async function listDirs(parentPath: string): Promise<string[]> {

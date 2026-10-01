@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, win32 } from "node:path";
 import * as fs from "./fs.ts";
 import * as git from "./git.ts";
@@ -1928,38 +1929,70 @@ export async function remove(
     const worktreePath = join(workspacePath, assertSafeMountPath(mount.path));
 
     if (deps.fs.exists(worktreePath)) {
-      const observed = await deps.git.inspectWorktree(worktreePath);
-      if (!input.force) {
-        if (observed.isDirty) {
-          throw new WorkspaceError(
-            "UNSAFE_REMOVE",
-            `Cannot remove mount '${input.mountPath}': worktree has uncommitted changes. Use --force to override.`,
-            { path: input.mountPath, isDirty: true },
-          );
-        }
-        if (observed.aheadCount > 0) {
-          throw new WorkspaceError(
-            "UNSAFE_REMOVE",
-            `Cannot remove mount '${input.mountPath}': worktree has unpushed commits. Use --force to override.`,
-            { path: input.mountPath, aheadCount: observed.aheadCount },
-          );
-        }
-      }
-
       const sourceKey = deps.git.normalizeSourceKey(mount.source);
       const adminRepoPath = workspaceAdminRepoPath({
         root: input.root,
         workspaceName: input.workspaceName,
         sourceKey,
       });
-      if (deps.fs.exists(adminRepoPath)) {
+      const registeredAdmin = await deps.git.worktreeAdminRepoPath(worktreePath);
+      let expectedAdmin = resolve(adminRepoPath);
+      let actualAdmin = registeredAdmin === undefined ? undefined : resolve(registeredAdmin);
+      if (deps.fs.exists(expectedAdmin)) expectedAdmin = realpathSync.native(expectedAdmin);
+      if (actualAdmin !== undefined && deps.fs.exists(actualAdmin)) {
+        actualAdmin = realpathSync.native(actualAdmin);
+      }
+      const belongsToAdmin =
+        actualAdmin !== undefined &&
+        (process.platform === "win32"
+          ? actualAdmin.toLowerCase() === expectedAdmin.toLowerCase()
+          : actualAdmin === expectedAdmin);
+
+      if (!belongsToAdmin && !input.force) {
+        throw new WorkspaceError(
+          "UNMANAGED_CHECKOUT",
+          `Cannot remove '${input.mountPath}': checkout is not a registered worktree of this workspace. Use --force to remove it.`,
+          { path: input.mountPath },
+        );
+      }
+
+      if (belongsToAdmin) {
+        const observed = await deps.git.inspectWorktree(worktreePath);
+        if (!input.force) {
+          if (observed.isDirty) {
+            throw new WorkspaceError(
+              "UNSAFE_REMOVE",
+              `Cannot remove mount '${input.mountPath}': worktree has uncommitted changes. Use --force to override.`,
+              { path: input.mountPath, isDirty: true },
+            );
+          }
+          if (observed.aheadCount > 0) {
+            throw new WorkspaceError(
+              "UNSAFE_REMOVE",
+              `Cannot remove mount '${input.mountPath}': worktree has unpushed commits. Use --force to override.`,
+              { path: input.mountPath, aheadCount: observed.aheadCount },
+            );
+          }
+        }
         try {
           await deps.git.removeWorktree(adminRepoPath, worktreePath, { force: input.force });
-        } catch {
-          await deps.fs.removeDir(worktreePath);
+        } catch (error) {
+          throw new WorkspaceError(
+            "REMOVE_FAILED",
+            `Git could not remove registered worktree '${input.mountPath}': ${error instanceof Error ? error.message : String(error)}`,
+            { path: input.mountPath },
+          );
         }
       } else {
         await deps.fs.removeDir(worktreePath);
+      }
+
+      if (deps.fs.exists(worktreePath)) {
+        throw new WorkspaceError(
+          "REMOVE_FAILED",
+          `Could not remove checkout '${input.mountPath}'.`,
+          { path: input.mountPath },
+        );
       }
     }
 

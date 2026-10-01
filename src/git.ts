@@ -642,6 +642,18 @@ export async function inspectWorktree(worktreePath: string): Promise<ObservedWor
         behindCount = Number.parseInt(parts[0], 10) || 0;
         aheadCount = Number.parseInt(parts[1], 10) || 0;
       }
+    } else {
+      // A local-only branch has no upstream or origin/<branch>. Count commits no remote has.
+      const localOnly = await runGit([
+        "-C",
+        worktreePath,
+        "rev-list",
+        "--count",
+        "HEAD",
+        "--not",
+        "--remotes",
+      ]);
+      if (localOnly.exitCode === 0) aheadCount = Number.parseInt(localOnly.stdout, 10) || 0;
     }
   } else if (rev.commitSha) {
     // A detached HEAD has no upstream: its local commits are the ones no
