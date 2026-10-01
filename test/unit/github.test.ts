@@ -5,10 +5,26 @@ import { join } from "node:path";
 import { readInventory, writeInventory } from "../../src/cache";
 import {
   createGitHubClient,
+  GitHubError,
   normalizeGitHubRepository,
   syncGitHubInventory,
   type GitHubRawRepository,
 } from "../../src/github";
+
+async function failureFrom<
+  E extends Error = Error & {
+    code?: string;
+    status?: number;
+    details?: Record<string, unknown>;
+  },
+>(promise: Promise<unknown>): Promise<E> {
+  try {
+    await promise;
+  } catch (error) {
+    return error as E;
+  }
+  throw new Error("expected rejection, got resolve");
+}
 
 describe("GitHub Client and Normalization (Phase 15)", () => {
   test("normalizeGitHubRepository converts GitHub API payload to canonical InventoryRecord", () => {
@@ -115,5 +131,66 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  test.each([
+    { status: 401, headers: {}, code: "AUTH_FAILED" },
+    { status: 404, headers: {}, code: "NOT_FOUND" },
+    { status: 403, headers: { "x-ratelimit-remaining": "0" }, code: "RATE_LIMITED" },
+    { status: 429, headers: {}, code: "RATE_LIMITED" },
+    { status: 503, headers: {}, code: "NETWORK" },
+    { status: 403, headers: {}, code: "FAILED" },
+    { status: 422, headers: {}, code: "FAILED" },
+  ])(
+    "classifies HTTP $status as $code without exposing the body",
+    async ({ status, headers, code }) => {
+      const body = '{"message":"provider diagnostic"}\nprivate response';
+      const client = createGitHubClient({
+        fetch: (async (_url: string | URL | Request) =>
+          new Response(body, { status, headers })) as typeof fetch,
+      });
+      const error = await failureFrom<GitHubError>(
+        client.getRepository("example-org", "sample-api"),
+      );
+      expect(error.code).toBe(code);
+      expect(error).toBeInstanceOf(GitHubError);
+      expect(error.status).toBe(status);
+      expect(error.details?.body).toBe(body);
+      expect(error.message).toContain(String(status));
+      expect(error.message).not.toContain("provider diagnostic");
+      expect(error.message).not.toContain("private response");
+      expect(error.message.split(/\r?\n/)).toHaveLength(1);
+    },
+  );
+
+  test("classifies rejected requests without exposing their credentials", async () => {
+    const client = createGitHubClient({
+      token: "example-secret",
+      fetch: (async (_url: string | URL | Request): Promise<Response> => {
+        throw new Error("Authorization: Bearer example-secret");
+      }) as typeof fetch,
+    });
+    const error = await failureFrom<GitHubError>(client.getRepository("example-org", "sample-api"));
+    expect(error.code).toBe("NETWORK");
+    expect(error.status).toBe(0);
+    expect(error.details?.body).toBe("");
+    expect(error.message).toBe("GitHub: network request failed.");
+  });
+
+  test("strips tokens, authorization headers, and URL userinfo from response details", async () => {
+    const body =
+      'Authorization: Bearer header-secret\nhttps://user:url-secret@example.org/repo\n{"echo":"example-secret"}';
+    const client = createGitHubClient({
+      token: "example-secret",
+      fetch: (async (_url: string | URL | Request) =>
+        new Response(body, { status: 401 })) as typeof fetch,
+    });
+    const error = await failureFrom<GitHubError>(client.getRepository("example-org", "sample-api"));
+    expect(error.code).toBe("AUTH_FAILED");
+    for (const secret of ["example-secret", "header-secret", "url-secret"]) {
+      expect(error.message).not.toContain(secret);
+      expect(error.details?.body).not.toContain(secret);
+    }
+    expect(error.details?.body).toContain("https://example.org/repo");
   });
 });

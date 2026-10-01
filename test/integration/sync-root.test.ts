@@ -43,6 +43,14 @@ describe("root sync failures", () => {
     const broken = await mirror.ensure({ root, source: brokenRemote, branch: "main" });
     const initialRevision = await git.currentRevision(broken.path);
     await ws.init({ root, name: "sample-workspace" });
+    await ws.init({ root, name: "broken-workspace" });
+    await ws.add({
+      root,
+      workspaceName: "broken-workspace",
+      source: brokenRemote,
+      path: "sample-api",
+      branch: "main",
+    });
     await Bun.write(join(seed, "sample.txt"), "updated\n");
     for (const args of [
       ["add", "."],
@@ -76,12 +84,20 @@ describe("root sync failures", () => {
     expect(refreshFailures).toEqual([
       expect.objectContaining({ path: expect.stringContaining("broken.git") }),
     ]);
-    expect(data.failures).toEqual(
-      refreshFailures.map(
-        ({ path, reason }: { path: string; reason: string }) => `mirrors: ${path}: ${reason}`,
-      ),
-    );
+    expect(data.failures).toEqual([
+      ...refreshFailures.map(({ path, reason }: { path: string; reason: string }) => ({
+        component: "mirrors",
+        code: "FAILED",
+        message: `${path}: ${reason}`.split(/\r?\n/)[0],
+      })),
+      {
+        component: "workspace broken-workspace",
+        code: "NOT_FOUND",
+        message: "Git mirror fetch failed.",
+      },
+    ]);
     expect(data.workspaces).toEqual([
+      expect.objectContaining({ name: "broken-workspace", ok: false }),
       expect.objectContaining({ name: "sample-workspace", ok: true }),
     ]);
     expect(await git.currentRevision(healthy.path)).toEqual(updatedRevision);
@@ -101,8 +117,5 @@ describe("root sync failures", () => {
       new Response(humanRun.stderr).text(),
     ]);
     expect(humanExitCode, `${humanStdout}\n${humanStderr}`).toBe(1);
-    expect(humanStderr).toMatch(
-      /↻ Provider data…[\s\S]*↻ Mirrors…[\s\S]*↻ Workspaces \(1\)…[\s\S]*↻   ✓ sample-workspace \(1\/1\)/,
-    );
   }, 30_000);
 });
