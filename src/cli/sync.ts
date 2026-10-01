@@ -110,7 +110,10 @@ export const syncInventoryCommand = defineCommand({
       },
     });
 
-    return errors.length > 0 && results.length === 0 ? 1 : 0;
+    // citty drops a nested command's return value, so report the exit code explicitly.
+    const failed = errors.length > 0 && results.length === 0;
+    if (failed) reportExitCode(1);
+    return failed ? 1 : 0;
   },
 });
 
