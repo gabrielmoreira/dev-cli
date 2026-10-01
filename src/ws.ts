@@ -114,9 +114,15 @@ export interface WorkspaceDeps {
   git: typeof git;
   shell: typeof shell;
   trust: typeof trust;
+  interactions?: {
+    chooseUnlockBranch?(context: {
+      path: string;
+      adminRepoPath: string;
+    }): Promise<string | undefined>;
+  };
 }
 
-const defaultDeps: WorkspaceDeps = {
+export const defaultDeps: WorkspaceDeps = {
   fs,
   manifest,
   git,
@@ -1830,8 +1836,27 @@ export async function unlock(
       const worktreePath = join(workspacePath, mount.path);
       let targetBranch = input.branch;
       if (!targetBranch) {
-        const observed = await deps.git.inspectWorktree(worktreePath);
-        targetBranch = observed.currentRevision?.branch || "main";
+        const sourceKey = deps.git.normalizeSourceKey(mount.source);
+        const adminRepoPath = workspaceAdminRepoPath({
+          root: input.root,
+          workspaceName: input.workspaceName,
+          sourceKey,
+        });
+        const defaultBranch = await deps.git.resolveDefaultBranch(adminRepoPath);
+        const hasDefault = await deps.git.hasRevision(adminRepoPath, {
+          mode: "track",
+          branch: defaultBranch,
+        });
+        targetBranch = hasDefault
+          ? defaultBranch
+          : await deps.interactions?.chooseUnlockBranch?.({ path: mount.path, adminRepoPath });
+        if (!targetBranch) {
+          throw new WorkspaceError(
+            "INTERACTION_REQUIRED",
+            `Could not infer a branch for mount '${mount.path}'. Pass [branch] to ws unlock.`,
+            { path: mount.path, adminRepoPath, required: "[branch]" },
+          );
+        }
       }
 
       if (deps.fs.exists(worktreePath)) {
