@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { chmod, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 
@@ -167,12 +167,23 @@ hooks:
 
   it("does not run vector embedding when qmd sync receives --no-embed", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "dev-cli-qmd-no-embed-"));
-    const qmdScript = join(rootDir, "qmd-stub");
+    const binDir = join(rootDir, "bin");
+    const qmdScript = join(binDir, process.platform === "win32" ? "qmd-stub.ts" : "qmd-stub");
+    const qmdCommand = process.platform === "win32" ? join(binDir, "qmd.cmd") : qmdScript;
     const callsFile = join(rootDir, "qmd-calls.log");
 
     try {
-      await fs.writeText(qmdScript, '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$QMD_CALLS"\n');
-      await chmod(qmdScript, 0o755);
+      await mkdir(binDir);
+      if (process.platform === "win32") {
+        await fs.writeText(
+          qmdScript,
+          'import { appendFile } from "node:fs/promises";\nawait appendFile(process.env.QMD_CALLS!, Bun.argv.slice(2).join(" ") + "\\n");\n',
+        );
+        await fs.writeText(qmdCommand, '@echo off\r\nbun "%~dp0qmd-stub.ts" %*\r\n');
+      } else {
+        await fs.writeText(qmdScript, '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$QMD_CALLS"\n');
+        await chmod(qmdScript, 0o755);
+      }
       await fs.writeText(
         join(rootDir, "dev.yaml"),
         [
@@ -183,7 +194,7 @@ hooks:
           '      "index:demo": {}',
           "plugins:",
           "  qmd:",
-          `    command: ${JSON.stringify(qmdScript)}`,
+          `    command: ${JSON.stringify(qmdCommand)}`,
           "    config_dir: scoped",
           "",
         ].join("\n"),
@@ -192,13 +203,19 @@ hooks:
       const syncProc = Bun.spawn(
         ["bun", "run", cliPath, "qmd", "sync", "index:demo", "--no-embed", "--root", rootDir],
         {
-          env: { ...process.env, QMD_CALLS: callsFile },
+          env: {
+            ...process.env,
+            PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
+            QMD_CALLS: callsFile,
+          },
           stdout: "pipe",
           stderr: "pipe",
         },
       );
 
-      expect(await syncProc.exited).toBe(0);
+      const stderr = await new Response(syncProc.stderr).text();
+      expect(await syncProc.exited, stderr).toBe(0);
+      expect(fs.exists(callsFile), "fake qmd was never invoked").toBe(true);
       const calls = (await fs.readText(callsFile)).trim().split("\n");
       expect(calls).toContain("update");
       expect(calls).not.toContain("embed");
@@ -209,28 +226,43 @@ hooks:
 
   it("keeps MCP stdio connected through qmd x", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "dev-cli-qmd-mcp-"));
-    const qmdScript = join(rootDir, "qmd-stub");
+    const binDir = join(rootDir, "bin");
+    const qmdScript = join(binDir, process.platform === "win32" ? "qmd-stub.ts" : "qmd-stub");
+    const qmdCommand = process.platform === "win32" ? join(binDir, "qmd.cmd") : qmdScript;
     const argsFile = join(rootDir, "qmd-args.log");
 
     try {
-      await fs.writeText(
-        qmdScript,
-        '#!/bin/sh\nprintf \'%s\\n\' "$*" > "$QMD_ARGS"\nIFS= read -r line\nprintf \'%s\\n\' "$line"\n',
-      );
-      await chmod(qmdScript, 0o755);
+      await mkdir(binDir);
+      if (process.platform === "win32") {
+        await fs.writeText(
+          qmdScript,
+          'import { writeFile } from "node:fs/promises";\nawait writeFile(process.env.QMD_ARGS!, Bun.argv.slice(2).join(" "));\nprocess.stdin.pipe(process.stdout);\n',
+        );
+        await fs.writeText(qmdCommand, '@echo off\r\nbun "%~dp0qmd-stub.ts" %*\r\n');
+      } else {
+        await fs.writeText(
+          qmdScript,
+          '#!/bin/sh\nprintf \'%s\\n\' "$*" > "$QMD_ARGS"\nIFS= read -r line\nprintf \'%s\\n\' "$line"\n',
+        );
+        await chmod(qmdScript, 0o755);
+      }
       await fs.writeText(
         join(rootDir, "dev.yaml"),
         [
           "plugins:",
           "  qmd:",
-          `    command: ${JSON.stringify(qmdScript)}`,
+          `    command: ${JSON.stringify(qmdCommand)}`,
           "    config_dir: scoped",
           "",
         ].join("\n"),
       );
 
       const mcpProc = Bun.spawn(["bun", "run", cliPath, "qmd", "x", "--root", rootDir, "mcp"], {
-        env: { ...process.env, QMD_ARGS: argsFile },
+        env: {
+          ...process.env,
+          PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
+          QMD_ARGS: argsFile,
+        },
         stdin: "pipe",
         stdout: "pipe",
         stderr: "pipe",
@@ -240,7 +272,9 @@ hooks:
       await mcpProc.stdin.end();
       const stdout = await new Response(mcpProc.stdout).text();
 
-      expect(await mcpProc.exited).toBe(0);
+      const stderr = await new Response(mcpProc.stderr).text();
+      expect(await mcpProc.exited, stderr).toBe(0);
+      expect(fs.exists(argsFile), "fake qmd was never invoked").toBe(true);
       expect((await fs.readText(argsFile)).trim()).toBe("mcp");
       expect(stdout.trim()).toBe(request);
     } finally {
