@@ -121,6 +121,8 @@ Invoke-Expression (dev shell-init powershell | Out-String)
 
 `dev ws jump` uses the configured workspace prefix and returns `WORKSPACE_NOT_FOUND` for missing or non-directory targets without printing a path or recording recent use.
 
+`dev ws path` also uses `defaults.workspace_prefix` from `dev.yaml`. Shell wrappers use this resolved path for workspace-name shortcuts, including roots configured with a custom prefix.
+
 Workspace shortcuts only change directory when the resolved path exists. Otherwise, the wrapper runs the original CLI command so its error and exit code reach your shell.
 
 When `dev` is not on your `PATH` but a checkout is, generate wrappers that run it through Mise:
