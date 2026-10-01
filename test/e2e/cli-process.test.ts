@@ -59,4 +59,18 @@ describe("CLI Process E2E (Phase 0)", () => {
     expect(error.command).toBe("not-a-command");
     expect(error.nextStep).toBe("dev --help");
   });
+
+  it("returns a structured usage error for an unknown nested command in JSON mode", async () => {
+    const proc = Bun.spawn(["bun", "run", cliPath, "ws", "nonexistent-command", "--json"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    expect(await proc.exited).toBe(2);
+    expect(stdout).toBe("");
+    const error = JSON.parse(stderr).error;
+    expect(error.code).toBe("UNKNOWN_COMMAND");
+    expect(error.nextStep).toBe("dev ws --help");
+  });
 });
