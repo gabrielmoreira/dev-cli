@@ -31,13 +31,19 @@ export function generateShellInit(shellType: string, runner: ShellRunner = "dire
   const norm = (shellType || "bash").toLowerCase().trim();
   const posixDev = runner === "mise" ? "mise run dev --" : "command dev";
   const powerShellDev =
-    runner === "mise" ? "& mise run dev --" : "& (Get-Command -CommandType Application dev)";
+    runner === "mise"
+      ? "& mise run dev --"
+      : "& (Get-Command -CommandType Application dev | Select-Object -First 1)";
   if (norm === "powershell" || norm === "pwsh") {
     return `# dev CLI shell integration for PowerShell
 function dev {
+    if ($args -contains '--json') {
+        ${powerShellDev} @args
+        return
+    }
     if ($args.Count -ge 1 -and $args[0] -eq 'go') {
         $goArgs = if ($args.Count -gt 1) { $args[1..($args.Count - 1)] } else { @() }
-        $target = (${powerShellDev} go --candidates @goArgs | fzf --select-1 --exit-0)
+        $target = (${powerShellDev} go @goArgs)
         if ($LASTEXITCODE -eq 0 -and $target) {
             Set-Location -LiteralPath $target
         }
@@ -76,8 +82,12 @@ function ws {
   if (norm === "fish") {
     return `# dev CLI shell integration for fish
 function dev
+    if contains -- --json $argv
+        ${posixDev} $argv
+        return $status
+    end
     if test (count $argv) -ge 1; and test "$argv[1]" = "go"
-        set -l target (${posixDev} go --candidates $argv[2..-1] | fzf --select-1 --exit-0)
+        set -l target (${posixDev} go $argv[2..-1])
         if test $status -eq 0; and test -n "$target"
             cd "$target"
         end
@@ -109,10 +119,17 @@ end
   // Default: bash and zsh
   return `# dev CLI shell integration for bash/zsh
 dev() {
+  local arg
+  for arg in "$@"; do
+    if [ "$arg" = "--json" ]; then
+      ${posixDev} "$@"
+      return $?
+    fi
+  done
   if [ "$1" = "go" ]; then
     shift
     local target
-    target=$(${posixDev} go --candidates "$@" | fzf --select-1 --exit-0)
+    target=$(${posixDev} go "$@")
     if [ $? -eq 0 ] && [ -n "$target" ]; then
       cd "$target" || return 1
     fi

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 
@@ -178,4 +178,63 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
     const repoPickJson = JSON.parse(await new Response(repoPickProc.stdout).text());
     expect(repoPickJson).toBeDefined();
   });
+
+  for (const shell of ["bash", "pwsh"] as const) {
+    const executable =
+      shell === "bash" && process.platform === "win32"
+        ? join(dirname(Bun.which("git")!), "..", "bin", "bash.exe")
+        : Bun.which(shell);
+    it.skipIf(!executable)(
+      `dev go --json prints JSON without changing directory in ${shell}`,
+      async () => {
+        const name = `json-${shell}`;
+        const init = Bun.spawn(
+          [process.execPath, cliPath, "ws", "init", name, "--root", tempRoot],
+          {
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        expect(await init.exited).toBe(0);
+        const bin = join(tempRoot, `${shell}-bin`);
+        const bun = process.execPath.replace(/\\/g, "/");
+        const cli = cliPath.replace(/\\/g, "/");
+        if (shell === "bash" || process.platform !== "win32") {
+          await fs.writeText(join(bin, "dev"), `#!/bin/sh\nexec '${bun}' '${cli}' "$@"\n`);
+          await chmod(join(bin, "dev"), 0o755);
+        } else {
+          await fs.writeText(
+            join(bin, "dev.cmd"),
+            `@echo off\r\n"${process.execPath}" "${cliPath}" %*\r\n`,
+          );
+        }
+        const root = tempRoot.replace(/\\/g, "/");
+        const script =
+          shell === "bash"
+            ? `eval "$(dev shell-init bash)"; dev go '${name}' --root '${root}' --json; printf '\\nCWD:%s\\n' "$(pwd -W 2>/dev/null || pwd)"`
+            : `Invoke-Expression (dev shell-init pwsh | Out-String); dev go '${name}' --root '${root}' --json; Write-Output "CWD:$($PWD.Path)"`;
+        const env = { ...process.env };
+        for (const key of Object.keys(env)) {
+          if (key.toLowerCase() === "path") delete env[key];
+        }
+        env.PATH = shell === "pwsh" ? bin : `${bin}${delimiter}${process.env.PATH}`;
+        const proc = Bun.spawn(
+          [executable!, ...(shell === "bash" ? ["-c"] : ["-NoProfile", "-Command"]), script],
+          {
+            cwd: tempRoot,
+            env,
+            stdout: "pipe",
+            stderr: "pipe",
+          },
+        );
+        const stdout = await new Response(proc.stdout).text();
+        const stderr = await new Response(proc.stderr).text();
+        expect(await proc.exited).toBe(0);
+        expect(stderr).toBe("");
+        const [json, cwd] = stdout.trim().split(/\r?\nCWD:/);
+        expect(JSON.parse(json!)).toMatchObject({ name, path: join(tempRoot, "ws", name) });
+        expect(resolve(cwd!)).toBe(resolve(tempRoot));
+      },
+    );
+  }
 });

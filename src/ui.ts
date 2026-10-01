@@ -164,9 +164,11 @@ export const ui = {
   async select<T extends string>(
     message: string,
     options: { label: string; value: T }[],
+    stream?: { output: NodeJS.WriteStream },
   ): Promise<T> {
     const selection = await autocomplete<string>({
       message,
+      output: stream?.output,
       placeholder: "Type to search...",
       maxItems: 10,
       options() {

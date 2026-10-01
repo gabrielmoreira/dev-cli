@@ -475,21 +475,57 @@ describe("smart CLI input", () => {
     ).toBe(0);
     expect(logs).toEqual([join(root, "ws", "older-workspace")]);
     prompt.mockRestore();
+  });
 
-    logs = [];
-    expect(
-      await runCli({
-        argv: ["go", "--candidates", "--root", root],
-        cwd: root,
-        env: {},
-        isTTY: false,
-      }),
-    ).toBe(0);
-    expect(logs.join("\n").split("\n")).toEqual([
-      join(root, "ws", "newest-workspace"),
-      join(root, "ws", "middle-workspace"),
-      join(root, "ws", "older-workspace"),
-    ]);
+  test("go refuses ambiguity when no interactive person is present", async () => {
+    for (const name of ["alpha-one", "alpha-two"]) {
+      expect(
+        await runCli({
+          argv: ["ws", "init", name, "--root", root],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        }),
+      ).toBe(0);
+    }
+    for (const constraint of [
+      { stdinIsTTY: true, stderrIsTTY: false, env: {} },
+      { stdinIsTTY: false, stderrIsTTY: true, env: {} },
+      { stdinIsTTY: true, stderrIsTTY: true, env: { CI: "1" } },
+      ...[
+        "AI_AGENT",
+        "AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE",
+        "CURSOR_AGENT",
+        "GEMINI_CLI",
+        "CODEX_SANDBOX",
+      ].map((name) => ({
+        stdinIsTTY: true,
+        stderrIsTTY: true,
+        env: { [name]: "1" },
+      })),
+      { stdinIsTTY: true, stderrIsTTY: true, env: {}, json: true },
+    ]) {
+      errors = [];
+      const json = "json" in constraint;
+      expect(
+        await runCli({
+          argv: ["go", "alpha", "--root", root, ...(json ? ["--json"] : [])],
+          cwd: root,
+          isTTY: false,
+          ...constraint,
+        }),
+      ).toBe(2);
+      expect(errors.join("\n")).toContain("dev go <query>");
+      if (json) {
+        expect(JSON.parse(errors.join("\n")).error).toMatchObject({
+          code: "INTERACTION_REQUIRED",
+          field: "query",
+          choices: expect.arrayContaining(["alpha-one", "alpha-two"]),
+        });
+      }
+    }
   });
 
   test("mounts every repository selected by the searchable multi-select", async () => {

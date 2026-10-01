@@ -8,6 +8,7 @@ export interface AmbientContext {
   env: Record<string, string | undefined>;
   isTTY: boolean;
   stdinIsTTY?: boolean;
+  stderrIsTTY?: boolean;
 }
 
 let currentAmbient: AmbientContext = {
@@ -16,6 +17,7 @@ let currentAmbient: AmbientContext = {
   env: { ...process.env },
   isTTY: Boolean(process.stdout.isTTY),
   stdinIsTTY: Boolean(process.stdin.isTTY),
+  stderrIsTTY: Boolean(process.stderr.isTTY),
 };
 
 export function getAmbient(): AmbientContext {

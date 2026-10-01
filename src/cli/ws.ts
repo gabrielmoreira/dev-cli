@@ -23,7 +23,7 @@ import { createGitHubClient } from "../github.ts";
 import * as prWorkspace from "../pr-workspace.ts";
 import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
-import { resolveConfirmation, resolveTextInput } from "./input.ts";
+import { CliInputRequiredError, resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInputs } from "./repository-input.ts";
 import {
   matchesWorkspaceQuery,
@@ -1474,10 +1474,6 @@ export const wsGoCommand = defineCommand({
   },
   args: {
     query: { type: "positional", description: "Workspace name or fuzzy query", required: false },
-    candidates: {
-      type: "boolean",
-      description: "Print matching workspace candidates for shell integration",
-    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -1508,19 +1504,23 @@ export const wsGoCommand = defineCommand({
       );
     }
 
-    if (args.candidates) {
-      ui.log(workspaces.map((workspace) => workspace.path).join("\n"));
-      return 0;
-    }
-
     const exact = query
       ? workspaces.find((workspace) => workspace.name.toLowerCase() === query.toLowerCase())
       : undefined;
     let selected = exact ?? (workspaces.length === 1 ? workspaces[0] : undefined);
     if (!selected) {
-      if (!canPrompt(getAmbient())) {
+      // The wrapper captures stdout; draw the list on stderr when stdin and stderr are terminals.
+      const ambient = getAmbient();
+      const viaStderr = !ambient.isTTY && Boolean(ambient.stderrIsTTY);
+      if (!canPrompt(viaStderr ? { ...ambient, isTTY: true } : ambient)) {
         return reportError(
-          "Multiple workspaces match. Run 'dev go' from an interactive shell.",
+          new CliInputRequiredError({
+            command: "go",
+            field: "query",
+            usage: "dev go <query>",
+            description: "An unambiguous workspace query (dev go <query>)",
+            choices: workspaces.map((workspace) => workspace.name),
+          }),
           args.json,
         );
       }
@@ -1532,6 +1532,7 @@ export const wsGoCommand = defineCommand({
             : workspace.name,
           value: workspace.name,
         })),
+        viaStderr ? { output: process.stderr } : undefined,
       );
       selected = workspaces.find((workspace) => workspace.name === name);
     }

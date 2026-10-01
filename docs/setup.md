@@ -113,7 +113,7 @@ dev shell-init fish | source
 Invoke-Expression (dev shell-init powershell | Out-String)
 ```
 
-`dev go` pipes its candidates through [fzf](https://github.com/junegunn/fzf) for fuzzy search; install it for the picker. `dev go <query>` with a unique match skips the picker.
+`dev go` asks with a fuzzy-searchable list when several workspaces match; `dev go <query>` with a unique match skips the question.
 
 When `dev` is not on your `PATH` but a checkout is, generate wrappers that run it through Mise:
 

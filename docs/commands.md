@@ -98,14 +98,13 @@ Switch active dev root environment or update global default
 
 Select a workspace and print its path for shell navigation
 
-**Usage:** `dev go [query] [--candidates] [--root <value>] [--json]`
+**Usage:** `dev go [query] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                               |
-| ---------------- | ---------- | --------------------------------------------------------- |
-| `query`          | positional | Workspace name or fuzzy query                             |
-| `--candidates`   | boolean    | Print matching workspace candidates for shell integration |
-| `--root <value>` | string     | Explicit dev root directory                               |
-| `--json`         | boolean    | Output in structured JSON format                          |
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `query`          | positional | Workspace name or fuzzy query    |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
 
 ## `dev start`
 
