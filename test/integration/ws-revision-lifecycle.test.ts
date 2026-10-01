@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
@@ -86,6 +86,18 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
     expect(manifestData).toContain("mode: lock");
     expect(manifestData).toContain(lockRes.lockedMounts[0].commit);
 
+    const beforeLockNoop = await stat(manifestPath, { bigint: true });
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    const lockAgain = await ws.lock({
+      root: tempRoot,
+      workspaceName: "rev-ws",
+      mountPath: "core-repo",
+    });
+    expect(lockAgain.changed).toBe(false);
+    expect(lockAgain.lockedMounts[0]?.commit).toBe(lockRes.lockedMounts[0]?.commit);
+    expect(lockAgain.healWarnings).toEqual(lockRes.healWarnings);
+    expect((await stat(manifestPath, { bigint: true })).mtimeNs).toBe(beforeLockNoop.mtimeNs);
+
     // 3. Unlock back to branch feature/lifecycle
     const unlockRes = await ws.unlock({
       root: tempRoot,
@@ -104,6 +116,28 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
     const inspected = await git.inspectWorktree(worktreePath);
     expect(inspected.currentRevision.branch).toBe("feature/lifecycle");
 
+    const beforeUnlockNoop = await stat(manifestPath, { bigint: true });
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    const unlockAgain = await ws.unlock({
+      root: tempRoot,
+      workspaceName: "rev-ws",
+      mountPath: "core-repo",
+      branch: "feature/lifecycle",
+    });
+    expect(unlockAgain.changed).toBe(false);
+    expect(unlockAgain.unlockedMounts[0]?.branch).toBe("feature/lifecycle");
+    expect(unlockAgain.healWarnings).toEqual(unlockRes.healWarnings);
+    expect((await stat(manifestPath, { bigint: true })).mtimeNs).toBe(beforeUnlockNoop.mtimeNs);
+
+    const unlockInferred = await ws.unlock({
+      root: tempRoot,
+      workspaceName: "rev-ws",
+      mountPath: "core-repo",
+    });
+    expect(unlockInferred.changed).toBe(false);
+    expect(unlockInferred.unlockedMounts[0]?.branch).toBe("feature/lifecycle");
+    expect((await stat(manifestPath, { bigint: true })).mtimeNs).toBe(beforeUnlockNoop.mtimeNs);
+
     // 4. Pin to tag v1.0.0
     const tagRes = await ws.tag({
       root: tempRoot,
@@ -116,6 +150,20 @@ describe("Workspace revision lifecycle & reconciliation integration (Phase 6)", 
     manifestData = await Bun.file(manifestPath).text();
     expect(manifestData).toContain("mode: tag");
     expect(manifestData).toContain("tag: v1.0.0");
+
+    const beforeTagNoop = await stat(manifestPath, { bigint: true });
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+    const tagAgain = await ws.tag({
+      root: tempRoot,
+      workspaceName: "rev-ws",
+      mountPath: "core-repo",
+      tag: "v1.0.0",
+    });
+    expect(tagAgain.changed).toBe(false);
+    expect(tagAgain.tag).toBe("v1.0.0");
+    expect(tagAgain.path).toBe(tagRes.path);
+    expect(tagAgain.healWarnings).toEqual(tagRes.healWarnings);
+    expect((await stat(manifestPath, { bigint: true })).mtimeNs).toBe(beforeTagNoop.mtimeNs);
 
     // 5. Track branch main again
     await ws.track({

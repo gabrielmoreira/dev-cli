@@ -1809,7 +1809,11 @@ export interface WorkspaceLockInput {
 export async function lock(
   input: WorkspaceLockInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ lockedMounts: { path: string; commit: string }[]; healWarnings: string[] }> {
+): Promise<{
+  lockedMounts: { path: string; commit: string }[];
+  healWarnings: string[];
+  changed: boolean;
+}> {
   const {
     workspacePath,
     manifestPath,
@@ -1822,13 +1826,16 @@ export async function lock(
       : currentManifest.mounts;
 
     const lockedResults: { path: string; commit: string }[] = [];
+    let changed = false;
 
     for (const mount of targetMounts) {
       const worktreePath = join(workspacePath, mount.path);
+      const observed = deps.fs.exists(worktreePath)
+        ? await deps.git.inspectWorktree(worktreePath)
+        : undefined;
       let commitSha = input.commit;
       if (!commitSha) {
-        const observed = await deps.git.inspectWorktree(worktreePath);
-        commitSha = observed.currentRevision?.commitSha;
+        commitSha = observed?.currentRevision.commitSha;
         if (!commitSha) {
           throw new WorkspaceError(
             "CANNOT_DETERMINE_COMMIT",
@@ -1836,20 +1843,29 @@ export async function lock(
           );
         }
       }
+      if (
+        mount.revision.mode !== "lock" ||
+        mount.revision.commit !== commitSha ||
+        (observed && !observed.currentRevision.commitSha?.startsWith(commitSha))
+      ) {
+        changed = true;
+      }
 
       lockedResults.push({ path: mount.path, commit: commitSha });
     }
 
-    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
-      for (const locked of lockedResults) {
-        const { mount, index } = findMountOrThrow(doc.manifest, locked.path);
-        doc.manifest.mounts[index] = transitionRevision(mount, {
-          mode: "lock",
-          commit: locked.commit,
-        });
-      }
-    });
-    return { lockedMounts: lockedResults, healWarnings };
+    if (changed) {
+      await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+        for (const locked of lockedResults) {
+          const { mount, index } = findMountOrThrow(doc.manifest, locked.path);
+          doc.manifest.mounts[index] = transitionRevision(mount, {
+            mode: "lock",
+            commit: locked.commit,
+          });
+        }
+      });
+    }
+    return { lockedMounts: lockedResults, healWarnings, changed };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
   }
@@ -1866,7 +1882,11 @@ export interface WorkspaceUnlockInput {
 export async function unlock(
   input: WorkspaceUnlockInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ unlockedMounts: { path: string; branch: string }[]; healWarnings: string[] }> {
+): Promise<{
+  unlockedMounts: { path: string; branch: string }[];
+  healWarnings: string[];
+  changed: boolean;
+}> {
   const {
     workspacePath,
     manifestPath,
@@ -1879,10 +1899,21 @@ export async function unlock(
       : currentManifest.mounts;
 
     const unlockedResults: { path: string; branch: string }[] = [];
+    let changed = false;
 
     for (const mount of targetMounts) {
       const worktreePath = join(workspacePath, mount.path);
+      const observed = deps.fs.exists(worktreePath)
+        ? await deps.git.inspectWorktree(worktreePath)
+        : undefined;
       let targetBranch = input.branch;
+      if (
+        !targetBranch &&
+        mount.revision.mode === "track" &&
+        observed?.currentRevision.branch === mount.revision.branch
+      ) {
+        targetBranch = mount.revision.branch;
+      }
       if (!targetBranch) {
         const sourceKey = deps.git.normalizeSourceKey(mount.source);
         const adminRepoPath = workspaceAdminRepoPath({
@@ -1905,24 +1936,33 @@ export async function unlock(
           );
         }
       }
-
-      if (deps.fs.exists(worktreePath)) {
-        await deps.git.switchBranch(worktreePath, targetBranch);
+      if (
+        mount.revision.mode === "track" &&
+        mount.revision.branch === targetBranch &&
+        (!observed || observed.currentRevision.branch === targetBranch)
+      ) {
+        unlockedResults.push({ path: mount.path, branch: targetBranch });
+        continue;
       }
+
+      if (observed) await deps.git.switchBranch(worktreePath, targetBranch);
 
       unlockedResults.push({ path: mount.path, branch: targetBranch });
+      changed = true;
     }
 
-    await deps.manifest.updateWorkspace(manifestPath, (doc) => {
-      for (const unlocked of unlockedResults) {
-        const { mount, index } = findMountOrThrow(doc.manifest, unlocked.path);
-        doc.manifest.mounts[index] = transitionRevision(mount, {
-          mode: "track",
-          branch: unlocked.branch,
-        });
-      }
-    });
-    return { unlockedMounts: unlockedResults, healWarnings };
+    if (changed) {
+      await deps.manifest.updateWorkspace(manifestPath, (doc) => {
+        for (const unlocked of unlockedResults) {
+          const { mount, index } = findMountOrThrow(doc.manifest, unlocked.path);
+          doc.manifest.mounts[index] = transitionRevision(mount, {
+            mode: "track",
+            branch: unlocked.branch,
+          });
+        }
+      });
+    }
+    return { unlockedMounts: unlockedResults, healWarnings, changed };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
   }
@@ -1939,7 +1979,7 @@ export interface WorkspaceTagInput {
 export async function tag(
   input: WorkspaceTagInput,
   deps: WorkspaceDeps = defaultDeps,
-): Promise<{ path: string; tag: string; healWarnings: string[] }> {
+): Promise<{ path: string; tag: string; healWarnings: string[]; changed: boolean }> {
   const {
     workspacePath,
     manifestPath,
@@ -1947,19 +1987,26 @@ export async function tag(
     healWarnings,
   } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
   try {
-    findMountOrThrow(currentManifest, input.mountPath);
+    const { mount } = findMountOrThrow(currentManifest, input.mountPath);
 
     const worktreePath = join(workspacePath, input.mountPath);
-    if (deps.fs.exists(worktreePath)) {
-      const observed = await deps.git.inspectWorktree(worktreePath);
-      if (observed.isDirty) {
-        throw new WorkspaceError(
-          "DIRTY_WORKTREE",
-          `Cannot tag mount '${input.mountPath}': worktree has uncommitted changes`,
-        );
-      }
-      await deps.git.checkoutRevision(worktreePath, input.tag);
+    const observed = deps.fs.exists(worktreePath)
+      ? await deps.git.inspectWorktree(worktreePath)
+      : undefined;
+    if (
+      mount.revision.mode === "tag" &&
+      mount.revision.tag === input.tag &&
+      (!observed || observed.currentRevision.tag === input.tag)
+    ) {
+      return { path: input.mountPath, tag: input.tag, healWarnings, changed: false };
     }
+    if (observed?.isDirty) {
+      throw new WorkspaceError(
+        "DIRTY_WORKTREE",
+        `Cannot tag mount '${input.mountPath}': worktree has uncommitted changes`,
+      );
+    }
+    if (observed) await deps.git.checkoutRevision(worktreePath, input.tag);
 
     await deps.manifest.updateWorkspace(manifestPath, (doc) => {
       const { mount, index } = findMountOrThrow(doc.manifest, input.mountPath);
@@ -1968,7 +2015,7 @@ export async function tag(
         tag: input.tag,
       });
     });
-    return { path: input.mountPath, tag: input.tag, healWarnings };
+    return { path: input.mountPath, tag: input.tag, healWarnings, changed: true };
   } catch (error) {
     throw withHealWarnings(error, healWarnings);
   }

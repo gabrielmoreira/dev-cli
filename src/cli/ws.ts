@@ -1093,6 +1093,7 @@ export const wsLockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
+          if (!result.changed) return "No revision changes required.";
           let out = "";
           for (const m of result.lockedMounts) {
             out += `Mount '${m.path}' locked to commit ${m.commit.slice(0, 8)}.\n`;
@@ -1188,6 +1189,7 @@ export const wsUnlockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
+          if (!result.changed) return "No revision changes required.";
           let out = "";
           for (const m of result.unlockedMounts) {
             out += `Mount '${m.path}' unlocked to track branch '${m.branch}'.\n`;
@@ -1256,7 +1258,10 @@ export const wsTagCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => `Mount '${result.path}' pinned to tag '${result.tag}'.`,
+        text: () =>
+          result.changed
+            ? `Mount '${result.path}' pinned to tag '${result.tag}'.`
+            : `Mount '${result.path}' is already pinned to tag '${result.tag}'.`,
       });
       return 0;
     } catch (error) {
