@@ -306,7 +306,7 @@ export const labelAddCommand = defineCommand({
         if (!target.declared) labels.upsertSourceDeclaration(doc, target.selector);
         labels.setSourceLabel(doc, target.selector, label, target.meta);
       }
-      config.writeConfig?.();
+      await config.writeConfig?.();
       const base = createPluginBase(config.root, config);
       for (const target of targets) {
         await emit(base, "label:add:after", {
@@ -424,7 +424,7 @@ export const labelRmCommand = defineCommand({
       for (const source of chosen) {
         labels.setSourceLabel(config.configDoc!, labels.selectorOf(source), label, undefined);
       }
-      config.writeConfig?.();
+      await config.writeConfig?.();
       const base = createPluginBase(config.root, config);
       for (const source of chosen) {
         await emit(base, "label:rm:after", {
@@ -503,7 +503,7 @@ export const labelRenameCommand = defineCommand({
           args.json,
         );
       }
-      config.writeConfig?.();
+      await config.writeConfig?.();
       ui.result({
         data: { from, to, ...renamed },
         json: args.json,

@@ -139,7 +139,7 @@ export const initCommand = defineCommand({
         content += `  enabled: true\n\n`;
       }
 
-      await fs.writeText(devYamlPath, content);
+      await fs.writeTextAtomic(devYamlPath, content);
     }
 
     const agentsPath = resolve(targetDir, "AGENTS.md");

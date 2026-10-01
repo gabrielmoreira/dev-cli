@@ -87,7 +87,7 @@ export const worksetCreateCommand = defineCommand({
         ui.log(renderWorkset(config, name.value, draft));
         if (!(await ui.confirm("Create this workset?", true))) return 0;
       }
-      const { definition, created } = workset.createWorkset(config, name.value, draft);
+      const { definition, created } = await workset.createWorkset(config, name.value, draft);
       ui.result({
         data: { name: name.value, created, ...definition },
         json: args.json,
@@ -138,7 +138,7 @@ export const worksetRenameCommand = defineCommand({
         },
         ambient,
       });
-      const definition = workset.renameWorkset(config, current.value, next.value);
+      const definition = await workset.renameWorkset(config, current.value, next.value);
       ui.result({
         data: { name: next.value, ...definition },
         json: args.json,
@@ -360,7 +360,7 @@ export const worksetManageCommand = defineCommand({
       ui.log(renderWorkset(config, name, draft));
       if (!(await ui.confirm("Save this workset?", true))) continue;
       try {
-        const definition = workset.saveWorksetDraft(config, originalName, name, draft);
+        const definition = await workset.saveWorksetDraft(config, originalName, name, draft);
         ui.result({
           data: { name, ...definition },
           json: args.json,
@@ -446,7 +446,11 @@ export const worksetRepoAddCommand = defineCommand({
         ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
         if (!(await ui.confirm("Add this repository?", true))) return 0;
       }
-      const { definition, added } = workset.addWorksetMember(config, selectedWorkset.value, member);
+      const { definition, added } = await workset.addWorksetMember(
+        config,
+        selectedWorkset.value,
+        member,
+      );
       ui.result({
         data: { name: selectedWorkset.value, added, ...definition },
         json: args.json,
@@ -543,7 +547,7 @@ export const worksetRepoEditCommand = defineCommand({
       if (canPrompt(ambient) && !args.yes) {
         if (!(await ui.confirm("Update this repository?", true))) return 0;
       }
-      const definition = workset.editWorksetMember(
+      const definition = await workset.editWorksetMember(
         config,
         selectedWorkset.value,
         selectedMember.value,
@@ -623,7 +627,7 @@ export const worksetRepoRemoveCommand = defineCommand({
         ambient,
       });
       if (!confirmed) return 0;
-      const definition = workset.removeWorksetMember(
+      const definition = await workset.removeWorksetMember(
         config,
         selectedWorkset.value,
         selectedMember.value,
@@ -705,7 +709,11 @@ export const worksetLabelAddCommand = defineCommand({
         ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
         if (!(await ui.confirm("Add this label?", true))) return 0;
       }
-      const { definition, added } = workset.addWorksetMember(config, selectedWorkset.value, member);
+      const { definition, added } = await workset.addWorksetMember(
+        config,
+        selectedWorkset.value,
+        member,
+      );
       ui.result({
         data: { name: selectedWorkset.value, added, ...definition },
         json: args.json,
@@ -780,7 +788,11 @@ export const worksetLabelRemoveCommand = defineCommand({
         ambient,
       });
       if (!confirmed) return 0;
-      const definition = workset.removeWorksetLabel(config, selectedWorkset.value, label.value);
+      const definition = await workset.removeWorksetLabel(
+        config,
+        selectedWorkset.value,
+        label.value,
+      );
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,

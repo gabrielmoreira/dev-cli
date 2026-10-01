@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
 import yaml from "yaml";
 import { z } from "zod";
+import * as fs from "./fs.ts";
 
 export const CONFIG_FILE_NAME = "dev.yaml";
 import { parseGlobalToml } from "./global.ts";
@@ -120,7 +121,7 @@ export interface RuntimeConfig {
   /** Parsed dev.yaml document (AST-preserving); undefined for dev.toml roots. */
   configDoc?: ReturnType<typeof yaml.parseDocument>;
   /** Persists the current configDoc back to configPath. No-op without dev.yaml. */
-  writeConfig?: () => void;
+  writeConfig?: () => Promise<void>;
   workspacePrefix: string;
   canonicalPrefix: string;
   defaults: ConfigDefaults;
@@ -386,9 +387,9 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
     configPath,
     configDoc,
     writeConfig: configDoc
-      ? () => {
+      ? async () => {
           if (!configPath) return;
-          writeFileSync(configPath, String(configDoc));
+          await fs.writeTextAtomic(configPath, String(configDoc));
         }
       : undefined,
     workspacePrefix: defaults.workspacePrefix.replace(/\/+$/, ""),
