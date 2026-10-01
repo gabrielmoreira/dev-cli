@@ -159,6 +159,8 @@ To catch up on everything at once, `dev sync --all` refreshes the provider cache
 
 Switch between tasks with `dev ls` and `dev go`, or `dev go checkout` when you know part of the name.
 
+If a workspace's `ws.md` is invalid, `dev ls` marks only that workspace as invalid. With `--json`, its entry includes `error.code` and `error.message` instead of a mount count.
+
 ## The same setup, every time
 
 If every checkout incident starts with the same four repositories, save the setup as a workset and create a fresh workspace from it each time:

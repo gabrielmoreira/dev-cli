@@ -2076,7 +2076,8 @@ export interface WorkspaceListItem {
   path: string;
   createdAt?: string;
   description?: string;
-  mountCount: number;
+  mountCount?: number;
+  error?: { code: string; message: string };
 }
 
 export async function list(
@@ -2104,11 +2105,14 @@ export async function list(
           description: manifest.description,
           mountCount: manifest.mounts.length,
         });
-      } catch {
+      } catch (error) {
         items.push({
           name,
           path: wsPath,
-          mountCount: 0,
+          error: {
+            code: (error as { code?: string } | null)?.code ?? "INVALID_MANIFEST",
+            message: error instanceof Error ? error.message : String(error),
+          },
         });
       }
     }
