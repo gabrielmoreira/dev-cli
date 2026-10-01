@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { glob } from "tinyglobby";
 import { writeTextAtomic } from "./fs.ts";
 import { cacheDir, inventoryCachePath, prsCachePath, workItemsCachePath } from "./paths.ts";
@@ -126,7 +126,7 @@ export interface PullRequestRecord {
   updatedAt: string;
   isDraft: boolean;
   repository: string;
-  /** Provider project; the cache file is per repository name, shared across projects. */
+  /** Provider project; cache identity is tenant, project, and repository. */
   project?: string;
   tenant: string;
   syncedAt: string;
@@ -136,6 +136,7 @@ export interface WritePullRequestsOptions {
   root: string;
   tenant: string;
   repo: string;
+  project?: string;
   records: PullRequestRecord[];
 }
 
@@ -143,18 +144,30 @@ export interface ReadPullRequestsOptions {
   root: string;
   tenant: string;
   repo: string;
+  project?: string;
 }
 
 /**
  * Resolves path to repository PR cache:
- * $DEV_ROOT/.dev/cache/prs/<tenant>/<repo>.jsonl
+ * $DEV_ROOT/.dev/cache/prs/<tenant>/<project>/<repo>.jsonl
+ * Legacy projectless files are ignored and rebuilt by the next sync.
  */
-export function resolvePrCachePath(root: string, tenant: string, repo: string): string {
-  return prsCachePath({ root, segments: tenant.split("/").filter(Boolean), repo });
+export function resolvePrCachePath(
+  root: string,
+  tenant: string,
+  repo: string,
+  project = "unknown",
+): string {
+  return prsCachePath({
+    root,
+    segments: [...tenant.split("/").filter(Boolean), project],
+    repo,
+  });
 }
 
 export async function writePullRequests(options: WritePullRequestsOptions): Promise<string> {
-  const filePath = resolvePrCachePath(options.root, options.tenant, options.repo);
+  const project = options.project ?? options.records[0]?.project ?? "unknown";
+  const filePath = resolvePrCachePath(options.root, options.tenant, options.repo, project);
   const content =
     options.records.map((r) => JSON.stringify(r)).join("\n") +
     (options.records.length > 0 ? "\n" : "");
@@ -165,7 +178,14 @@ export async function writePullRequests(options: WritePullRequestsOptions): Prom
 export async function readPullRequests(
   options: ReadPullRequestsOptions,
 ): Promise<PullRequestRecord[]> {
-  const filePath = resolvePrCachePath(options.root, options.tenant, options.repo);
+  if (!options.project) {
+    const all = await loadAllCachedPullRequests(options.root);
+    return all.filter(
+      (record) => record.tenant === options.tenant && record.repository === options.repo,
+    );
+  }
+
+  const filePath = resolvePrCachePath(options.root, options.tenant, options.repo, options.project);
 
   if (!existsSync(filePath)) {
     return [];
@@ -250,7 +270,11 @@ export async function loadAllCachedPullRequests(root: string): Promise<PullReque
         try {
           const rec = JSON.parse(trimmed) as PullRequestRecord;
           if (rec && rec.id) {
-            const uniqueKey = `${rec.tenant}/${rec.repository}/${rec.id}`;
+            const expectedPath = resolve(
+              resolvePrCachePath(root, rec.tenant, rec.repository, rec.project ?? "unknown"),
+            );
+            if (resolve(fullPath) !== expectedPath) continue;
+            const uniqueKey = `${rec.tenant}/${rec.project ?? ""}/${rec.repository}/${rec.id}`;
             recordsMap.set(uniqueKey, rec);
           }
         } catch {}

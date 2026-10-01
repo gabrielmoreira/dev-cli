@@ -58,7 +58,12 @@ describe("Combined Offline Data Sync Integration (Phase 14)", () => {
     });
     expect(cachedWis.length).toBeGreaterThan(0);
 
-    const prPath = cache.resolvePrCachePath(tempRoot, tenant, fixtureConfig.repoName);
+    const prPath = cache.resolvePrCachePath(
+      tempRoot,
+      tenant,
+      fixtureConfig.repoName,
+      fixtureConfig.project,
+    );
     expect(existsSync(prPath)).toBe(true);
     const cachedPrs = await cache.readPullRequests({
       root: tempRoot,

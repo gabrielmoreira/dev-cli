@@ -371,7 +371,7 @@ export const prListCommand = defineCommand({
 
     const seen = new Set<string>();
     const deduped = allPrs.filter((item) => {
-      const key = `${item.tenant}/${item.repository}/${item.id}`;
+      const key = `${item.tenant}/${item.project ?? ""}/${item.repository}/${item.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -565,7 +565,13 @@ export const prCheckoutCommand = defineCommand({
       const credential = await resolveAzureDevOpsCredential(config);
       const client = createAzureDevOps({ organization, token: credential.token });
       const raw = await client.getPullRequest(repository, pullRequestId, { project });
-      selected = pr.normalizeAdoPullRequest(raw, adoTenant(organization), repository);
+      selected = pr.normalizeAdoPullRequest(
+        raw,
+        adoTenant(organization),
+        repository,
+        undefined,
+        project,
+      );
     }
     if (!selected || !Number.isSafeInteger(pullRequestId)) {
       return reportError(
