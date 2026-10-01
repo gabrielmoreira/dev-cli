@@ -18,16 +18,21 @@ export const qmdSyncCommand = defineCommand({
     },
     "no-embed": { type: "boolean", description: "Skip vector indexing (lexical-only / CI)" },
     root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const plugin = createQmdPlugin(createPluginBase(config.root, config));
-    const code = await plugin.run({
-      subcommand: "sync",
-      label: String(args.label ?? ""),
-      noEmbed: args.embed === false,
-    });
-    return typeof code === "number" ? code : 0;
+    const code =
+      (await plugin.run({
+        subcommand: "sync",
+        label: String(args.label ?? ""),
+        noEmbed: args.embed === false,
+      })) ?? 0;
+    if (code === 0) {
+      ui.result({ data: { exitCode: code }, json: args.json, text: () => "qmd sync complete" });
+    }
+    return code;
   },
 });
 

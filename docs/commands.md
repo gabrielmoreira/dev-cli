@@ -897,24 +897,26 @@ Inspect hardware capabilities and recommend local LLM tiers
 
 Generate shell wrapper functions for bash, zsh, fish, or powershell
 
-**Usage:** `dev shell-init [shell] [--runner <value>]`
+**Usage:** `dev shell-init [shell] [--runner <value>] [--json]`
 
 | Argument           | Type       | Description                                        |
 | ------------------ | ---------- | -------------------------------------------------- |
 | `shell`            | positional | Target shell: bash, zsh, fish, powershell, or pwsh |
 | `--runner <value>` | string     | CLI runner used by wrappers: direct or mise        |
+| `--json`           | boolean    | Output in structured JSON format                   |
 
 ## `dev qmd`
 
 QMD plugin: collections from labeled sources (scoped registry)
 
-**Usage:** `dev qmd [label] [--no-embed] [--root <value>] <command>`
+**Usage:** `dev qmd [label] [--no-embed] [--root <value>] [--json] <command>`
 
 | Argument         | Type       | Description                              |
 | ---------------- | ---------- | ---------------------------------------- |
 | `label`          | positional | Label whose sources become collections   |
 | `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
 | `--root <value>` | string     | Explicit dev root directory              |
+| `--json`         | boolean    | Output in structured JSON format         |
 
 | Subcommand       | Description                                               |
 | ---------------- | --------------------------------------------------------- |
@@ -926,13 +928,14 @@ QMD plugin: collections from labeled sources (scoped registry)
 
 Reconcile qmd collections from sources carrying a label
 
-**Usage:** `dev qmd sync [label] [--no-embed] [--root <value>]`
+**Usage:** `dev qmd sync [label] [--no-embed] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                              |
 | ---------------- | ---------- | ---------------------------------------- |
 | `label`          | positional | Label whose sources become collections   |
 | `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
 | `--root <value>` | string     | Explicit dev root directory              |
+| `--json`         | boolean    | Output in structured JSON format         |
 
 ## `dev qmd search`
 
