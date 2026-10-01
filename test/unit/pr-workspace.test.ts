@@ -7,18 +7,18 @@ import {
 
 describe("pull request workspace planning", () => {
   test("parses GitHub and Azure DevOps pull request URLs", () => {
-    expect(
-      parseGitHubPullRequestUrl("https://github.com/gabrielmoreira/tiny-asl-machine/pull/52"),
-    ).toEqual({
-      owner: "gabrielmoreira",
-      repository: "tiny-asl-machine",
-      pullRequestId: 52,
-    });
+    expect(parseGitHubPullRequestUrl("https://github.com/example-org/sample-repo/pull/52")).toEqual(
+      {
+        owner: "example-org",
+        repository: "sample-repo",
+        pullRequestId: 52,
+      },
+    );
   });
 
   test("continues a GitHub pull request from its head repository and branch", async () => {
     const plan = await resolvePullRequestWorkspacePlan(
-      "https://github.com/gabrielmoreira/tiny-asl-machine/pull/52",
+      "https://github.com/example-org/sample-repo/pull/52",
       {
         getGitHubPullRequest: async () => ({
           id: 100,
@@ -28,8 +28,8 @@ describe("pull request workspace planning", () => {
           head: {
             ref: "feature/deterministic-transitions",
             repo: {
-              name: "tiny-asl-machine-fork",
-              clone_url: "https://github.com/contributor/tiny-asl-machine-fork.git",
+              name: "sample-repo-fork",
+              clone_url: "https://github.com/contributor/sample-repo-fork.git",
             },
           },
           base: { ref: "main" },
@@ -43,41 +43,41 @@ describe("pull request workspace planning", () => {
     expect(plan).toEqual({
       provider: "github",
       pullRequestId: 52,
-      repository: "tiny-asl-machine",
-      source: "https://github.com/contributor/tiny-asl-machine-fork.git",
+      repository: "sample-repo",
+      source: "https://github.com/contributor/sample-repo-fork.git",
       branch: "feature/deterministic-transitions",
-      workspaceName: "pr-52-tiny-asl-machine-feature-deterministic-transitions",
+      workspaceName: "pr-52-sample-repo-feature-deterministic-transitions",
       description: "Continue PR #52: Make transitions deterministic",
     });
   });
 
   test("continues an Azure DevOps pull request from its fork when present", async () => {
     const plan = await resolvePullRequestWorkspacePlan(
-      "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-monorepo/pullrequest/18637",
+      "https://dev.azure.com/example-org/sample-project/_git/sample-api/pullrequest/101",
       {
         getGitHubPullRequest: async () => {
           throw new Error("unexpected GitHub request");
         },
         getAzureDevOpsPullRequest: async () => ({
-          pullRequestId: 18637,
+          pullRequestId: 101,
           status: "active",
           title: "Update authentication flow",
-          sourceRefName: "refs/heads/users/gabriel/update-auth",
+          sourceRefName: "refs/heads/users/alice/update-auth",
           targetRefName: "refs/heads/main",
           creationDate: "2026-09-18T00:00:00Z",
-          url: "https://dev.azure.com/nn-apps/retail-app/_apis/git/pullRequests/18637",
+          url: "https://dev.azure.com/example-org/sample-project/_apis/git/pullRequests/101",
           repository: {
             id: "target",
-            name: "retail-app-bff-monorepo",
+            name: "sample-api",
             url: "target-api-url",
-            remoteUrl: "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-monorepo",
+            remoteUrl: "https://dev.azure.com/example-org/sample-project/_git/sample-api",
           },
           forkSource: {
             repository: {
               id: "fork",
-              name: "retail-app-bff-fork",
+              name: "sample-api-fork",
               url: "fork-api-url",
-              remoteUrl: "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-fork",
+              remoteUrl: "https://dev.azure.com/example-org/sample-project/_git/sample-api-fork",
             },
           },
         }),
@@ -86,12 +86,12 @@ describe("pull request workspace planning", () => {
 
     expect(plan).toEqual({
       provider: "azure_devops",
-      pullRequestId: 18637,
-      repository: "retail-app-bff-monorepo",
-      source: "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-fork",
-      branch: "users/gabriel/update-auth",
-      workspaceName: "pr-18637-retail-app-bff-monorepo-users-gabriel-update-auth",
-      description: "Continue PR #18637: Update authentication flow",
+      pullRequestId: 101,
+      repository: "sample-api",
+      source: "https://dev.azure.com/example-org/sample-project/_git/sample-api-fork",
+      branch: "users/alice/update-auth",
+      workspaceName: "pr-101-sample-api-users-alice-update-auth",
+      description: "Continue PR #101: Update authentication flow",
     });
   });
 
@@ -127,11 +127,11 @@ describe("pull request workspace planning", () => {
    * `dev ws add <pr-url>` named it after the branch, so the same pull request
    * produced two folders. Both callers derive the name here now. */
   test("derives one workspace name per pull request, per kind", () => {
-    expect(derivePullRequestWorkspaceName(18637, "retail-app-bff", "feature/payments")).toBe(
-      "pr-18637-retail-app-bff-feature-payments",
+    expect(derivePullRequestWorkspaceName(101, "sample-api", "feature/payments")).toBe(
+      "pr-101-sample-api-feature-payments",
     );
-    expect(
-      derivePullRequestWorkspaceName(18637, "retail-app-bff", "feature/payments", "review"),
-    ).toBe("review-18637-retail-app-bff-feature-payments");
+    expect(derivePullRequestWorkspaceName(101, "sample-api", "feature/payments", "review")).toBe(
+      "review-101-sample-api-feature-payments",
+    );
   });
 });

@@ -254,7 +254,7 @@ describe("smart CLI input", () => {
       argv: [
         "ws",
         "init",
-        "https://github.com/gabrielmoreira/tiny-asl-machine/pull/52",
+        "https://github.com/example-org/sample-repo/pull/52",
         "--root",
         root,
         "--json",
@@ -264,14 +264,14 @@ describe("smart CLI input", () => {
       isTTY: false,
     });
 
-    const workspaceName = "pr-52-tiny-asl-machine-feature-pr-url";
+    const workspaceName = "pr-52-sample-repo-feature-pr-url";
     const workspacePath = join(root, "ws", workspaceName);
     expect(exitCode).toBe(0);
-    expect(existsSync(join(workspacePath, "tiny-asl-machine", "README.md"))).toBe(true);
+    expect(existsSync(join(workspacePath, "sample-repo", "README.md"))).toBe(true);
     const workspace = await manifest.readWorkspace(join(workspacePath, "ws.md"));
     expect(workspace.manifest.description).toBe("Continue PR #52: Make transitions deterministic");
     expect(workspace.manifest.mounts[0]).toMatchObject({
-      path: "tiny-asl-machine",
+      path: "sample-repo",
       source,
       revision: { mode: "track", branch: "feature/pr-url" },
     });
@@ -283,29 +283,29 @@ describe("smart CLI input", () => {
     const source = join(root, "ado-pr-source.git");
     const seed = join(root, "ado-pr-seed");
     await git.runGit(["init", "--bare", source]);
-    await git.runGit(["init", "-b", "users/gabriel/update-auth", seed]);
+    await git.runGit(["init", "-b", "users/alice/update-auth", seed]);
     await git.runGit(["config", "user.name", "ADO PR Workspace Test"], { cwd: seed });
     await git.runGit(["config", "user.email", "ado-pr@example.com"], { cwd: seed });
     await writeFile(join(seed, "README.md"), "# Azure pull request branch\n");
     await git.runGit(["add", "."], { cwd: seed });
     await git.runGit(["commit", "-m", "feat: seed Azure pull request branch"], { cwd: seed });
     await git.runGit(["remote", "add", "origin", source], { cwd: seed });
-    await git.runGit(["push", "-u", "origin", "users/gabriel/update-auth"], { cwd: seed });
+    await git.runGit(["push", "-u", "origin", "users/alice/update-auth"], { cwd: seed });
 
     let authorization = "";
     const request = spyOn(globalThis, "fetch").mockImplementation((async (_input, init) => {
       authorization = String((init?.headers as Record<string, string>)?.Authorization ?? "");
       return Response.json({
-        pullRequestId: 18637,
+        pullRequestId: 101,
         status: "active",
         title: "Update authentication flow",
-        sourceRefName: "refs/heads/users/gabriel/update-auth",
+        sourceRefName: "refs/heads/users/alice/update-auth",
         targetRefName: "refs/heads/main",
         creationDate: "2026-09-18T00:00:00Z",
-        url: "https://dev.azure.com/nn-apps/retail-app/_apis/git/pullRequests/18637",
+        url: "https://dev.azure.com/example-org/sample-project/_apis/git/pullRequests/101",
         repository: {
           id: "repo-id",
-          name: "retail-app-bff-monorepo",
+          name: "sample-api",
           remoteUrl: source,
         },
       });
@@ -315,7 +315,7 @@ describe("smart CLI input", () => {
       argv: [
         "ws",
         "init",
-        "https://dev.azure.com/nn-apps/retail-app/_git/retail-app-bff-monorepo/pullrequest/18637",
+        "https://dev.azure.com/example-org/sample-project/_git/sample-api/pullrequest/101",
         "--root",
         root,
         "--json",
@@ -325,15 +325,15 @@ describe("smart CLI input", () => {
       isTTY: false,
     });
 
-    const workspaceName = "pr-18637-retail-app-bff-monorepo-users-gabriel-update-auth";
+    const workspaceName = "pr-101-sample-api-users-alice-update-auth";
     const workspacePath = join(root, "ws", workspaceName);
     expect(exitCode).toBe(0);
-    expect(existsSync(join(workspacePath, "retail-app-bff-monorepo", "README.md"))).toBe(true);
+    expect(existsSync(join(workspacePath, "sample-api", "README.md"))).toBe(true);
     const workspace = await manifest.readWorkspace(join(workspacePath, "ws.md"));
     expect(workspace.manifest.mounts[0]).toMatchObject({
-      path: "retail-app-bff-monorepo",
+      path: "sample-api",
       source,
-      revision: { mode: "track", branch: "users/gabriel/update-auth" },
+      revision: { mode: "track", branch: "users/alice/update-auth" },
     });
     expect(authorization).toBe(`Basic ${Buffer.from(":test-pat").toString("base64")}`);
     request.mockRestore();

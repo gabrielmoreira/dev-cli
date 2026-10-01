@@ -16,33 +16,33 @@ describe("Azure DevOps REST Client", () => {
   test("parses Azure DevOps repository URLs into query context", () => {
     expect(
       parseAzureDevOpsRepositoryUrl(
-        "https://dev.azure.com/example-org/retail-app/_git/retail-app-bff-monorepo",
+        "https://dev.azure.com/example-org/sample-project/_git/sample-api",
       ),
     ).toEqual({
       organization: "example-org",
-      project: "retail-app",
-      repository: "retail-app-bff-monorepo",
+      project: "sample-project",
+      repository: "sample-api",
     });
     expect(
       parseAzureDevOpsRepositoryUrl(
-        "https://example-org.visualstudio.com/retail-app/_git/retail-app-bff-monorepo",
+        "https://example-org.visualstudio.com/sample-project/_git/sample-api",
       ),
     ).toEqual({
       organization: "example-org",
-      project: "retail-app",
-      repository: "retail-app-bff-monorepo",
+      project: "sample-project",
+      repository: "sample-api",
     });
   });
 
   test("parses an Azure DevOps pull request URL", () => {
     expect(
       parseAzureDevOpsPullRequestUrl(
-        "https://dev.azure.com/example-org/retail-app/_git/retail-app/pullrequest/18432",
+        "https://dev.azure.com/example-org/sample-project/_git/sample-api/pullrequest/18432",
       ),
     ).toEqual({
       organization: "example-org",
-      project: "retail-app",
-      repository: "retail-app",
+      project: "sample-project",
+      repository: "sample-api",
       pullRequestId: 18432,
     });
   });
@@ -191,7 +191,7 @@ describe("Azure DevOps REST Client", () => {
     });
 
     await client.queryWorkItems("SELECT [System.Id] FROM WorkItems", {
-      project: "retail-app",
+      project: "sample-project",
       top: 50,
     });
 

@@ -30,10 +30,10 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
   test("normalizeGitHubRepository converts GitHub API payload to canonical InventoryRecord", () => {
     const raw: GitHubRawRepository = {
       id: 987654,
-      name: "tiny-ops",
-      full_name: "example-owner/tiny-ops",
-      html_url: "https://github.com/example-owner/tiny-ops",
-      clone_url: "https://github.com/example-owner/tiny-ops.git",
+      name: "sample-repo",
+      full_name: "example-owner/sample-repo",
+      html_url: "https://github.com/example-owner/sample-repo",
+      clone_url: "https://github.com/example-owner/sample-repo.git",
       default_branch: "main",
       description: "TypeScript-first operation graph runtime",
       pushed_at: "2026-09-14T10:00:00Z",
@@ -43,8 +43,8 @@ describe("GitHub Client and Normalization (Phase 15)", () => {
     const record = normalizeGitHubRepository(raw, "2026-09-15T12:00:00Z");
 
     expect(record.id).toBe("987654");
-    expect(record.name).toBe("tiny-ops");
-    expect(record.url).toBe("https://github.com/example-owner/tiny-ops.git");
+    expect(record.name).toBe("sample-repo");
+    expect(record.url).toBe("https://github.com/example-owner/sample-repo.git");
     expect(record.default_branch).toBe("main");
     expect(record.description).toBe("TypeScript-first operation graph runtime");
     expect(record.last_changed).toBe("2026-09-14T10:00:00Z");

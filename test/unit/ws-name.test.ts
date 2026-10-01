@@ -25,9 +25,9 @@ describe("Workspace pure domain rules (Phase 1)", () => {
   });
 
   it("derives a stable provider-prefixed name from repository URLs", () => {
-    expect(deriveWorkspaceNameFromRepository("https://github.com/can1357/oh-my-pi.git")).toBe(
-      "gh-can1357-oh-my-pi",
-    );
+    expect(
+      deriveWorkspaceNameFromRepository("https://github.com/example-org/sample-repo.git"),
+    ).toBe("gh-example-org-sample-repo");
     expect(
       deriveWorkspaceNameFromRepository(
         "https://dev.azure.com/example-org/platform/_git/payments-api",
@@ -36,7 +36,9 @@ describe("Workspace pure domain rules (Phase 1)", () => {
   });
 
   it("treats file URIs as local repositories", () => {
-    expect(deriveWorkspaceNameFromRepository("file:///tmp/oh-my-pi.git")).toBe("local-oh-my-pi");
+    expect(deriveWorkspaceNameFromRepository("file:///tmp/sample-repo.git")).toBe(
+      "local-sample-repo",
+    );
   });
 
   it("names Windows drive paths as one local repository, not two owners", () => {
