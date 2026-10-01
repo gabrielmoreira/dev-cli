@@ -6,7 +6,7 @@ import * as mirror from "./mirror.ts";
 /** Semantic error for label resolution failures (validation, unknown label). */
 export class LabelError extends Error {
   constructor(
-    public readonly code: "LABEL_VALIDATION" | "LABEL_NOT_FOUND",
+    public readonly code: "LABEL_VALIDATION" | "LABEL_NOT_FOUND" | "INVALID_LABEL_FIELD",
     message: string,
   ) {
     super(message);
@@ -159,10 +159,18 @@ function coerceValue(
     case "string[]":
       return Array.isArray(value) ? value.map(String) : [String(value)];
     case "bool":
-      return Boolean(value);
+      if (value === true || value === "true") return true;
+      if (value === false || value === "false") return false;
+      warnings.push(`${what}: '${String(value)}' is not a valid bool`);
+      return undefined;
     case "int":
     case "float": {
-      const num = schema.type === "int" ? Number.parseInt(String(value), 10) : Number(value);
+      const text = String(value);
+      if (schema.type === "int" && !/^-?\d+$/.test(text)) {
+        warnings.push(`${what}: '${text}' is not a valid int`);
+        return undefined;
+      }
+      const num = schema.type === "int" ? Number.parseInt(text, 10) : Number(value);
       if (Number.isNaN(num)) {
         warnings.push(`${what}: '${String(value)}' is not a valid ${schema.type}`);
         return undefined;
@@ -221,6 +229,24 @@ export function resolveLabelMeta(
     if (!schema) {
       warnings.push(`label '${label}': unknown field '${key}' (not declared in label_defs)`);
       continue;
+    }
+    if (
+      schema.type === "bool" &&
+      value !== true &&
+      value !== false &&
+      value !== "true" &&
+      value !== "false"
+    ) {
+      throw new LabelError(
+        "INVALID_LABEL_FIELD",
+        `label '${label}': field '${key}' must be true or false`,
+      );
+    }
+    if (schema.type === "int" && !/^-?\d+$/.test(String(value))) {
+      throw new LabelError(
+        "INVALID_LABEL_FIELD",
+        `label '${label}': field '${key}' must be an integer`,
+      );
     }
     if (schema.domain && !schema.domain.includes(String(value))) {
       errors.push(

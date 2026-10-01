@@ -94,6 +94,47 @@ describe("dev label CLI", () => {
     expect(await Bun.file(join(root, "dev.yaml")).text()).toBe(configText());
   });
 
+  test.each(["enabled=yes,retries=2", "enabled=false,retries=1.5"])(
+    "rejects invalid typed fields %s without changing dev.yaml",
+    async (fields) => {
+      const configPath = join(root, "dev.yaml");
+      const content = `# Preserve this configuration on invalid input.
+version: 1
+label_defs:
+  settings:
+    fields:
+      enabled: { type: bool, required: true }
+      retries: { type: int, required: true }
+sources:
+  - url: ${SOURCE}
+    branch: master
+`;
+      await Bun.write(configPath, content);
+      await utimes(configPath, new Date(0), new Date(0));
+      const before = (await stat(configPath)).mtimeMs;
+
+      const code = await run([
+        "label",
+        "add",
+        "settings",
+        SOURCE,
+        THIRD,
+        "--ref",
+        "master",
+        "--fields",
+        fields,
+        "--json",
+      ]);
+
+      expect(code).toBe(2);
+      expect(JSON.parse(errors.join("\n"))).toMatchObject({
+        error: { code: "INVALID_LABEL_FIELD" },
+      });
+      expect(await Bun.file(configPath).text()).toBe(content);
+      expect((await stat(configPath)).mtimeMs).toBe(before);
+    },
+  );
+
   test("declares a repository dev.yaml did not know, and reports the mirror an index label needs", async () => {
     const code = await run(["label", "add", "index:api", OTHER, "--json"]);
 
