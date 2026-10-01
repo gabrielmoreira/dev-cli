@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, spyOn } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,20 @@ import {
   writeInventory,
   readInventory,
   resolveInventoryCachePath,
+  loadAllCachedInventories,
+  loadAllCachedPullRequests,
+  loadAllCachedWorkItems,
+  readPullRequests,
+  readPullRequestSelection,
+  readWorkItems,
+  resolvePrCachePath,
+  resolveWorkItemCachePath,
+  writePullRequests,
+  writePullRequestSelection,
+  writeWorkItems,
   type InventoryRecord,
+  type PullRequestRecord,
+  type WorkItemRecord,
 } from "../../src/cache";
 
 describe("Inventory Cache (JSONL)", () => {
@@ -136,5 +149,111 @@ describe("Inventory Cache (JSONL)", () => {
 
     expect(records.length).toBe(1);
     expect(records[0].id).toMatch(/^batch-\d+$/);
+  });
+
+  test("warns once with the count of malformed rows and keeps valid cache records", async () => {
+    const tenant = "sample-tenant";
+    const repo = "sample-api";
+    const project = "sample-project";
+    const inventoryRecord: InventoryRecord = {
+      id: "1",
+      name: repo,
+      url: "https://example.org/sample-api",
+      default_branch: "main",
+      description: "",
+      last_changed: "",
+      syncedAt: "2026-10-01T00:00:00Z",
+    };
+    const pullRequestRecord: PullRequestRecord = {
+      id: 1,
+      title: "Change",
+      description: "",
+      status: "open",
+      sourceBranch: "feature",
+      targetBranch: "main",
+      author: "sample-user",
+      url: "https://example.org/sample-api/1",
+      createdAt: "2026-10-01T00:00:00Z",
+      updatedAt: "2026-10-01T00:00:00Z",
+      isDraft: false,
+      repository: repo,
+      project,
+      tenant,
+      syncedAt: "2026-10-01T00:00:00Z",
+    };
+    const workItemRecord: WorkItemRecord = {
+      id: 1,
+      type: "Task",
+      title: "Change",
+      state: "Active",
+      url: "https://example.org/sample-api/1",
+      tenant,
+      project,
+      syncedAt: "2026-10-01T00:00:00Z",
+    };
+
+    const inventoryPath = await writeInventory({
+      root: tempRoot,
+      tenant,
+      records: [inventoryRecord],
+    });
+    const prPath = await writePullRequests({
+      root: tempRoot,
+      tenant,
+      repo,
+      project,
+      records: [pullRequestRecord],
+    });
+    const selectionPath = await writePullRequestSelection({
+      root: tempRoot,
+      tenant,
+      name: "selection",
+      records: [pullRequestRecord],
+    });
+    const workItemPath = await writeWorkItems({
+      root: tempRoot,
+      tenant,
+      project,
+      records: [workItemRecord],
+    });
+    for (const path of [inventoryPath, prPath, selectionPath, workItemPath]) {
+      await Bun.write(path, `${await Bun.file(path).text()}\n \t\r\nnot-json\n{\n\n`);
+    }
+
+    const warn = spyOn(console, "warn");
+    try {
+      expect((await readInventory({ root: tempRoot, tenant })).map((record) => record.id)).toEqual([
+        "1",
+      ]);
+      expect((await loadAllCachedInventories(tempRoot)).map((record) => record.id)).toEqual(["1"]);
+      expect(
+        (await readPullRequests({ root: tempRoot, tenant, repo, project })).map(
+          (record) => record.id,
+        ),
+      ).toEqual([1]);
+      expect(
+        (await readPullRequestSelection({ root: tempRoot, tenant, name: "selection" }))?.map(
+          (record) => record.id,
+        ),
+      ).toEqual([1]);
+      expect((await loadAllCachedPullRequests(tempRoot)).map((record) => record.id)).toEqual([1]);
+      expect(
+        (await readWorkItems({ root: tempRoot, tenant, project })).map((record) => record.id),
+      ).toEqual([1]);
+      expect((await readWorkItems({ root: tempRoot, tenant })).map((record) => record.id)).toEqual([
+        1,
+      ]);
+      expect((await loadAllCachedWorkItems(tempRoot)).map((record) => record.id)).toEqual([1]);
+
+      expect(warn).toHaveBeenCalledTimes(8);
+      expect(warn.mock.calls.map((call) => call[1])).toEqual([2, 2, 2, 2, 2, 2, 2, 2]);
+      expect(warn.mock.calls.every((call) => call[0] === "Skipped malformed cache rows")).toBe(
+        true,
+      );
+      expect(resolvePrCachePath(tempRoot, tenant, repo, project)).toBe(prPath);
+      expect(resolveWorkItemCachePath(tempRoot, tenant, project)).toBe(workItemPath);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

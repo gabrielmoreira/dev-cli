@@ -64,6 +64,7 @@ export async function readInventory(options: ReadInventoryOptions): Promise<Inve
   const text = await Bun.file(filePath).text();
   const lines = text.split("\n");
   const records: InventoryRecord[] = [];
+  let skippedRows = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -72,10 +73,11 @@ export async function readInventory(options: ReadInventoryOptions): Promise<Inve
       const record = JSON.parse(trimmed) as InventoryRecord;
       records.push(record);
     } catch {
-      // Skip malformed lines
+      skippedRows += 1;
     }
   }
 
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return records;
 }
 
@@ -90,6 +92,7 @@ export async function loadAllCachedInventories(root: string): Promise<InventoryR
 
   const files = await glob("**/repos.jsonl", { cwd: baseDir, absolute: true });
   const recordsMap = new Map<string, InventoryRecord>();
+  let skippedRows = 0;
 
   for (const fullPath of files) {
     try {
@@ -103,13 +106,16 @@ export async function loadAllCachedInventories(root: string): Promise<InventoryR
           if (rec && rec.id) {
             recordsMap.set(rec.id, rec);
           }
-        } catch {}
+        } catch {
+          skippedRows += 1;
+        }
       }
     } catch {}
   }
 
   const records = Array.from(recordsMap.values());
   records.sort((a, b) => a.name.localeCompare(b.name));
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return records;
 }
 
@@ -194,6 +200,7 @@ export async function readPullRequests(
   const text = await Bun.file(filePath).text();
   const lines = text.split("\n");
   const records: PullRequestRecord[] = [];
+  let skippedRows = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -201,9 +208,12 @@ export async function readPullRequests(
     try {
       const rec = JSON.parse(trimmed) as PullRequestRecord;
       records.push(rec);
-    } catch {}
+    } catch {
+      skippedRows += 1;
+    }
   }
 
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return records;
 }
 
@@ -239,16 +249,20 @@ export async function readPullRequestSelection(
   const filePath = pullRequestSelectionPath(options);
   if (!existsSync(filePath)) return undefined;
   const text = await Bun.file(filePath).text();
-  return text
+  let skippedRows = 0;
+  const records = text
     .split("\n")
-    .filter(Boolean)
+    .filter((line) => line.trim())
     .flatMap((line) => {
       try {
         return [JSON.parse(line) as PullRequestRecord];
       } catch {
+        skippedRows += 1;
         return [];
       }
     });
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
+  return records;
 }
 
 export async function loadAllCachedPullRequests(root: string): Promise<PullRequestRecord[]> {
@@ -259,6 +273,7 @@ export async function loadAllCachedPullRequests(root: string): Promise<PullReque
 
   const files = await glob("**/*.jsonl", { cwd: baseDir, absolute: true });
   const recordsMap = new Map<string, PullRequestRecord>();
+  let skippedRows = 0;
 
   for (const fullPath of files) {
     try {
@@ -277,13 +292,16 @@ export async function loadAllCachedPullRequests(root: string): Promise<PullReque
             const uniqueKey = `${rec.tenant}/${rec.project ?? ""}/${rec.repository}/${rec.id}`;
             recordsMap.set(uniqueKey, rec);
           }
-        } catch {}
+        } catch {
+          skippedRows += 1;
+        }
       }
     } catch {}
   }
 
   const records = Array.from(recordsMap.values());
   records.sort((a, b) => b.id - a.id);
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return records;
 }
 
@@ -346,13 +364,17 @@ export async function readWorkItems(options: ReadWorkItemsOptions): Promise<Work
     const text = await Bun.file(filePath).text();
     const lines = text.split("\n");
     const records: WorkItemRecord[] = [];
+    let skippedRows = 0;
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try {
         records.push(JSON.parse(trimmed) as WorkItemRecord);
-      } catch {}
+      } catch {
+        skippedRows += 1;
+      }
     }
+    if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
     return records;
   }
 
@@ -364,6 +386,7 @@ export async function readWorkItems(options: ReadWorkItemsOptions): Promise<Work
 
   const files = await glob("*.jsonl", { cwd: tenantDir, absolute: true });
   const all: WorkItemRecord[] = [];
+  let skippedRows = 0;
   for (const f of files) {
     try {
       const text = await Bun.file(f).text();
@@ -372,12 +395,15 @@ export async function readWorkItems(options: ReadWorkItemsOptions): Promise<Work
         if (trimmed) {
           try {
             all.push(JSON.parse(trimmed) as WorkItemRecord);
-          } catch {}
+          } catch {
+            skippedRows += 1;
+          }
         }
       }
     } catch {}
   }
   all.sort((a, b) => b.id - a.id);
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return all;
 }
 
@@ -389,6 +415,7 @@ export async function loadAllCachedWorkItems(root: string): Promise<WorkItemReco
 
   const files = await glob("**/*.jsonl", { cwd: baseDir, absolute: true });
   const recordsMap = new Map<string, WorkItemRecord>();
+  let skippedRows = 0;
   for (const fullPath of files) {
     try {
       const text = await Bun.file(fullPath).text();
@@ -401,12 +428,15 @@ export async function loadAllCachedWorkItems(root: string): Promise<WorkItemReco
             const uniqueKey = `${rec.tenant}/${rec.project}/${rec.id}`;
             recordsMap.set(uniqueKey, rec);
           }
-        } catch {}
+        } catch {
+          skippedRows += 1;
+        }
       }
     } catch {}
   }
 
   const records = Array.from(recordsMap.values());
   records.sort((a, b) => b.id - a.id);
+  if (skippedRows > 0) console.warn("Skipped malformed cache rows", skippedRows);
   return records;
 }
