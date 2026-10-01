@@ -1,6 +1,7 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { describeError, reportError } from "../../src/cli/errors.ts";
 import { ui } from "../../src/ui.ts";
+import { parseGlobalToml } from "../../src/global.ts";
 
 class Coded extends Error {
   constructor(
@@ -77,5 +78,36 @@ describe("reportError exit codes", () => {
     expect(reportError(new Coded("WORKSPACE_NOT_FOUND", "no such workspace"), true)).toBe(1);
     expect(reportError(new Error("plain"), true)).toBe(1);
     stderr.mockRestore();
+  });
+
+  test("reports invalid registry TOML as actionable usage failure without exposing its contents", () => {
+    let error: unknown;
+    const path = "/fixture/.dev.toml";
+    try {
+      parseGlobalToml(
+        String.raw`private_value = "private-registry-value"
+path = "C:\Users\Example\dev"`,
+        path,
+      );
+    } catch (caught) {
+      error = caught;
+    }
+    ui.reset();
+    const stderr = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(reportError(error, true)).toBe(2);
+      const output = stderr.mock.calls.map(([message]) => message).join("\n");
+      const result = JSON.parse(output);
+      expect(result.error.code).toBe("INVALID_GLOBAL_TOML");
+      expect(result.error.path).toBe(path);
+      expect(result.error.message).toContain(path);
+      expect(result.error.message).toMatch(/forward slashes/i);
+      expect(result.error.message).toMatch(/TOML escaping/i);
+      expect(result.error.nextStep).toContain(path);
+      expect(result.error).not.toHaveProperty("cause");
+      expect(output).not.toContain("private-registry-value");
+    } finally {
+      stderr.mockRestore();
+    }
   });
 });

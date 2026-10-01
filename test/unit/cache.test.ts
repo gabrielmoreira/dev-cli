@@ -55,6 +55,22 @@ describe("Inventory Cache (JSONL)", () => {
     expect(records).toEqual([]);
   });
 
+  test("rejects pull request selection traversal outside the dev root", async () => {
+    const root = join(tempRoot, "root");
+    const outsidePath = join(tempRoot, "outside.jsonl");
+    const originalContent = "private data\n";
+    await Bun.write(outsidePath, originalContent);
+    const options = { root, tenant: "../../../..", name: "outside" };
+
+    await expect(readPullRequestSelection(options)).rejects.toMatchObject({
+      code: "PATH_OUTSIDE_ROOT",
+    });
+    await expect(writePullRequestSelection({ ...options, records: [] })).rejects.toMatchObject({
+      code: "PATH_OUTSIDE_ROOT",
+    });
+    expect(await Bun.file(outsidePath).text()).toBe(originalContent);
+  });
+
   test("writeInventory writes atomic JSONL and readInventory reads it back", async () => {
     const items: InventoryRecord[] = [
       {

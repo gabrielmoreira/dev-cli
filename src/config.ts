@@ -1,14 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve, win32 } from "node:path";
+import { dirname, isAbsolute, resolve, win32 } from "node:path";
 import yaml, { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml";
 import { z } from "zod";
 import * as fs from "./fs.ts";
 import { LabelError, type SourceSelector } from "./labels.ts";
-import { configFilePath } from "./paths.ts";
-
-export const CONFIG_FILE_NAME = "dev.yaml";
-import { parseGlobalToml } from "./global.ts";
+import { getGlobalConfigPath, parseGlobalToml } from "./global.ts";
+import { configFilePath, legacyConfigFilePath } from "./paths.ts";
 
 export async function updateConfig(
   configPath: string,
@@ -406,9 +404,9 @@ function resolveConfiguredPath(path: string, base?: string): string {
 export function findUpConfig(startDir: string): string | undefined {
   let current = resolve(startDir);
   while (true) {
-    const yamlPath = join(current, CONFIG_FILE_NAME);
+    const yamlPath = configFilePath({ root: current });
     if (existsSync(yamlPath)) return current;
-    const tomlPath = join(current, "dev.toml");
+    const tomlPath = legacyConfigFilePath({ root: current });
     if (existsSync(tomlPath)) return current;
     const parent = dirname(current);
     if (parent === current) break;
@@ -436,17 +434,13 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
       rootSource = "env";
     } else {
       const home = options.env.HOME || options.env.USERPROFILE || homedir();
-      const globalTomlPath = join(home, ".dev.toml");
+      const globalTomlPath = getGlobalConfigPath(home);
       let globalRoot: string | undefined;
       if (existsSync(globalTomlPath)) {
-        try {
-          const content = readFileSync(globalTomlPath, "utf8");
-          const globalConfig = parseGlobalToml(content);
-          if (globalConfig.default_root && globalConfig.roots[globalConfig.default_root]) {
-            globalRoot = globalConfig.roots[globalConfig.default_root].path;
-          }
-        } catch {
-          // ignore error parsing ~/.dev.toml
+        const content = readFileSync(globalTomlPath, "utf8");
+        const globalConfig = parseGlobalToml(content, globalTomlPath);
+        if (globalConfig.default_root && globalConfig.roots[globalConfig.default_root]) {
+          globalRoot = globalConfig.roots[globalConfig.default_root].path;
         }
       }
 
@@ -462,7 +456,7 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
 
   let configPath: string | undefined;
   const yamlPath = configFilePath({ root });
-  const tomlPath = join(root, "dev.toml");
+  const tomlPath = legacyConfigFilePath({ root });
   if (existsSync(yamlPath)) {
     configPath = yamlPath;
   } else if (existsSync(tomlPath)) {

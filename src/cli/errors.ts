@@ -9,6 +9,7 @@ import { CancelledError, ui } from "../ui.ts";
 const NEXT_STEPS: Record<string, string> = {
   BRANCH_ALREADY_MOUNTED: "dev ws status",
   CREDENTIAL_NOT_AVAILABLE: "gh auth login    # or: az login",
+  INVALID_GLOBAL_TOML: "Edit <path> to fix the TOML syntax, then retry.",
   MANIFEST_NOT_FOUND: "dev ls",
   MOUNT_ALREADY_EXISTS: "dev ws status",
   MOUNT_NOT_FOUND: "dev ws status",
@@ -44,6 +45,7 @@ export const EXIT_USAGE = 2;
 const EXIT_CODES: Record<string, number> = {
   CONFLICTING_OPTIONS: EXIT_USAGE,
   INTERACTION_REQUIRED: EXIT_USAGE,
+  INVALID_GLOBAL_TOML: EXIT_USAGE,
   INVALID_MOUNT_PATH: EXIT_USAGE,
   INVALID_SOURCE: EXIT_USAGE,
   INVALID_WORKSPACE_NAME: EXIT_USAGE,

@@ -18,13 +18,32 @@ export class GlobalRootError extends Error {
   }
 }
 
+class GlobalTomlError extends Error {
+  readonly code = "INVALID_GLOBAL_TOML";
+  readonly details: { path: string };
+
+  constructor(path: string, cause: unknown) {
+    super(
+      `Invalid TOML in global root registry at ${path}. Windows paths need forward slashes or valid TOML escaping.`,
+      { cause },
+    );
+    this.name = "GlobalTomlError";
+    this.details = { path };
+  }
+}
+
 export function getGlobalConfigPath(homeDir?: string): string {
   const home = homeDir || process.env.HOME || process.env.USERPROFILE || homedir();
   return join(home, ".dev.toml");
 }
 
-export function parseGlobalToml(content: string): GlobalConfig {
-  const parsed = (Bun.TOML.parse(content) ?? {}) as Partial<GlobalConfig>;
+export function parseGlobalToml(content: string, configPath = "~/.dev.toml"): GlobalConfig {
+  let parsed: Partial<GlobalConfig>;
+  try {
+    parsed = (Bun.TOML.parse(content) ?? {}) as Partial<GlobalConfig>;
+  } catch (cause) {
+    throw new GlobalTomlError(configPath, cause);
+  }
   return {
     default_root: parsed.default_root,
     roots: parsed.roots ?? {},
@@ -57,7 +76,7 @@ export async function loadGlobalConfig(configPath?: string): Promise<GlobalConfi
   }
 
   const content = await fs.readText(targetPath);
-  return parseGlobalToml(content);
+  return parseGlobalToml(content, targetPath);
 }
 
 export async function saveGlobalConfig(config: GlobalConfig, configPath?: string): Promise<void> {
