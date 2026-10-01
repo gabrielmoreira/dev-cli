@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -154,16 +154,29 @@ describe("CLI entrypoint (Phase 0)", () => {
     }
   });
 
-  it("verifies that .env is ignored by Git", async () => {
-    const proc = Bun.spawn(["git", "check-ignore", ".env"], {
-      cwd: process.cwd(),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const stdout = (await new Response(proc.stdout).text()).trim();
-    const exitCode = await proc.exited;
-    expect(exitCode).toBe(0);
-    expect(stdout).toBe(".env");
+  it("verifies .env is ignored by this repository, not global Git config", async () => {
+    const fixture = await mkdtemp(join(tmpdir(), "sample-project-git-ignore-"));
+    const globalIgnore = join(fixture, "global-ignore");
+    const globalConfig = join(fixture, "gitconfig");
+    try {
+      await writeFile(globalIgnore, ".env\n");
+      await writeFile(
+        globalConfig,
+        `[core]\n\texcludesFile = ${globalIgnore.replaceAll("\\", "/")}\n`,
+      );
+      const proc = Bun.spawn(["git", "-c", "core.excludesFile=", "check-ignore", "-v", ".env"], {
+        cwd: process.cwd(),
+        env: { ...process.env, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: "1" },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stdout = (await new Response(proc.stdout).text()).trim().replaceAll("\\", "/");
+      const exitCode = await proc.exited;
+      expect(exitCode).toBe(0);
+      expect(stdout).toMatch(/(?:^|\/)\.gitignore:\d+:\.env\s+\.env$/);
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
   });
 
   it("exits 2 with a structured code when sync inventory has no provider", async () => {
