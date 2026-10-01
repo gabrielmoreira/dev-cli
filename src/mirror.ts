@@ -27,9 +27,20 @@ export class CanonicalMirrorError extends Error {
   constructor(
     public readonly code: string,
     message: string,
+    public readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = "CanonicalMirrorError";
+  }
+}
+
+function assertMirrorBranch(path: string, requestedBranch: string, existingBranch?: string): void {
+  if (existingBranch !== requestedBranch) {
+    throw new CanonicalMirrorError(
+      "MIRROR_PATH_COLLISION",
+      `Mirror path for '${requestedBranch}' is tracking '${existingBranch ?? "detached HEAD"}'.`,
+      { path, existingBranch, requestedBranch },
+    );
   }
 }
 
@@ -164,7 +175,8 @@ function pinToRevision(pin: string): MountRevision {
 
 /** Materializes a canonical checkout for a source at a branch tip or pinned
  * revision. Idempotent: an existing checkout at the planned path is returned
- * as-is with `created: false` (freshness stays the job of mirror sync). */
+ * with `created: false` unless a sibling is tracking a different branch
+ * (freshness stays the job of mirror sync). */
 export async function ensure(
   input: MirrorAddInput,
   deps: MirrorDeps = defaultDeps,
@@ -204,6 +216,9 @@ export async function ensure(
 
   if (deps.fs.exists(plan.absolutePath)) {
     const observed = await deps.git.inspectWorktree(plan.absolutePath);
+    if (!pinned && plan.isSibling) {
+      assertMirrorBranch(plan.absolutePath, branch, observed.currentRevision.branch);
+    }
     return {
       sourceKey,
       canonicalUrl,
@@ -297,6 +312,8 @@ export async function track(
   });
 
   if (deps.fs.exists(plan.absolutePath)) {
+    const observed = await deps.git.inspectWorktree(plan.absolutePath);
+    assertMirrorBranch(plan.absolutePath, input.branch, observed.currentRevision.branch);
     return { sourceKey, branch: input.branch, path: plan.absolutePath, created: false };
   }
 
@@ -360,6 +377,7 @@ export async function untrack(
   }
 
   const observed = await deps.git.inspectWorktree(plan.absolutePath);
+  assertMirrorBranch(plan.absolutePath, input.branch, observed.currentRevision.branch);
   if (observed.isDirty && !input.force) {
     throw new CanonicalMirrorError(
       "DIRTY_WORKTREE",
