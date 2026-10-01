@@ -40,7 +40,10 @@ function writableDocument(config: RuntimeConfig): NonNullable<RuntimeConfig["con
   return config.configDoc;
 }
 
-function persistWorksets(config: RuntimeConfig, worksets: Record<string, WorksetDefinition>): void {
+async function persistWorksets(
+  config: RuntimeConfig,
+  worksets: Record<string, WorksetDefinition>,
+): Promise<void> {
   const doc = writableDocument(config);
   const existing = doc.get("worksets");
   const node = isMap(existing) ? existing : doc.createNode({});
@@ -52,16 +55,16 @@ function persistWorksets(config: RuntimeConfig, worksets: Record<string, Workset
   for (const [name, workset] of Object.entries(worksets)) {
     node.set(name, doc.createNode(workset));
   }
-  config.writeConfig?.();
+  await config.writeConfig?.();
   config.worksets = worksets;
 }
 
 /** created is false when a workset with this exact definition already exists. */
-export function createWorkset(
+export async function createWorkset(
   config: RuntimeConfig,
   name: string,
   definition: WorksetDefinition,
-): { definition: WorksetDefinition; created: boolean } {
+): Promise<{ definition: WorksetDefinition; created: boolean }> {
   const normalizedName = name.trim();
   const parsed = WorksetDefinitionSchema.parse(definition);
   if (Object.hasOwn(config.worksets, normalizedName)) {
@@ -74,15 +77,15 @@ export function createWorkset(
       `Workset '${normalizedName}' already exists with a different definition.`,
     );
   }
-  persistWorksets(config, { ...config.worksets, [normalizedName]: parsed });
+  await persistWorksets(config, { ...config.worksets, [normalizedName]: parsed });
   return { definition: parsed, created: true };
 }
 
-export function renameWorkset(
+export async function renameWorkset(
   config: RuntimeConfig,
   currentName: string,
   nextName: string,
-): WorksetDefinition {
+): Promise<WorksetDefinition> {
   const current = currentName.trim();
   const next = nextName.trim();
   const definition = config.worksets[current];
@@ -98,7 +101,7 @@ export function renameWorkset(
       name === current ? [next, workset] : [name, workset],
     ),
   );
-  persistWorksets(config, renamed);
+  await persistWorksets(config, renamed);
   return definition;
 }
 
@@ -149,11 +152,11 @@ export function declaredLabels(config: Pick<RuntimeConfig, "sources">): Map<stri
 }
 
 /** added is false when the same member (source, ref and path, or label) is already there. */
-export function addWorksetMember(
+export async function addWorksetMember(
   config: RuntimeConfig,
   name: string,
   member: WorksetMember,
-): { definition: WorksetDefinition; added: boolean } {
+): Promise<{ definition: WorksetDefinition; added: boolean }> {
   const definition = config.worksets[name];
   if (!definition) {
     throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
@@ -167,7 +170,7 @@ export function addWorksetMember(
     ...definition,
     members: [...definition.members, member],
   });
-  persistWorksets(config, { ...config.worksets, [name]: updated });
+  await persistWorksets(config, { ...config.worksets, [name]: updated });
   return { definition: updated, added: true };
 }
 
@@ -196,12 +199,12 @@ function findLabelIndex(definition: WorksetDefinition, label: string): number {
   return index;
 }
 
-export function editWorksetMember(
+export async function editWorksetMember(
   config: RuntimeConfig,
   name: string,
   target: string,
   changes: { ref?: string; path?: string; reason?: string },
-): WorksetDefinition {
+): Promise<WorksetDefinition> {
   const definition = config.worksets[name];
   if (!definition) {
     throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
@@ -212,32 +215,32 @@ export function editWorksetMember(
   );
   validateUniqueMembers(members);
   const updated = WorksetDefinitionSchema.parse({ ...definition, members });
-  persistWorksets(config, { ...config.worksets, [name]: updated });
+  await persistWorksets(config, { ...config.worksets, [name]: updated });
   return updated;
 }
 
 /** Removes the repository at `target` (path or source). */
-export function removeWorksetMember(
+export async function removeWorksetMember(
   config: RuntimeConfig,
   name: string,
   target: string,
-): WorksetDefinition {
-  return removeMember(config, name, (definition) => findMemberIndex(definition, target));
+): Promise<WorksetDefinition> {
+  return await removeMember(config, name, (definition) => findMemberIndex(definition, target));
 }
 
-export function removeWorksetLabel(
+export async function removeWorksetLabel(
   config: RuntimeConfig,
   name: string,
   label: string,
-): WorksetDefinition {
-  return removeMember(config, name, (definition) => findLabelIndex(definition, label));
+): Promise<WorksetDefinition> {
+  return await removeMember(config, name, (definition) => findLabelIndex(definition, label));
 }
 
-function removeMember(
+async function removeMember(
   config: RuntimeConfig,
   name: string,
   find: (definition: WorksetDefinition) => number,
-): WorksetDefinition {
+): Promise<WorksetDefinition> {
   const definition = config.worksets[name];
   if (!definition) {
     throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
@@ -253,16 +256,16 @@ function removeMember(
     ...definition,
     members: definition.members.filter((_, memberIndex) => memberIndex !== index),
   });
-  persistWorksets(config, { ...config.worksets, [name]: updated });
+  await persistWorksets(config, { ...config.worksets, [name]: updated });
   return updated;
 }
 
-export function saveWorksetDraft(
+export async function saveWorksetDraft(
   config: RuntimeConfig,
   originalName: string | undefined,
   name: string,
   definition: WorksetDefinition,
-): WorksetDefinition {
+): Promise<WorksetDefinition> {
   const normalizedName = name.trim();
   const parsed = WorksetDefinitionSchema.parse(definition);
   validateUniqueMembers(parsed.members);
@@ -280,6 +283,6 @@ export function saveWorksetDraft(
         ),
       )
     : { ...config.worksets, [normalizedName]: parsed };
-  persistWorksets(config, updated);
+  await persistWorksets(config, updated);
   return parsed;
 }

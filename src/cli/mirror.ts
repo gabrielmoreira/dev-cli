@@ -59,7 +59,7 @@ export const mirrorAddCommand = defineCommand({
           url: result.canonicalUrl,
           branch: result.branch,
         });
-        config.writeConfig?.();
+        await config.writeConfig?.();
       }
 
       ui.result({

@@ -121,7 +121,7 @@ describe("label source declaration editing", () => {
 });
 
 describe("config document round-trip", () => {
-  it("resolveConfig exposes the parsed doc and writeConfig persists edits", () => {
+  it("resolveConfig exposes the parsed doc and writeConfig persists edits atomically", async () => {
     const root = mkdtempSync(join(tmpdir(), "dev-cli-config-doc-"));
     try {
       writeFileSync(join(root, "dev.yaml"), YAML_WITH_COMMENTS);
@@ -134,7 +134,9 @@ describe("config document round-trip", () => {
         url: "https://github.com/org/wiki",
         branch: "main",
       });
-      config.writeConfig!();
+      const write = config.writeConfig!();
+      expect(write).toBeInstanceOf(Promise);
+      await write;
 
       const onDisk = readFileSync(join(root, "dev.yaml"), "utf8");
       expect(onDisk).toContain("# dev root configuration");
