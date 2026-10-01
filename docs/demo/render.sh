@@ -2,6 +2,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ -z "${DEV_VERSION:-}" ]]; then
+  printf 'DEV_VERSION is required to render the demo. Set it to a released CLI version.\n' >&2
+  exit 1
+fi
 if ! command -v docker >/dev/null 2>&1; then
   docker_desktop_bin="/Applications/Docker.app/Contents/Resources/bin"
   if [[ -x "$docker_desktop_bin/docker" ]]; then
@@ -39,9 +43,7 @@ fi
 cd "$repo_root"
 mkdir -p docs/assets
 build_args=(--file docs/demo/Dockerfile --tag dev-cli-demo:local)
-if [[ -n "${DEV_VERSION:-}" ]]; then
-  build_args+=(--build-arg "DEV_VERSION=$DEV_VERSION")
-fi
+build_args+=(--build-arg "DEV_VERSION=$DEV_VERSION")
 ca_file="${SSL_CERT_FILE:-${NODE_EXTRA_CA_CERTS:-}}"
 if [[ -f "$ca_file" ]]; then
   build_args+=(--secret "id=extra_ca,src=$ca_file")
