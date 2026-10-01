@@ -163,8 +163,24 @@ export async function reconcileCollections(
   label: string,
   desired: Map<string, string>,
   opts: { update?: boolean; embed: boolean } = { update: true, embed: true },
-): Promise<{ step: string; stderr: string } | null> {
-  const list = await qmd(base, config, ["collection", "list"]);
+): Promise<{
+  code: "QMD_FAILED";
+  args: string[];
+  exitCode: number;
+  step: string;
+  stderr: string;
+} | null> {
+  const listArgs = ["collection", "list"];
+  const list = await qmd(base, config, listArgs);
+  if (list.exitCode !== 0) {
+    return {
+      code: "QMD_FAILED",
+      args: listArgs,
+      exitCode: list.exitCode,
+      step: "collection list",
+      stderr: list.stderr || list.stdout,
+    };
+  }
   const ownedNames = new Set(
     list.stdout
       .split("\n")
@@ -175,25 +191,73 @@ export async function reconcileCollections(
 
   for (const name of ownedNames) {
     if (desired.has(name)) continue;
-    const removed = await qmd(base, config, ["collection", "remove", name]);
-    if (removed.exitCode !== 0)
-      return { step: "collection remove", stderr: removed.stderr || removed.stdout };
+    const args = ["collection", "remove", name];
+    const removed = await qmd(base, config, args);
+    if (removed.exitCode !== 0) {
+      return {
+        code: "QMD_FAILED",
+        args,
+        exitCode: removed.exitCode,
+        step: "collection remove",
+        stderr: removed.stderr || removed.stdout,
+      };
+    }
   }
 
   for (const [name, path] of desired) {
     if (ownedNames.has(name)) continue;
-    // qmd exits 1 when name or path+pattern already exists: idempotent add.
-    await qmd(base, config, ["collection", "add", path, "--name", name]);
+    const args = ["collection", "add", path, "--name", name];
+    const added = await qmd(base, config, args);
+    if (added.exitCode === 0) continue;
+
+    const verify = await qmd(base, config, listArgs);
+    if (verify.exitCode !== 0) {
+      return {
+        code: "QMD_FAILED",
+        args: listArgs,
+        exitCode: verify.exitCode,
+        step: "collection list",
+        stderr: verify.stderr || verify.stdout,
+      };
+    }
+    const present = verify.stdout.split("\n").some((line) => line.trim().split(/\s+/)[0] === name);
+    if (!present) {
+      return {
+        code: "QMD_FAILED",
+        args,
+        exitCode: added.exitCode,
+        step: "collection add",
+        stderr: added.stderr || added.stdout,
+      };
+    }
   }
 
   if (opts.update === false) return null;
 
-  const update = await qmd(base, config, ["update"]);
-  if (update.exitCode !== 0) return { step: "update", stderr: update.stderr || update.stdout };
+  const updateArgs = ["update"];
+  const update = await qmd(base, config, updateArgs);
+  if (update.exitCode !== 0) {
+    return {
+      code: "QMD_FAILED",
+      args: updateArgs,
+      exitCode: update.exitCode,
+      step: "update",
+      stderr: update.stderr || update.stdout,
+    };
+  }
 
   if (opts.embed) {
-    const embed = await qmd(base, config, ["embed"]);
-    if (embed.exitCode !== 0) return { step: "embed", stderr: embed.stderr || embed.stdout };
+    const args = ["embed"];
+    const embed = await qmd(base, config, args);
+    if (embed.exitCode !== 0) {
+      return {
+        code: "QMD_FAILED",
+        args,
+        exitCode: embed.exitCode,
+        step: "embed",
+        stderr: embed.stderr || embed.stdout,
+      };
+    }
   }
   return null;
 }

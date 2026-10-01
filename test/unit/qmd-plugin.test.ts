@@ -190,6 +190,147 @@ describe("reconcileCollections", () => {
     rmSync(root, { recursive: true, force: true });
   });
 
+  it("reports a failed initial list before mutating collections", async () => {
+    const { base, shell, root } = makeHarness();
+    shell.answerWith((args) =>
+      args[0] === "collection" && args[1] === "list"
+        ? { stdout: "wiki--stale", stderr: "registry unavailable", exitCode: 2 }
+        : { stdout: "", stderr: "", exitCode: 0 },
+    );
+
+    try {
+      const failure = await reconcileCollections(
+        base,
+        parseQmdConfig(undefined),
+        "wiki",
+        new Map([["wiki--docs", "P:/docs"]]),
+      );
+
+      expect(failure).toEqual({
+        code: "QMD_FAILED",
+        args: ["collection", "list"],
+        exitCode: 2,
+        step: "collection list",
+        stderr: "registry unavailable",
+      });
+      expect(shell.calls.every((call) => call.args[1] === "list")).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it.each(["", "wiki--docs-copy\n"])(
+    "reports a failed collection add unless a follow-up list confirms the exact name (%j)",
+    async (listed) => {
+      const { base, shell, root } = makeHarness();
+      let listCalls = 0;
+      shell.answerWith((args) => {
+        if (args[0] === "collection" && args[1] === "list") {
+          listCalls++;
+          return { stdout: listCalls === 1 ? "" : listed, stderr: "", exitCode: 0 };
+        }
+        if (args[0] === "collection" && args[1] === "add") {
+          return { stdout: "", stderr: "path unavailable", exitCode: 1 };
+        }
+        return { stdout: "", stderr: "", exitCode: 0 };
+      });
+
+      try {
+        const failure = await reconcileCollections(
+          base,
+          parseQmdConfig(undefined),
+          "wiki",
+          new Map([["wiki--docs", "P:/docs"]]),
+        );
+
+        expect(failure).toEqual({
+          code: "QMD_FAILED",
+          args: ["collection", "add", "P:/docs", "--name", "wiki--docs"],
+          exitCode: 1,
+          step: "collection add",
+          stderr: "path unavailable",
+        });
+        expect(listCalls).toBe(2);
+        expect(shell.calls[0]?.env.QMD_CONFIG_DIR).toBe(join(root, ".dev", "plugins", "qmd"));
+        expect(shell.calls.some((call) => call.args[0] === "update")).toBe(false);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("reports a failed verification list even if its output names the collection", async () => {
+    const { base, shell, root } = makeHarness();
+    let listCalls = 0;
+    shell.answerWith((args) => {
+      if (args[0] === "collection" && args[1] === "list") {
+        listCalls++;
+        return listCalls === 1
+          ? { stdout: "", stderr: "", exitCode: 0 }
+          : { stdout: "wiki--docs", stderr: "registry unavailable", exitCode: 2 };
+      }
+      if (args[0] === "collection" && args[1] === "add") {
+        return { stdout: "", stderr: "already registered", exitCode: 1 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    try {
+      const failure = await reconcileCollections(
+        base,
+        parseQmdConfig(undefined),
+        "wiki",
+        new Map([["wiki--docs", "P:/docs"]]),
+      );
+
+      expect(failure).toEqual({
+        code: "QMD_FAILED",
+        args: ["collection", "list"],
+        exitCode: 2,
+        step: "collection list",
+        stderr: "registry unavailable",
+      });
+      expect(shell.calls.some((call) => call.args[0] === "update")).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts a failed add when a successful follow-up list confirms the collection", async () => {
+    const { base, shell, root } = makeHarness();
+    let listCalls = 0;
+    shell.answerWith((args) => {
+      if (args[0] === "collection" && args[1] === "list") {
+        listCalls++;
+        return {
+          stdout: listCalls === 1 ? "" : "  wiki--docs  P:/docs\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      if (args[0] === "collection" && args[1] === "add") {
+        return { stdout: "", stderr: "already registered", exitCode: 1 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    });
+
+    try {
+      const failure = await reconcileCollections(
+        base,
+        parseQmdConfig(undefined),
+        "wiki",
+        new Map([["wiki--docs", "P:/docs"]]),
+      );
+
+      expect(failure).toBeNull();
+      expect(listCalls).toBe(2);
+      expect(shell.calls.some((call) => call.args[0] === "update")).toBe(true);
+      expect(shell.calls.some((call) => call.args[0] === "embed")).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("skips embed when asked and reports update failures", async () => {
     const { base, shell, root } = makeHarness();
     shell.answerWith((args) => {
@@ -205,7 +346,13 @@ describe("reconcileCollections", () => {
       { embed: false },
     );
 
-    expect(failure).toEqual({ step: "update", stderr: "update boom" });
+    expect(failure).toEqual({
+      code: "QMD_FAILED",
+      args: ["update"],
+      exitCode: 3,
+      step: "update",
+      stderr: "update boom",
+    });
     expect(shell.calls.some((c) => c.args[0] === "embed")).toBe(false);
     rmSync(root, { recursive: true, force: true });
   });
