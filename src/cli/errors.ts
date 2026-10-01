@@ -9,7 +9,7 @@ import { CancelledError, ui } from "../ui.ts";
 const NEXT_STEPS: Record<string, string> = {
   BRANCH_ALREADY_MOUNTED: "dev ws status",
   CREDENTIAL_NOT_AVAILABLE: "gh auth login    # or: az login",
-  INVALID_GLOBAL_TOML: "Edit <path> to fix the TOML syntax, then retry.",
+  INVALID_GLOBAL_TOML: "Edit <path> to fix the TOML syntax or root entries, then retry.",
   MANIFEST_NOT_FOUND: "dev ls",
   MOUNT_ALREADY_EXISTS: "dev ws status",
   MOUNT_NOT_FOUND: "dev ws status",
