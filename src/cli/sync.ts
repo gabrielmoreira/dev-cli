@@ -3,16 +3,11 @@ import * as sync from "../sync.ts";
 import * as ws from "../ws.ts";
 import * as cache from "../cache.ts";
 import { createAzureDevOps } from "../ado.ts";
-import { resolveAzureDevOpsCredential } from "../credentials.ts";
+import { resolveAzureDevOpsCredential, resolveExtraHeader } from "../credentials.ts";
 import { ui } from "../ui.ts";
 import { reportError, reportExitCode } from "./errors.ts";
 import { getActiveConfig, getAmbient } from "./context.ts";
-import {
-  describeSkipReason,
-  warnHealFailures,
-  workspaceSyncOptions,
-  wsUpdateCommand,
-} from "./ws.ts";
+import { describeSkipReason, warnHealFailures, workspaceSyncOptions } from "./ws.ts";
 import { formatLabelMirrors, formatMirrorSync } from "./mirror.ts";
 import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
@@ -83,7 +78,7 @@ export const syncInventoryCommand = defineCommand({
     if (args.offline) {
       const cached = await cache.loadAllCachedInventories(config.root);
       ui.result({
-        data: { mode: "offline", total: cached.length, repositories: cached },
+        data: { action: "data", mode: "offline", total: cached.length, repositories: cached },
         json: args.json,
         text: `Offline mode: ${cached.length} repositories from local cache.`,
       });
@@ -106,7 +101,7 @@ export const syncInventoryCommand = defineCommand({
     const { results, errors } = await sync.syncProviderInventories(config, providers, args.project);
 
     ui.result({
-      data: { results, errors },
+      data: { action: "data", results, errors },
       json: args.json,
       text: () => {
         let out = formatInventoryResults(results);
@@ -150,6 +145,7 @@ export const syncDataCommand = defineCommand({
 
       ui.result({
         data: {
+          action: "data",
           mode: "offline",
           inventory: { total: inventories.length, repos: inventories },
           workItems: { total: workItems.length, items: workItems },
@@ -285,7 +281,7 @@ export const syncDataCommand = defineCommand({
     });
 
     ui.result({
-      data: result,
+      data: { action: "data", ...result },
       json: args.json,
       text: () => formatDataResult(result),
     });
@@ -320,8 +316,14 @@ export const syncCommand = defineCommand({
       description:
         "Sync everything, in or out of a workspace: provider data, mirrors, and every workspace. Reads from remotes only and runs no hooks",
     },
-    provider: { type: "string", description: "Limit provider data to one provider id" },
-    project: { type: "string", description: "Azure DevOps project for provider data" },
+    provider: {
+      type: "string",
+      description: "Limit provider data to one provider id (outside a workspace or with --all)",
+    },
+    project: {
+      type: "string",
+      description: "Azure DevOps project for provider data (outside a workspace or with --all)",
+    },
     offline: {
       type: "boolean",
       description: "Read the local caches only, without network access",
@@ -390,6 +392,7 @@ export const syncCommand = defineCommand({
       const seconds = (durationMs / 1000).toFixed(1);
       ui.result({
         data: {
+          action: "all",
           providers,
           mirrors,
           workspaces,
@@ -453,8 +456,100 @@ export const syncCommand = defineCommand({
     const ambient = getAmbient();
     const wsName = args.ws || ws.detectWorkspaceFromCwd(ambient.cwd, config.root);
     if (wsName) {
+      if (args.provider !== undefined || args.project !== undefined) {
+        return reportError(
+          new ws.WorkspaceError(
+            "CONFLICTING_OPTIONS",
+            "--provider and --project apply to provider data, not a workspace sync. Run 'dev sync data --provider <id> [--project <name>]'.",
+            { usage: "dev sync data --provider <id> [--project <name>]" },
+          ),
+          args.json,
+        );
+      }
       if (!args.json) ui.info(`Sync action: workspace update (${wsName}).`);
-      return await runNestedCommand(wsUpdateCommand, [...rawArgs, "--ws", wsName]);
+      try {
+        const fetching = !args.offline && args.refresh !== false;
+        if (fetching && !args.json) ui.info(`↻ Fetching remotes for ${wsName}...`);
+        const result = await ws.update({
+          root: config.root,
+          workspacePrefix: config.workspacePrefix,
+          workspaceName: wsName,
+          refresh: args.refresh,
+          offline: args.offline,
+          autostash: args.autostash,
+          rebase: args.rebase,
+          dryRun: args["dry-run"],
+          resolveExtraHeader: (source) => resolveExtraHeader(config, source),
+          trustedScopes: config.trustedScopes,
+          explicitConsent: args.consent || args.force,
+          globalHooks: config.hooks,
+        });
+        warnHealFailures([result]);
+        ui.result({
+          data: { action: "workspace", ...result },
+          json: args.json,
+          text: () => {
+            if (result.dryRun) {
+              let plan = `Plan for ${result.workspaceName} (dry run, nothing changed${fetching ? "" : "; offline, compared with the last fetch"}):\n`;
+              for (const mount of result.mounts) {
+                const at = mount.revision ? ws.describeRevision(mount.revision) : "";
+                const line =
+                  mount.action === "create"
+                    ? `would create at ${at}`
+                    : mount.action === "checkout"
+                      ? `would check out ${at}`
+                      : mount.action === "fast_forward"
+                        ? "would fast-forward"
+                        : mount.action === "rebase"
+                          ? "would rebase onto remote"
+                          : mount.action === "up_to_date"
+                            ? "up to date"
+                            : `would skip: ${describeSkipReason(mount.reason, result.workspaceName).why}`;
+                plan += `  → ${mount.path}: ${line}\n`;
+              }
+              return plan.trimEnd();
+            }
+            let out = `Workspace: ${result.workspaceName}\n`;
+            out += `Path:      ${result.workspacePath}\n`;
+            out += `Summary:   ${result.summary.updated} updated, ${result.summary.upToDate} up to date, ${result.summary.skipped} skipped (${result.summary.total} total)\n`;
+            if (!fetching)
+              out += "Remotes:   not fetched (--offline); compared with the last fetch\n";
+            if (result.hookWarning) {
+              out += `Hook:      ⚠ ${result.hookWarning}\n`;
+            }
+            out += "\n";
+            for (const mount of result.mounts) {
+              if (mount.action === "create") {
+                const reused = mount.mirrorReused ? ", reused the local mirror" : "";
+                out += `  ✓ ${mount.path}: created at ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)}${reused})\n`;
+              } else if (mount.action === "checkout") {
+                out += `  ✓ ${mount.path}: back on ${ws.describeRevision(mount.revision!)} (${mount.newCommit?.slice(0, 8)})\n`;
+              } else if (mount.action === "fast_forward") {
+                out += `  ✓ ${mount.path}: fast-forwarded (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
+              } else if (mount.action === "rebase") {
+                out += `  ✓ ${mount.path}: rebased onto remote (${mount.previousCommit?.slice(0, 8)} -> ${mount.newCommit?.slice(0, 8)})\n`;
+              } else if (mount.action === "up_to_date") {
+                out += `  ○ ${mount.path}: up to date (${mount.newCommit?.slice(0, 8)})\n`;
+              } else {
+                const skip = describeSkipReason(mount.reason, result.workspaceName);
+                out += `  ⚠ ${mount.path}: skipped, ${skip.why}\n`;
+                if (skip.hint) out += `    ↳ ${skip.hint}\n`;
+              }
+              if (mount.warning) {
+                out += `    ⚠ ${mount.warning}\n`;
+              }
+              if (mount.stash) {
+                out += `    Work restored, backup retained: ${mount.stash.stashName} (${mount.stash.stashSha.slice(0, 8)})\n`;
+                out += `    Recovery: ${mount.stash.recovery}\n`;
+              }
+            }
+            return out.trimEnd();
+          },
+        });
+        return 0;
+      } catch (error) {
+        return reportError(error, args.json);
+      }
     }
     // Outside a workspace these would be ignored, and the inventory sync has no
     // dry run: never let a preview start a real sync.
@@ -491,7 +586,11 @@ export const syncCommand = defineCommand({
       provider: args.provider,
       project: args.project,
     });
-    ui.result({ data: result, json: args.json, text: () => formatProviderSync(result) });
+    ui.result({
+      data: { action: "data", ...result },
+      json: args.json,
+      text: () => formatProviderSync(result),
+    });
     return result.errors.length > 0 && result.inventory.length === 0 && result.data.length === 0
       ? 1
       : 0;
