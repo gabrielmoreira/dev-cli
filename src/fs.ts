@@ -81,7 +81,9 @@ export async function withFileLock<T>(
   options: { timeoutMs?: number } = {},
 ): Promise<T> {
   const lockPath = `${targetPath}.lock`;
-  const reclaimPath = join(lockPath, "reclaim");
+  // Beside the lock, not inside it: a waiter creating an entry inside the lock
+  // while the owner removes it can leave an empty, ownerless lock behind.
+  const reclaimPath = `${lockPath}.reclaim`;
   const localHostname = hostname();
   const startedAt = Date.now();
   let created = false;
@@ -132,7 +134,7 @@ export async function withFileLock<T>(
           }
           if (dead) await rm(lockPath, { recursive: true, force: true });
         } finally {
-          if (!dead) await rm(reclaimPath, { recursive: true, force: true });
+          await rm(reclaimPath, { recursive: true, force: true });
         }
         if (dead) continue;
       }
