@@ -87,9 +87,23 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       }
     });
 
-    test("defaults to bash for unrecognized shell type", () => {
-      const def = generateShellInit("unknown");
-      expect(def).toContain("dev() {");
+    test.each(["unknown", ""])("rejects an unsupported shell %s with its choices", (shell) => {
+      expect(generateShellInit("bash", undefined)).toBe(generateShellInit("bash", "direct"));
+      expect(() => generateShellInit(shell)).toThrow("Unknown shell");
+      let error: unknown;
+      try {
+        generateShellInit(shell);
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toMatchObject({
+        code: "INVALID_ARGUMENT",
+        details: {
+          shell,
+          choices: ["bash", "zsh", "fish", "powershell", "pwsh"],
+          usage: "dev shell-init --help",
+        },
+      });
     });
   });
 

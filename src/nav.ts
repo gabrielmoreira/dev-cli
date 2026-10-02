@@ -37,7 +37,15 @@ export async function resolveJumpTarget(input: ResolveJumpTargetInput): Promise<
 export type ShellRunner = "direct" | "mise";
 
 export function generateShellInit(shellType: string, runner: ShellRunner = "direct"): string {
-  const norm = (shellType || "bash").toLowerCase().trim();
+  const norm = shellType.toLowerCase().trim();
+  const choices = ["bash", "zsh", "fish", "powershell", "pwsh"];
+  if (!choices.includes(norm)) {
+    throw new WorkspaceError(
+      "INVALID_ARGUMENT",
+      `Unknown shell '${shellType}'. Choose bash, zsh, fish, powershell, or pwsh.`,
+      { shell: shellType, choices, usage: "dev shell-init --help" },
+    );
+  }
   const posixDev = runner === "mise" ? "mise run dev --" : "command dev";
   const powerShellDev =
     runner === "mise"
@@ -133,7 +141,7 @@ end
 `;
   }
 
-  // Default: bash and zsh
+  // The remaining supported shells are bash and zsh.
   return `# dev CLI shell integration for bash/zsh
 dev() {
   local arg

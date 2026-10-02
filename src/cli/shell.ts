@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { generateShellInit } from "../nav.ts";
 import { ui } from "../ui.ts";
-import { reportError } from "./errors.ts";
+import { WorkspaceError } from "../ws.ts";
 
 export const shellInitCommand = defineCommand({
   meta: {
@@ -21,10 +21,14 @@ export const shellInitCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   run({ args }) {
-    const shellType = args.shell || (process.platform === "win32" ? "powershell" : "bash");
-    const runner = args.runner ?? "direct";
-    if (runner !== "direct" && runner !== "mise") {
-      return reportError("--runner must be 'direct' or 'mise'.");
+    const shellType = args.shell ?? (process.platform === "win32" ? "powershell" : "bash");
+    const runner = args.runner;
+    if (runner !== undefined && runner !== "direct" && runner !== "mise") {
+      throw new WorkspaceError(
+        "INVALID_ARGUMENT",
+        `Unknown runner '${runner}'. Choose direct or mise.`,
+        { runner, choices: ["direct", "mise"], usage: "dev shell-init --help" },
+      );
     }
     const script = generateShellInit(shellType, runner);
     ui.result({

@@ -123,6 +123,8 @@ dev shell-init fish | source
 Invoke-Expression (dev shell-init powershell | Out-String)
 ```
 
+`shell-init` accepts `bash`, `zsh`, `fish`, `powershell`, and `pwsh`; omit the shell to use the platform default. `--runner` accepts `direct` or `mise` and defaults to `direct`. An unsupported shell or runner exits 2 with `INVALID_ARGUMENT`, the supported choices, and `dev shell-init --help`; `--json` returns that error on stderr.
+
 `dev go` asks with a fuzzy-searchable list when several workspaces match; `dev go <query>` with a unique match skips the question.
 
 `dev ws jump` uses the configured workspace prefix and returns `WORKSPACE_NOT_FOUND` for missing or non-directory targets without printing a path or recording recent use.
