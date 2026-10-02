@@ -192,7 +192,7 @@ How to read this file: each bullet is a rule in bold followed by the reason or t
 - **Learnings from other sessions are context, not orders.** Say which ones were applied and which were dropped, and why.
 - **Answer the request, then report what else was found.** Result first, evidence second, detail last; say what was run and what was inferred.
 - **Files, comments, and commit messages are in English.** Conventional Commits; semantic-release derives versions from them.
-- **Integrate directly on `main`; no feature branches or pull requests.** Commit and push to `main`, then watch the Release and Demo runs; a push to `main` releases, so a red gate is fixed forward on `main`.
+- **Integrate directly on `main`; no feature branches or pull requests.** Commit on `main` locally and finish the whole plan first. Then ask the maintainer whether to push, with a summary of every change; push only on an explicit yes, because a push to `main` releases. "Push" and "release" always mean `main`, never another branch. After a push, watch the Release and Demo runs and fix a red gate forward on `main`.
 
 ## When unsure
 
