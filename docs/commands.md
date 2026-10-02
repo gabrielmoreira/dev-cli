@@ -1148,10 +1148,10 @@ Remove a label from a workset
 
 Show one configured workset
 
-**Usage:** `dev workset show <name> [--root <value>] [--json]`
+**Usage:** `dev workset show [name] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                      |
 | ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Workset name Required.           |
+| `name`           | positional | Workset name                     |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |

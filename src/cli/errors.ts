@@ -111,11 +111,13 @@ export function describeError(error: unknown): StructuredError {
   const code =
     rawCode === "E_UNKNOWN_COMMAND"
       ? "UNKNOWN_COMMAND"
-      : typeof rawCode === "string"
-        ? rawCode
-        : undefined;
+      : rawCode === "EARG" || rawCode === "E_NO_COMMAND"
+        ? "INTERACTION_REQUIRED"
+        : typeof rawCode === "string"
+          ? rawCode
+          : undefined;
   const details =
-    rawCode === "E_UNKNOWN_COMMAND"
+    rawCode === "E_UNKNOWN_COMMAND" || rawCode === "EARG" || rawCode === "E_NO_COMMAND"
       ? { usage: "dev --help", ...detailsOf(error) }
       : detailsOf(error);
   const hint = code ? NEXT_STEPS[code] : undefined;
@@ -123,7 +125,11 @@ export function describeError(error: unknown): StructuredError {
   return {
     code,
     message,
-    nextStep: hint ? fillPlaceholders(hint, details) : undefined,
+    nextStep: hint
+      ? fillPlaceholders(hint, details)
+      : typeof details?.usage === "string"
+        ? details.usage
+        : undefined,
     details,
   };
 }

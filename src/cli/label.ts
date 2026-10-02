@@ -11,6 +11,7 @@ import { createPluginBase, emit } from "../plugins/index.ts";
 import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig } from "./context.ts";
 import { reportError, reportExitCode } from "./errors.ts";
+import { CliInputRequiredError, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 type Declared = labels.SourceDeclaration;
@@ -269,13 +270,23 @@ export const labelAddCommand = defineCommand({
     if (missingYaml) return reportError(missingYaml, args.json);
     try {
       const interactive = canPrompt();
-      const label = args.label?.trim() || (interactive ? await chooseLabel(config, "Label") : "");
+      const usage = "dev label add <label> <repository...>";
+      const label = (
+        await resolveTextInput({
+          value:
+            args.label?.trim() || (interactive ? await chooseLabel(config, "Label") : undefined),
+          message: "Label name",
+          required: { command: "label add", field: "label", usage, description: "Label name" },
+        })
+      ).value;
       const given = (args._ as string[]).slice(1);
-      if (!label || (given.length === 0 && !interactive)) {
-        return reportError(
-          "A label and at least one repository are required: dev label add <label> <repository...>",
-          args.json,
-        );
+      if (given.length === 0 && !interactive) {
+        throw new CliInputRequiredError({
+          command: "label add",
+          field: "sources",
+          usage,
+          description: "At least one repository",
+        });
       }
       const parsed = parseFields(args.fields);
       if (parsed.error) return reportError(parsed.error, args.json);

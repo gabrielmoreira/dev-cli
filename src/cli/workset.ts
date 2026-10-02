@@ -848,23 +848,36 @@ export const worksetListCommand = defineCommand({
 export const worksetShowCommand = defineCommand({
   meta: { name: "show", description: "Show one configured workset" },
   args: {
-    name: { type: "positional", description: "Workset name", required: true },
+    name: { type: "positional", description: "Workset name", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
-    const workset = config.worksets[args.name];
-    if (!workset) {
-      return reportError(`Unknown workset '${args.name}'.`, args.json);
+    try {
+      const selected = await resolveChoiceInput({
+        value: args.name,
+        choices: async () =>
+          Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
+        message: "Select workset",
+        required: {
+          command: "workset show",
+          field: "name",
+          usage: "dev workset show <name>",
+          description: "Workset name",
+        },
+      });
+      const definition = config.worksets[selected.value];
+      if (!definition) return reportError(`Unknown workset '${selected.value}'.`, args.json);
+      ui.result({
+        data: { name: selected.value, ...definition },
+        json: args.json,
+        text: () => renderWorkset(config, selected.value, definition),
+      });
+      return 0;
+    } catch (error) {
+      return reportError(error, args.json);
     }
-    const data = { name: args.name, ...workset };
-    ui.result({
-      data,
-      json: args.json,
-      text: () => renderWorkset(config, args.name, workset),
-    });
-    return 0;
   },
 });
 

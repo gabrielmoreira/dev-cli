@@ -12,8 +12,7 @@ import { providerCommand } from "./provider.ts";
 import { type AmbientContext, setAmbient } from "./context.ts";
 import { detectWorkspaceFromCwd, WorkspaceError } from "../ws.ts";
 import { ui } from "../ui.ts";
-import { CliInputRequiredError } from "./input.ts";
-import { EXIT_CODE_MEANINGS, EXIT_USAGE, reportError, takeReportedExitCode } from "./errors.ts";
+import { EXIT_CODE_MEANINGS, reportError, takeReportedExitCode } from "./errors.ts";
 import { qmdCommand, qmdSearchCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
@@ -512,13 +511,16 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     // printed an error without reporting a code still failed.
     return takeReportedExitCode() ?? (ui.hasError() ? 1 : 0);
   } catch (error: unknown) {
-    if (error instanceof CliInputRequiredError) {
-      if (ui.isJson()) {
-        return reportError(error, true);
-      }
-      ui.error(`✗ ${error.message}`);
-      ui.error(`↳ ${error.details.usage}`);
-      return EXIT_USAGE;
+    const code = (error as { code?: string } | null)?.code;
+    if (code === "EARG" || code === "E_NO_COMMAND") {
+      const command = normalizedArgs[0] === "qmd" ? normalizedArgs[1] : undefined;
+      const usage =
+        command === "search"
+          ? "dev qmd search <query>"
+          : command === "x"
+            ? "dev qmd x <args>"
+            : "dev --help";
+      return reportError(Object.assign(error as Error, { details: { usage } }), ui.isJson());
     }
 
     return reportError(error, ui.isJson());

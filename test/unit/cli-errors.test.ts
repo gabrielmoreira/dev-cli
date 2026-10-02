@@ -14,6 +14,23 @@ class Coded extends Error {
 }
 
 describe("describeError", () => {
+  test("uses structured usage for a locally caught missing input", () => {
+    expect(
+      describeError(
+        new Coded("INTERACTION_REQUIRED", "Name is required.", {
+          usage: "dev workset create [name] [repository]",
+        }),
+      ).nextStep,
+    ).toBe("dev workset create [name] [repository]");
+    expect(describeError(new Coded("SOMETHING_ODD", "it broke")).nextStep).toBeUndefined();
+  });
+
+  test.each(["EARG", "E_NO_COMMAND"])("normalizes parser input error %s with usage", (code) => {
+    expect(
+      describeError(new Coded(code, "Input is required", { usage: "dev qmd x <args>" })),
+    ).toMatchObject({ code: "INTERACTION_REQUIRED", nextStep: "dev qmd x <args>" });
+  });
+
   test("names the way out for a known code", () => {
     const described = describeError(new Coded("WORKSPACE_NOT_FOUND", "Workspace 'x' not found"));
 
