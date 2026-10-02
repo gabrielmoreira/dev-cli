@@ -5,6 +5,7 @@ import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
 import * as git from "../../src/git.ts";
 import * as mirror from "../../src/mirror.ts";
+import { formatMirrorSync } from "../../src/cli/mirror.ts";
 
 describe("Canonical repository local integration (Phase 8)", () => {
   let tempRoot: string;
@@ -145,6 +146,10 @@ describe("Canonical repository local integration (Phase 8)", () => {
       const stashed = result.stashed[0]!;
       expect(stashed.path).toBe(plan.absolutePath);
       expect(stashed.stashName).toMatch(/^dev mirror sync \d{4}-\d{2}-\d{2}T/);
+      expect(stashed.stashSha).toMatch(/^[0-9a-f]{40}$/);
+      const report = formatMirrorSync(result, { changes: true }).join("\n");
+      expect(report).toContain(`were stashed as ${stashed.stashName}`);
+      expect(report).toContain(`git -C "${stashed.path}" stash apply ${stashed.stashSha}`);
       expect(stashed.changes).toContain("M file.txt");
       if (index === 0) {
         expect(stashed.changes).toContain("?? scratch.txt");
@@ -203,6 +208,42 @@ describe("Canonical repository local integration (Phase 8)", () => {
     expect(result.stashed.map((item) => item.path)).toEqual([first.path]);
     expect((await git.inspectWorktree(first.path)).isDirty).toBe(false);
     expect((await git.inspectWorktree(second.path)).isDirty).toBe(true);
+  });
+
+  it("rejects a selected source that matches no mirror without changing existing mirrors", async () => {
+    const selectedRoot = join(tempRoot, "unknown-source");
+    const added = await mirror.ensure({
+      root: selectedRoot,
+      source: bareRemotePath,
+      branch: "main",
+    });
+    const unfiltered = await mirror.sync({ root: selectedRoot });
+    expect(unfiltered.skipped).toEqual([
+      expect.objectContaining({ path: added.path, reason: "UP_TO_DATE" }),
+    ]);
+    await fs.writeText(join(added.path, "notes.local"), "keep this untracked work");
+
+    await expect(mirror.sync({ root: selectedRoot, source: "typo" })).rejects.toMatchObject({
+      code: "SOURCE_NOT_FOUND",
+      details: { source: "typo" },
+    });
+
+    expect(await fs.readText(join(added.path, "notes.local"))).toBe("keep this untracked work");
+    expect((await git.inspectWorktree(added.path)).isDirty).toBe(true);
+  });
+
+  it("keeps empty unfiltered sync successful but rejects an explicit missing source", async () => {
+    const emptyRoot = join(tempRoot, "empty-sync");
+    expect(await mirror.sync({ root: emptyRoot })).toMatchObject({
+      updated: [],
+      stashed: [],
+      skipped: [],
+      refreshFailures: [],
+    });
+    await expect(mirror.sync({ root: emptyRoot, source: "typo" })).rejects.toMatchObject({
+      code: "SOURCE_NOT_FOUND",
+      details: { source: "typo" },
+    });
   });
 
   it("repairs legacy permission damage without stashing false changes", async () => {

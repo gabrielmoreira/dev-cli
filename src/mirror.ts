@@ -564,6 +564,13 @@ export async function sync(
     worktreePaths = identified
       .filter((item) => item.source && deps.git.normalizeSourceKey(item.source) === targetSourceKey)
       .map((item) => item.path);
+    if (worktreePaths.length === 0 && unlinked.length === 0) {
+      throw new CanonicalMirrorError(
+        "SOURCE_NOT_FOUND",
+        `No mirror matches source '${input.source}'.`,
+        { source: input.source },
+      );
+    }
   }
 
   const stageMs = new Map<string, number>();

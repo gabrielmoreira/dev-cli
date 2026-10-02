@@ -137,4 +137,51 @@ describe("dev mirror CLI E2E (Phase 8)", () => {
     const listAfterJson = JSON.parse(await new Response(listAfterProc.stdout).text());
     expect(listAfterJson.length).toBe(1);
   });
+
+  it.each([false, true])("rejects an unknown mirror sync source (json=%s)", async (json) => {
+    const proc = Bun.spawn(
+      [
+        process.execPath,
+        cliPath,
+        "mirror",
+        "sync",
+        "typo",
+        "--offline",
+        "--root",
+        tempRoot,
+        ...(json ? ["--json"] : []),
+      ],
+      {
+        cwd: tempRoot,
+        env: {
+          ...process.env,
+          HOME: tempRoot,
+          USERPROFILE: tempRoot,
+          DEV_ROOT: tempRoot,
+          DEV_CWD: tempRoot,
+          GIT_CONFIG_GLOBAL: join(tempRoot, "gitconfig"),
+          GIT_CONFIG_NOSYSTEM: "1",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    expect(exitCode).toBe(2);
+    expect(stdout).toBe("");
+    if (json) {
+      expect(JSON.parse(stderr).error).toEqual({
+        code: "SOURCE_NOT_FOUND",
+        message: "No mirror matches source 'typo'.",
+        nextStep: "dev mirror ls",
+        source: "typo",
+      });
+    } else {
+      expect(stderr).toBe("✗ No mirror matches source 'typo'.\n↳ dev mirror ls\n");
+    }
+  });
 });
