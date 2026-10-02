@@ -65,12 +65,27 @@ export class FileLockError extends Error {
     path: string;
     lockPath: string;
     owner?: { pid: number; hostname: string };
+    reclaimPath?: string;
   };
 
-  constructor(path: string, lockPath: string, owner?: { pid: number; hostname: string }) {
-    super(`Timed out waiting for file lock: ${lockPath}. Remove it only if you know it is stale.`);
+  constructor(
+    path: string,
+    lockPath: string,
+    owner?: { pid: number; hostname: string },
+    reclaimPath?: string,
+  ) {
+    super(
+      reclaimPath
+        ? `Timed out waiting for file lock: ${lockPath}. A reclaim guard is stuck at ${reclaimPath}; remove both only if you know their owners are gone.`
+        : `Timed out waiting for file lock: ${lockPath}. Remove it only if you know it is stale.`,
+    );
     this.name = "FileLockError";
-    this.details = { path, lockPath, ...(owner ? { owner } : {}) };
+    this.details = {
+      path,
+      lockPath,
+      ...(owner ? { owner } : {}),
+      ...(reclaimPath ? { reclaimPath } : {}),
+    };
   }
 }
 
@@ -99,8 +114,9 @@ export async function withFileLock<T>(
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       }
 
-      // Only one waiter may verify and reclaim a dead owner at a time. The guard
-      // records its own owner so a waiter that crashed holding it cannot strand it.
+      // Only one waiter may verify and reclaim a dead owner at a time. A guard left
+      // by a waiter that crashed mid-reclaim is never removed automatically: every
+      // automatic takeover needs a guard of its own. The timeout names it instead.
       let reclaimCreated = false;
       try {
         await mkdir(reclaimPath);
@@ -109,10 +125,6 @@ export async function withFileLock<T>(
         const code = (error as NodeJS.ErrnoException).code;
         if (code === "ENOENT") continue;
         if (code !== "EEXIST") throw error;
-      }
-      if (!reclaimCreated && (await readLockOwner(reclaimPath, localHostname)).dead) {
-        await rm(reclaimPath, { recursive: true, force: true });
-        continue;
       }
       if (reclaimCreated) {
         let dead = false;
@@ -132,7 +144,8 @@ export async function withFileLock<T>(
       }
 
       if (Date.now() - startedAt >= (options.timeoutMs ?? 10_000)) {
-        throw new FileLockError(targetPath, lockPath, owner);
+        const guard = reclaimCreated ? undefined : await readLockOwner(reclaimPath, localHostname);
+        throw new FileLockError(targetPath, lockPath, owner, guard?.dead ? reclaimPath : undefined);
       }
       await Bun.sleep(50);
     }
