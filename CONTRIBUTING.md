@@ -92,6 +92,7 @@ We follow strict **Test-Driven Development (TDD)**:
 - **`test/unit/`**: Hermetic tests with no network, credentials, or machine-specific configuration.
 - **`test/integration/`**: Integration tests for local Git/filesystem boundaries and explicitly configured external services.
 - **`test/e2e/`**: CLI subprocess tests against temporary roots; some scenarios require the same external fixture configuration as integration tests.
+- **Real-terminal tests** (`test/e2e/*-pty.test.ts`): run the CLI in a real pseudo-terminal (ConPTY on Windows) through [`@microsoft/tui-test`](https://github.com/microsoft/tui-test), wait for text on the rendered screen, and press keys. Use them for prompt flows, where a captured-stdout test cannot see the bug. Clear `CI` and agent markers in the child environment, or the CLI correctly refuses to prompt. Clack multiselects select with Tab.
 
 ### Running Tests
 

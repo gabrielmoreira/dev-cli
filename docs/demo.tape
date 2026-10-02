@@ -1,6 +1,6 @@
 # Render from the repository root with: mise run demo
 #
-# Row budget: VHS 0.11 matches Wait+Screen against the first <rows> lines of the terminal buffer
+# Row budget: VHS (0.11 through 0.12) matches Wait+Screen against the first <rows> lines of the terminal buffer
 # since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x800 and
 # 18pt that is about 30 rows. Every scene starts with a clear, and a marker must land within
 # those rows; measure a scene before adding output above its marker.
