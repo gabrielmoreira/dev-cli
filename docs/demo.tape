@@ -124,11 +124,10 @@ Type "clear"
 Enter
 Type "cd ~/dev"
 Enter
-Type "dev workset manage"
-Sleep 500ms
+Type "clear"
 Enter
-Wait+Screen@20s /Workset name/
-Type "incident"
+Type "dev workset manage incident"
+Sleep 500ms
 Enter
 Wait+Screen@20s /Workset description/
 Type "Investigate checkout timeouts"

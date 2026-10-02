@@ -1,18 +1,18 @@
-FROM public.ecr.aws/debian/debian:bookworm-slim@sha256:833d7afe7d42e2fc552740ebdb947218770eb6f0a533927ed2a04b4d453e4f0a
+FROM public.ecr.aws/debian/debian:trixie-slim@sha256:2cdc43a83d3b7666a63bd7a902846fa6871d37a9db85468c79139f2a443952dd
 
-ARG MISE_VERSION=2026.9.6
-ARG NODE_VERSION=24.21.0
-ARG DEV_VERSION=1.7.0
+ARG MISE_VERSION=2026.10.0
+ARG NODE_VERSION=26.10.0
+ARG DEV_VERSION=4.0.5
 ARG QMD_VERSION=2.8.3
 ARG SKILLS_REVISION=d5cdb657ea95ab27c6233e959c08af5eb3806092
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl git zsh \
+    && apt-get install --yes --no-install-recommends ca-certificates curl git libatomic1 zsh \
     && rm -rf /var/lib/apt/lists/*
 ARG SPACESHIP_VERSION=4.22.5
-ARG HERDR_VERSION=0.9.1
-ARG OMP_VERSION=18.2.6
+ARG HERDR_VERSION=0.9.3
+ARG OMP_VERSION=18.4.10
 
 RUN --mount=type=secret,id=extra_ca,required=false set -eu; \
     if [ -f /run/secrets/extra_ca ]; then export SSL_CERT_FILE=/run/secrets/extra_ca; fi; \
