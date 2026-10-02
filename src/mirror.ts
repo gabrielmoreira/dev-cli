@@ -568,7 +568,7 @@ export async function sync(
       throw new CanonicalMirrorError(
         "SOURCE_NOT_FOUND",
         `No mirror matches source '${input.source}'.`,
-        { source: input.source },
+        { source: input.source, usage: "dev mirror ls" },
       );
     }
   }

@@ -230,7 +230,7 @@ sources:
 
     const code = await run(["label", "add", "team:docs", "docs"]);
 
-    expect(code).toBe(1);
+    expect(code).toBe(2);
     expect(errors.join(" ")).toContain("pass a full URL");
   });
 

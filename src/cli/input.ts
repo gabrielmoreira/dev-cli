@@ -25,6 +25,17 @@ export class CliInputRequiredError extends Error {
   }
 }
 
+export class CliInputError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "CliInputError";
+  }
+}
+
 export interface ResolveTextInputOptions {
   value?: string;
   defaultValue?: string;

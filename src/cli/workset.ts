@@ -868,7 +868,8 @@ export const worksetShowCommand = defineCommand({
         },
       });
       const definition = config.worksets[selected.value];
-      if (!definition) return reportError(`Unknown workset '${selected.value}'.`, args.json);
+      if (!definition)
+        throw new workset.WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${selected.value}'.`);
       ui.result({
         data: { name: selected.value, ...definition },
         json: args.json,

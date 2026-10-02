@@ -4,7 +4,6 @@ import type { RuntimeConfig } from "../config.ts";
 import * as configFile from "../config.ts";
 import { resolveExtraHeader } from "../credentials.ts";
 import * as git from "../git.ts";
-import { resolveInputSource } from "../inventory.ts";
 import * as labels from "../labels.ts";
 import * as mirror from "../mirror.ts";
 import { createPluginBase, emit } from "../plugins/index.ts";
@@ -12,6 +11,7 @@ import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig } from "./context.ts";
 import { reportError, reportExitCode } from "./errors.ts";
 import { CliInputRequiredError, resolveTextInput } from "./input.ts";
+import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 type Declared = labels.SourceDeclaration;
@@ -101,26 +101,18 @@ async function chooseRepositories(config: RuntimeConfig, label: string): Promise
 }
 
 async function resolveUrl(config: RuntimeConfig, value: string): Promise<string> {
-  const query = value.trim();
-  const resolved = await resolveInputSource(config.root, query);
-  if (resolved.sourceUrl) {
-    return git.stripCredentialsFromUrl(resolved.sourceUrl);
-  }
-  // A repository declared in dev.yaml is a valid target even when the local
-  // inventory has not indexed it yet (fresh root): fall back to declared names.
-  const declared = labels.parseDeclaredSources(config.sources).sources;
-  const matches = declared.filter(
-    (source) => git.deriveDefaultMountPath(source.url).toLowerCase() === query.toLowerCase(),
-  );
-  if (matches.length === 1) {
-    return git.stripCredentialsFromUrl(matches[0]!.url);
-  }
-  if (matches.length > 1) {
-    throw new Error(
-      `Ambiguous repository '${query}'. ${matches.length} repositories declared in dev.yaml share that name; pass a full URL.`,
-    );
-  }
-  throw new Error(resolved.error ?? `Could not resolve repository '${query}'.`);
+  const resolved = await resolveRepositoryInput({
+    value,
+    root: config.root,
+    message: "Select repository",
+    required: {
+      command: "label",
+      field: "sources",
+      usage: "dev label add <label> <repository...>",
+      description: "Repository source",
+    },
+  });
+  return git.stripCredentialsFromUrl(resolved.value);
 }
 
 interface PlannedTarget {

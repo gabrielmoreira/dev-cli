@@ -8,6 +8,17 @@ import { LabelError, type SourceSelector } from "./labels.ts";
 import { getGlobalConfigPath, parseGlobalToml } from "./global.ts";
 import { configFilePath, legacyConfigFilePath } from "./paths.ts";
 
+export class ConfigError extends Error {
+  readonly code = "INVALID_CONFIG";
+  readonly details: { path: string };
+
+  constructor(path: string, message: string) {
+    super(message);
+    this.name = "ConfigError";
+    this.details = { path };
+  }
+}
+
 export async function updateConfig(
   configPath: string,
   mutate: (doc: ReturnType<typeof yaml.parseDocument>) => void | Promise<void>,
@@ -477,15 +488,22 @@ export function resolveConfig(options: ResolveConfigOptions): RuntimeConfig {
         }
         rawConfig = (configDoc.toJS() as Record<string, unknown>) || {};
       }
-    } catch (e: any) {
-      throw new Error(`Failed to parse configuration file at ${configPath}: ${e.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ConfigError(
+        configPath,
+        `Failed to parse configuration file at ${configPath}: ${message}`,
+      );
     }
   }
 
   const parsed = RawConfigFileSchema.safeParse(rawConfig);
   if (!parsed.success) {
     const details = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ");
-    throw new Error(`Invalid configuration in ${configPath}: ${details}`);
+    throw new ConfigError(
+      configPath ?? yamlPath,
+      `Invalid configuration in ${configPath}: ${details}`,
+    );
   }
 
   const configData = parsed.data;

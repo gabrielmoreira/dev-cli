@@ -1,7 +1,11 @@
 import { isExplicitSource, resolveInputSource, resolveRepositorySource } from "../inventory.ts";
+import { resolveConfig } from "../config.ts";
+import * as git from "../git.ts";
+import { parseDeclaredSources } from "../labels.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getAmbient, type AmbientContext } from "./context.ts";
 import {
+  CliInputError,
   CliInputRequiredError,
   resolveTextInput,
   type RequiredCliInputDetails,
@@ -77,15 +81,54 @@ export async function resolveRepositoryInput(
     };
   }
 
-  if (!canPrompt(ambient)) {
-    if (!query) throw new CliInputRequiredError(options.required);
-    const fallback = await resolveInputSource(options.root, query);
-    throw new Error(fallback.error ?? `Repository '${query}' could not be resolved.`);
+  const config = resolveConfig({ rootFlag: options.root, cwd: ambient.cwd, env: ambient.env });
+  let matches: Array<{ name: string; url: string }> = resolved.matches;
+  if (query) {
+    const declared = parseDeclaredSources(config.sources).sources.filter(
+      (source) => git.deriveDefaultMountPath(source.url).toLowerCase() === query.toLowerCase(),
+    );
+    const candidates = new Map<string, { name: string; url: string }>(
+      matches.map((record) => [record.url, record]),
+    );
+    for (const source of declared) {
+      if (!candidates.has(source.url)) {
+        candidates.set(source.url, { name: query, url: source.url });
+      }
+    }
+    matches = [...candidates.values()];
+    if (matches.length === 1) {
+      return { value: matches[0]!.url, source: "argument" };
+    }
+    if (matches.length === 0 || !canPrompt(ambient)) {
+      const urls = matches.map((record) => git.stripCredentialsFromUrl(record.url));
+      if (urls.length > 0) {
+        throw new CliInputError(
+          "SOURCE_AMBIGUOUS",
+          `Ambiguous repository '${query}'. Matching repositories:\n${urls.map((url) => `  - ${url}`).join("\n")}\nPlease pass a full URL.`,
+          { query, matches: urls, usage: options.required.usage },
+        );
+      }
+      const fallback = await resolveInputSource(options.root, query);
+      const usage =
+        config.providers.length > 0
+          ? "dev sync inventory"
+          : "Pass a repository URL or local path, or configure a provider: dev provider add <type>";
+      const disabled = resolved.disabledMatches?.[0];
+      throw new CliInputError(
+        "SOURCE_NOT_FOUND",
+        disabled
+          ? fallback.error!
+          : `No repository matching '${query}' found in local inventory or declared sources.`,
+        { query, usage },
+      );
+    }
   }
 
-  if (resolved.matches.length > 0) {
+  if (!canPrompt(ambient)) throw new CliInputRequiredError(options.required);
+
+  if (matches.length > 0) {
     const selected = await ui.select(options.message, [
-      ...resolved.matches.map((record) => ({
+      ...matches.map((record) => ({
         label: `${record.name} — ${record.url}`,
         value: record.url,
       })),
