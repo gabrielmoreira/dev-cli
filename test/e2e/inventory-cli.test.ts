@@ -152,15 +152,9 @@ describe("CLI E2E - dev sync inventory", () => {
         isTTY: false,
       });
 
-      // Sync with no credentials: exits 1 because all providers failed,
-      // and the warning/error is reported in combined output.
-      const combined = allLogs.join("\n");
-      // Either exitCode=1, or the output mentions a credential/warning issue
-      expect(
-        exitCode === 1 ||
-          combined.toLowerCase().includes("credential") ||
-          combined.includes("Warning"),
-      ).toBe(true);
+      // Every provider failed, so the nested command must still exit 1.
+      expect(exitCode).toBe(1);
+      expect(allLogs.join("\n")).toContain("AZURE_DEVOPS_PAT");
     } finally {
       console.log = origLog;
       console.error = origError;
