@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
   findUnknownOption,
@@ -9,7 +10,8 @@ import {
 
 describe("subcommand help (UX)", () => {
   it("renders positional and option rows from the args schema", async () => {
-    const out = await formatCommandHelp(["ws", "update"]);
+    // Color depends on the environment (TTY, CI, NO_COLOR); assert the text only.
+    const out = stripVTControlCharacters(await formatCommandHelp(["ws", "update"]));
     expect(out).toContain("dev ws update");
     expect(out).toContain("Converge mounts to ws.md");
     expect(out).toContain("USAGE dev ws update [OPTIONS] [TARGET]");

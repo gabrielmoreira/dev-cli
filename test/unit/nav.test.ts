@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import { generateShellInit, resolveJumpTarget } from "../../src/nav";
 import { formatCommandHelp, formatHelp } from "../../src/cli";
 
@@ -223,7 +224,8 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
     });
 
     test("human help uses the requested root shortcut spelling", async () => {
-      expect(await formatCommandHelp(["ls"])).toContain("USAGE dev ls");
+      const help = stripVTControlCharacters(await formatCommandHelp(["ls"]));
+      expect(help).toContain("USAGE dev ls");
     });
 
     test("structured help reflects aliases and interactive optionality", async () => {
