@@ -17,15 +17,21 @@ export type GitErrorCode = "AUTH_FAILED" | "NOT_FOUND" | "REF_NOT_FOUND" | "NETW
 
 export class GitError extends Error {
   readonly code: GitErrorCode;
-  readonly details: { args: string[]; stderr: string };
+  readonly details: { args: string[]; stderr: string; ref?: string; source?: string };
 
-  constructor(code: GitErrorCode, message: string, details: { args: string[]; stderr: string }) {
+  constructor(
+    code: GitErrorCode,
+    message: string,
+    details: { args: string[]; stderr: string; ref?: string; source?: string },
+  ) {
     super(message);
     this.name = "GitError";
     this.code = code;
     this.details = {
       args: details.args.map(redactCredentials),
       stderr: redactCredentials(details.stderr),
+      ...(details.ref ? { ref: redactCredentials(details.ref) } : {}),
+      ...(details.source ? { source: redactCredentials(details.source) } : {}),
     };
   }
 }
@@ -542,7 +548,31 @@ export async function addWorktree(options: AddWorktreeOptions): Promise<{ commit
   }
 
   if (res.exitCode !== 0) {
-    throw new GitError(classifyGitError(res.stderr), "Git worktree checkout failed.", {
+    const code = classifyGitError(res.stderr);
+    if (code === "REF_NOT_FOUND") {
+      const revision = options.revision;
+      const ref =
+        revision.mode === "track"
+          ? (revision.upstream ?? revision.branch)
+          : revision.mode === "lock"
+            ? revision.commit
+            : revision.tag;
+      const origin = await runGit([
+        "-C",
+        options.adminRepoPath,
+        "config",
+        "--get",
+        "remote.origin.url",
+      ]);
+      const source = redactCredentials(origin.stdout.trim() || options.adminRepoPath);
+      throw new GitError(code, `Ref '${redactCredentials(ref)}' not found in ${source}.`, {
+        args,
+        stderr: res.stderr,
+        ref,
+        source,
+      });
+    }
+    throw new GitError(code, "Git worktree checkout failed.", {
       args,
       stderr: res.stderr,
     });

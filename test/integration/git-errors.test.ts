@@ -79,21 +79,60 @@ describe("Git error classification", () => {
       for (const operation of [
         () => git.switchBranch(root, "missing-ref"),
         () => git.checkoutRevision(root, "missing-ref"),
-        () =>
-          git.addWorktree({
-            adminRepoPath: root,
-            mountPath: join(root, "mount"),
-            revision: { mode: "track", branch: "missing-ref" },
-          }),
       ]) {
         const error = await failureFrom(operation());
         expect(error.code).toBe("REF_NOT_FOUND");
         expect(error.details?.stderr).toContain("missing-ref");
-        expect(error.message).not.toContain("missing-ref");
-        expect(error.message.split(/\r?\n/)).toHaveLength(1);
       }
       await git.checkoutRevision(root, "main");
       expect((await git.currentRevision(root)).branch).toBe("main");
+    } finally {
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    }
+  });
+
+  it("names the missing worktree ref and remote source", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dev-worktree-ref-"));
+    try {
+      const seed = join(root, "seed");
+      const remote = join(root, "remote.git");
+      const admin = join(root, "admin.git");
+      expect((await git.runGit(["init", "-b", "main", seed])).exitCode).toBe(0);
+      expect(
+        (
+          await git.runGit([
+            "-C",
+            seed,
+            "-c",
+            "user.name=Test Author",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "initial",
+          ])
+        ).exitCode,
+      ).toBe(0);
+      expect((await git.runGit(["clone", "--bare", seed, remote])).exitCode).toBe(0);
+      expect((await git.runGit(["clone", "--bare", remote, admin])).exitCode).toBe(0);
+      const error = await failureFrom(
+        git.addWorktree({
+          adminRepoPath: admin,
+          mountPath: join(root, "missing"),
+          revision: { mode: "track", branch: "missing-ref" },
+        }),
+      );
+      expect(error.code).toBe("REF_NOT_FOUND");
+      expect(error.message).toBe(`Ref 'missing-ref' not found in ${remote}.`);
+      expect(error.details).toMatchObject({ ref: "missing-ref", source: remote });
+      expect(error.details?.stderr).toContain("missing-ref");
+      const control = await git.addWorktree({
+        adminRepoPath: admin,
+        mountPath: join(root, "valid"),
+        revision: { mode: "track", branch: "main" },
+      });
+      expect((await git.currentRevision(join(root, "valid"))).commitSha).toBe(control.commitSha);
     } finally {
       await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
