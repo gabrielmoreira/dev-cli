@@ -1,6 +1,10 @@
-import { createInterface } from "node:readline/promises";
-import { consola } from "consola";
-import { autocomplete, autocompleteMultiselect, isCancel } from "@clack/prompts";
+import {
+  autocomplete,
+  autocompleteMultiselect,
+  confirm as clackConfirm,
+  isCancel,
+  text as clackText,
+} from "@clack/prompts";
 
 /** The user pressed Ctrl+C or Esc at a prompt: not a failure, so it prints nothing. */
 export class CancelledError extends Error {
@@ -141,24 +145,18 @@ export const ui = {
     console.log(JSON.stringify(options.data, null, 2));
   },
 
+  // Every prompt goes through Clack: mixing prompt libraries left two readers on
+  // stdin, and on Windows ConPTY the second one failed with EPIPE.
   async text(message: string, initial?: string): Promise<string | undefined> {
-    const prompt = initial ? `${message} (${initial}): ` : `${message}: `;
-    const readline = createInterface({
-      input: process.stdin,
+    // stderr keeps the prompt visible when the shell wrapper captures stdout.
+    const value = await clackText({
+      message,
+      placeholder: initial,
+      defaultValue: initial,
       output: process.stderr,
-      terminal: true,
     });
-    const aborted = new AbortController();
-    readline.on("SIGINT", () => aborted.abort());
-    try {
-      const value = await readline.question(prompt, { signal: aborted.signal });
-      return value || initial;
-    } catch (error) {
-      if (aborted.signal.aborted) throw new CancelledError();
-      throw error;
-    } finally {
-      readline.close();
-    }
+    if (isCancel(value)) throw new CancelledError();
+    return value || initial;
   },
 
   async select<T extends string>(
@@ -203,12 +201,8 @@ export const ui = {
   },
 
   async confirm(message: string, initial = false): Promise<boolean> {
-    const value = await consola.prompt(message, {
-      type: "confirm",
-      initial,
-      cancel: "undefined",
-    });
-    if (value === undefined) throw new CancelledError();
-    return value === true;
+    const value = await clackConfirm({ message, initialValue: initial });
+    if (isCancel(value)) throw new CancelledError();
+    return value;
   },
 };
