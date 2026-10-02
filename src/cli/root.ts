@@ -121,6 +121,7 @@ export const initCommand = defineCommand({
     const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);
     const globalConfig = await loadGlobalConfig(globalPath);
     const previousDefaultRoot = globalConfig.default_root;
+    const previousRootPath = globalConfig.roots[alias]?.path;
     try {
       registerGlobalRoot(globalConfig, {
         alias,
@@ -132,8 +133,11 @@ export const initCommand = defineCommand({
       return reportError(error, args.json);
     }
     const defaultRootChanged = previousDefaultRoot !== globalConfig.default_root;
+    const registrationChanged =
+      previousRootPath !== globalConfig.roots[alias]?.path || defaultRootChanged;
     await fs.ensureDir(targetDir);
 
+    let created = false;
     if (!fs.exists(devYamlPath)) {
       let content = `# dev CLI Root Configuration\n`;
       content += `# Documentation: https://github.com/gabrielmoreira/dev-cli\n\n`;
@@ -158,16 +162,22 @@ export const initCommand = defineCommand({
       }
 
       await fs.withFileLock(devYamlPath, async () => {
-        if (!fs.exists(devYamlPath)) await fs.writeTextAtomic(devYamlPath, content);
+        if (!fs.exists(devYamlPath)) {
+          await fs.writeTextAtomic(devYamlPath, content);
+          created = true;
+        }
       });
     }
 
     const agentsPath = rootAgentsPath({ root: targetDir });
+    let agentsCreated = false;
     if (!fs.exists(agentsPath)) {
       await fs.writeText(agentsPath, ROOT_AGENTS_CONTENT);
+      agentsCreated = true;
     }
 
-    await saveGlobalConfig(globalConfig, globalPath);
+    if (registrationChanged) await saveGlobalConfig(globalConfig, globalPath);
+    const changed = created || agentsCreated || registrationChanged;
 
     const result = {
       alias,
@@ -176,13 +186,20 @@ export const initCommand = defineCommand({
       globalConfigPath: globalPath,
       defaultRoot: globalConfig.default_root,
       defaultRootChanged,
+      created,
+      changed,
+      agentsCreated,
+      registrationChanged,
     };
 
     ui.result({
       data: result,
       json: args.json,
       text: () => {
-        let out = `Initialized dev root '${alias}' at:\n`;
+        if (!changed) return `○ ${targetDir} is already a dev root (alias ${alias}).`;
+        let out = created
+          ? `Initialized dev root '${alias}' at:\n`
+          : `Updated dev root '${alias}' at:\n`;
         out += `  Directory:     ${targetDir}\n`;
         out += `  Configuration: ${devYamlPath}\n`;
         out += `  Global Config: ${globalPath} (alias: ${alias})`;

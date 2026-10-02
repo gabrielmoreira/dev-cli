@@ -34,6 +34,8 @@ export interface WorkspaceInitInput {
   from?: string;
   /** Return an existing workspace of that name instead of failing. */
   reuseExisting?: boolean;
+  /** When reusing, require the requested description to match without rewriting it. */
+  requireMatchingDescription?: boolean;
 }
 
 export interface WorkspaceInitResult {
@@ -568,10 +570,24 @@ export async function init(
   const manifestPath = join(workspacePath, "ws.md");
   const localPath = join(workspacePath, ".local");
   if (deps.fs.exists(workspacePath)) {
-    // Asking again for a workspace that exists is not an error, unless the caller
-    // wants something the existing one may not be (an explicit description).
+    // Reuse preserves existing state; an explicit matching requirement validates intent.
     if (input.reuseExisting && deps.fs.exists(manifestPath)) {
       const { manifest: existing } = await deps.manifest.readWorkspace(manifestPath);
+      if (
+        input.requireMatchingDescription &&
+        (existing.description ?? "") !== (input.description ?? "")
+      ) {
+        throw new WorkspaceError(
+          "WORKSPACE_ALREADY_EXISTS",
+          `Workspace '${name}' has description ${JSON.stringify(existing.description ?? "")}; requested ${JSON.stringify(input.description ?? "")}.`,
+          {
+            name,
+            path: workspacePath,
+            existingDescription: existing.description ?? "",
+            requestedDescription: input.description ?? "",
+          },
+        );
+      }
       return {
         name,
         path: workspacePath,

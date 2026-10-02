@@ -304,9 +304,9 @@ export const labelAddCommand = defineCommand({
         return 0;
       }
 
-      await labels.addLabel(config, label, targets);
+      const applied = await labels.addLabel(config, label, targets);
       const base = createPluginBase(config.root);
-      for (const target of targets) {
+      for (const target of applied.added) {
         await emit(base, "label:add:after", {
           root: config.root,
           sourceKey: git.normalizeSourceKey(target.url),
@@ -321,11 +321,22 @@ export const labelAddCommand = defineCommand({
           label,
           mirror: mirrors,
           sources: targets.map((target) => ({ ...target.selector, meta: target.meta })),
+          added: applied.added,
+          unchanged: applied.unchanged,
           missingMirrors: missing.map((target) => target.selector),
         },
         json: args.json,
         text: () =>
-          `✓ Labeled ${targets.length} repositor${targets.length === 1 ? "y" : "ies"} '${label}'.`,
+          [
+            ...(applied.added.length > 0
+              ? [
+                  `✓ Labeled ${applied.added.length} repositor${applied.added.length === 1 ? "y" : "ies"} '${label}'.`,
+                ]
+              : []),
+            ...applied.unchanged.map(
+              (source) => `○ ${describeSource(source)} already labeled '${label}'.`,
+            ),
+          ].join("\n"),
       });
       if (missing.length === 0) return 0;
       const now =

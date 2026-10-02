@@ -287,9 +287,9 @@ export const wsInitCommand = defineCommand({
         root: config.root,
         workspacePrefix: config.workspacePrefix,
         name: name.value,
-        description: description || undefined,
-        // Running the same init again converges; an explicit --desc may disagree.
-        reuseExisting: args.desc === undefined,
+        description: args.desc === undefined ? description || undefined : args.desc,
+        reuseExisting: true,
+        requireMatchingDescription: args.desc !== undefined,
       });
       if (result.created) initializedPath = result.path;
       const mounted: ws.WorkspaceAddResult[] = [];

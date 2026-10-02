@@ -89,6 +89,67 @@ describe("Workspace initialization integration (Phase 1)", () => {
       code: "WORKSPACE_ALREADY_EXISTS",
     });
   });
+
+  it("explicit matching reuse is a no-op or a conflict, never a description overwrite", async () => {
+    const first = await ws.init({ root: tempRoot, name: "matching", description: "Original" });
+    const before = await fs.readText(first.manifestPath);
+    const again = await ws.init({
+      root: tempRoot,
+      name: "matching",
+      description: "Original",
+      reuseExisting: true,
+      requireMatchingDescription: true,
+    });
+    expect(again).toMatchObject({ created: false, createdAt: first.createdAt });
+    await expect(
+      ws.init({
+        root: tempRoot,
+        name: "matching",
+        description: "Different",
+        reuseExisting: true,
+        requireMatchingDescription: true,
+      }),
+    ).rejects.toMatchObject({
+      code: "WORKSPACE_ALREADY_EXISTS",
+      details: { existingDescription: "Original", requestedDescription: "Different" },
+    });
+    expect(await fs.readText(first.manifestPath)).toBe(before);
+  });
+
+  it("ordinary reuse still preserves a workspace despite a new generated description", async () => {
+    const first = await ws.init({
+      root: tempRoot,
+      name: "pr-reuse",
+      description: "Review PR #7: Original title",
+    });
+    const before = await fs.readText(first.manifestPath);
+    const again = await ws.init({
+      root: tempRoot,
+      name: "pr-reuse",
+      description: "Checkout PR #7: Edited title",
+      reuseExisting: true,
+    });
+    expect(again).toMatchObject({ created: false, createdAt: first.createdAt });
+    expect(await fs.readText(first.manifestPath)).toBe(before);
+  });
+
+  it("matching reuse never adopts an occupied directory without a manifest", async () => {
+    const path = join(tempRoot, "ws", "occupied");
+    await fs.ensureDir(path);
+    await fs.writeText(join(path, "keep.txt"), "Keep user data\n");
+    await expect(
+      ws.init({
+        root: tempRoot,
+        name: "occupied",
+        description: "",
+        reuseExisting: true,
+        requireMatchingDescription: true,
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_ALREADY_EXISTS" });
+    expect(await fs.readText(join(path, "keep.txt"))).toBe("Keep user data\n");
+    expect(fs.exists(join(path, "ws.md"))).toBe(false);
+  });
+
   it("sorts recently used workspaces first and falls back to creation time", async () => {
     const used = await ws.init({ root: tempRoot, name: "z-recent" });
     const unusedNew = await ws.init({ root: tempRoot, name: "a-unused-new" });

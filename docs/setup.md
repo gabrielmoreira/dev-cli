@@ -61,6 +61,8 @@ Global `--json`, `--quiet` (`-q`), and `--non-interactive` flags work before or 
 
 Boolean flags accept `--json=true`, `--json=false`, and `--no-json`; the same spellings apply to `--quiet` and `--non-interactive`. JSON and non-interactive modes never prompt. Flags after `--` belong to the forwarded command, not to `dev`.
 
+`label add --json` retains `sources` for the requested repositories and separates changed assignments in `added` from identical assignments in `unchanged`; each entry includes its URL, ref/path and effective metadata. `init --json` returns `created` for a new dev.yaml and `changed` for configuration creation, instructions repair or a registry change. Its `agentsCreated`, `registrationChanged`, and `defaultRootChanged` fields identify those effects.
+
 ## What `dev init` creates
 
 With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an editable path, detects when you are already inside a dev root, and lets you update that root or create another one. It can then add providers and synchronizes their repository inventory before returning.
@@ -83,6 +85,8 @@ The registry accepts an optional string `default_root` and a `roots` table whose
 ```
 
 Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are created when first needed. `AGENTS.md` is not a global machine or user configuration. Running `dev init` again preserves existing `dev.yaml` and `AGENTS.md` files; concurrent initializations do not replace a configuration created by another initializer.
+
+Repeating an identical initialization reports that the root is already configured. A new alias/default or a missing instructions file is reported as an update rather than a no-op.
 
 Every repository is cloned once, as a bare mirror under `.dev/git/<host>/<owner>/<repo>.git`. Workspace mounts and `mirrors/` checkouts are Git worktrees on that clone, so the same repository in ten workspaces is downloaded once.
 

@@ -58,17 +58,26 @@ export async function declareSource(
 export async function addLabel(
   config: RuntimeConfig,
   label: string,
-  targets: Array<{ selector: SourceSelector; declared: boolean; meta: Record<string, unknown> }>,
-): Promise<void> {
+  targets: Array<{ selector: SourceSelector; meta: Record<string, unknown> }>,
+): Promise<{
+  added: Array<SourceSelector & { meta: Record<string, unknown> }>;
+  unchanged: Array<SourceSelector & { meta: Record<string, unknown> }>;
+}> {
   if (!config.configPath?.endsWith(".yaml")) {
     throw new LabelError("LABEL_VALIDATION", "Labels require a dev.yaml configuration.");
   }
+  const added: Array<SourceSelector & { meta: Record<string, unknown> }> = [];
+  const unchanged: Array<SourceSelector & { meta: Record<string, unknown> }> = [];
   await configFile.updateConfig(config.configPath, (doc) => {
     for (const target of targets) {
-      if (!target.declared) configFile.upsertSourceDeclaration(doc, target.selector);
-      configFile.setSourceLabel(doc, target.selector, label, target.meta);
+      const declarationChanged = configFile.upsertSourceDeclaration(doc, target.selector).changed;
+      const assignment = configFile.setSourceLabel(doc, target.selector, label, target.meta);
+      const entry = { ...target.selector, meta: target.meta };
+      if (declarationChanged || assignment.changed) added.push(entry);
+      else unchanged.push(entry);
     }
   });
+  return { added, unchanged };
 }
 
 export async function removeLabel(

@@ -139,6 +139,8 @@ dev ws add infra --commit 3f9c2ab
 dev ws add runbooks --readonly               # reference only, skipped by sync
 ```
 
+Running the same workspace initialization again succeeds without changing its manifest. An explicit `--desc` must match the existing objective; a different objective is a conflict, not permission to overwrite it.
+
 ```text
 checkout-incident/
 ├── checkout-api/       tag v2026.09.1

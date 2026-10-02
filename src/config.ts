@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve, win32 } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import yaml, { parseDocument, isMap, isScalar, isSeq, type YAMLMap } from "yaml";
 import { z } from "zod";
 import * as fs from "./fs.ts";
@@ -111,6 +112,9 @@ export function setSourceLabel(
     if (!(label in currentLabels)) return { changed: false, found: true };
     delete currentLabels[label];
   } else {
+    if (label in currentLabels && isDeepStrictEqual(currentLabels[label], meta)) {
+      return { changed: false, found: true };
+    }
     currentLabels[label] = meta;
   }
 
