@@ -98,6 +98,21 @@ How to read this file: each bullet is a rule in bold followed by the reason or t
 - **`dev sync` means fresh.** A stale cache is an explicit option, never the default, because performance must not change what a command means.
 - **Shortcuts stay consistent with their long forms.** `dev status`, `dev sync`, `dev ls`, `dev go`, and `dev start` are aliases of workspace commands; the shell wrapper only turns a printed path into a `cd`, because a subprocess cannot change its parent's directory.
 
+## Communication
+
+**Wanted:** a person who just installed `dev` understands at every step what is happening, why they are asked, what each answer changes, and what to do next, from one line of context and not from the README.
+
+**Not wanted:** a bare question, an empty result with no way forward, an error that only says no, internal words in output, or a standard that holds only while someone remembers it.
+
+- **A prompt says why it asks.** One line under the question: what the value becomes, or what Yes and No change. `Add a provider now?` alone left a demo viewer unable to tell what was declined, although the README explains providers well.
+- **An empty state names the cause and the way forward.** "No provider connected, so there are no pull requests to show" and the command that fixes it, not "No cached pull requests found". Empty is still success.
+- **An error offers the way out, not the whole help.** A close match ("Did you mean 'incident'?"), or the known names and the command that lists them, or the usage line. Print help only when the user asked for help.
+- **A remedy must work in the state the user is in.** Do not suggest `dev sync inventory` to a root without a provider, and do not say "this dev root" when there is no root. The handler holds the state; it chooses the remedy.
+- **A result says what changed and what you can do now.** `dev init` ends with the next commands, not with three configuration paths.
+- **Output speaks the public vocabulary.** Words such as canonical, inventory, desired vs observed, discovery source, admin repository, or `$DEV_ROOT` stay in code. Where output shows a concept, help gives its job in one sentence and its contrast with the nearest neighbor.
+- **Short forms are uniform.** Every group with `list` also answers to `ls`, and every `remove` to `rm`. A gap in one group teaches the user that the shortcut is unreliable everywhere.
+- **A standard is kept by the code, not by memory.** When a communication rule is set, add the mechanism that makes the next command right by default: a required field in the shared primitive, one shared renderer, or a test over rendered output (help, `--llms`, a spawned command). A review checklist is the last resort, because it holds only while someone remembers it.
+
 ## Concepts and configuration
 
 **Wanted:** six public nouns a reader can tell apart by the job each one does, and every setting living with the entity whose behavior it controls.
