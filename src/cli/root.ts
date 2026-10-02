@@ -100,6 +100,10 @@ export const initCommand = defineCommand({
     },
     adoOrg: { type: "string", description: "Default Azure DevOps organization" },
     githubOwner: { type: "string", description: "Default GitHub owner/organization" },
+    force: {
+      type: "boolean",
+      description: "Replace a root alias that points to another directory",
+    },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
@@ -112,10 +116,23 @@ export const initCommand = defineCommand({
       : args.path
         ? resolve(ambient.cwd, args.path)
         : resolve(homeDir, "dev");
-    await fs.ensureDir(targetDir);
-
     const alias = args.alias || basename(targetDir);
     const devYamlPath = configFilePath({ root: targetDir });
+    const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);
+    const globalConfig = await loadGlobalConfig(globalPath);
+    const previousDefaultRoot = globalConfig.default_root;
+    try {
+      registerGlobalRoot(globalConfig, {
+        alias,
+        path: targetDir,
+        makeDefault: !previousDefaultRoot || Boolean(args.alias) || guided,
+        force: args.force,
+      });
+    } catch (error) {
+      return reportError(error, args.json);
+    }
+    const defaultRootChanged = previousDefaultRoot !== globalConfig.default_root;
+    await fs.ensureDir(targetDir);
 
     if (!fs.exists(devYamlPath)) {
       let content = `# dev CLI Root Configuration\n`;
@@ -150,13 +167,6 @@ export const initCommand = defineCommand({
       await fs.writeText(agentsPath, ROOT_AGENTS_CONTENT);
     }
 
-    // Register in ~/.dev.toml
-    const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);
-    const globalConfig = await loadGlobalConfig(globalPath);
-    globalConfig.roots[alias] = { path: targetDir.replace(/\\/g, "/") };
-    if (!globalConfig.default_root || args.alias || guided) {
-      globalConfig.default_root = alias;
-    }
     await saveGlobalConfig(globalConfig, globalPath);
 
     const result = {
@@ -164,6 +174,8 @@ export const initCommand = defineCommand({
       path: targetDir,
       configPath: devYamlPath,
       globalConfigPath: globalPath,
+      defaultRoot: globalConfig.default_root,
+      defaultRootChanged,
     };
 
     ui.result({
@@ -174,6 +186,7 @@ export const initCommand = defineCommand({
         out += `  Directory:     ${targetDir}\n`;
         out += `  Configuration: ${devYamlPath}\n`;
         out += `  Global Config: ${globalPath} (alias: ${alias})`;
+        if (defaultRootChanged) out += `\n  Default Root:  ${globalConfig.default_root}`;
         return out;
       },
     });

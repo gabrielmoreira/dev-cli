@@ -3,6 +3,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as fs from "../../src/fs.ts";
+import { parseGlobalToml } from "../../src/global.ts";
 
 describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => {
   let tempHome: string;
@@ -260,5 +261,138 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
     expect(JSON.parse(await new Response(removeProc.stdout).text()).filesRemoved).toBe(false);
     expect(await roots()).not.toHaveProperty("linked");
     expect(fs.exists(linkedRoot)).toBe(true);
+  });
+});
+
+describe("init root alias protection", () => {
+  const cliPath = join(process.cwd(), "src", "cli.ts");
+  let temp: string;
+  beforeAll(async () => {
+    temp = await mkdtemp(join(tmpdir(), "dev-init-alias-"));
+  });
+  afterAll(async () => {
+    await rm(temp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  async function fixture(id: string) {
+    const home = join(temp, id, "home");
+    await fs.ensureDir(home);
+    return { home, first: join(temp, id, "first"), second: join(temp, id, "second") };
+  }
+  async function invoke(home: string, args: string[]) {
+    const child = Bun.spawn([process.execPath, cliPath, ...args], {
+      cwd: temp,
+      env: {
+        ...process.env,
+        HOME: home,
+        USERPROFILE: home,
+        CI: "1",
+        GIT_CONFIG_GLOBAL: join(home, "gitconfig"),
+        GIT_CONFIG_NOSYSTEM: "1",
+        DEV_ROOT: undefined,
+        DEV_CWD: undefined,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    return { stdout, stderr, code };
+  }
+  async function initial(home: string, path: string) {
+    const result = await invoke(home, ["init", path, "--alias", "taken", "--json"]);
+    expect(result.code, result.stderr).toBe(0);
+    return JSON.parse(result.stdout);
+  }
+
+  it("refuses alias collision before creating the target or changing the registry", async () => {
+    const { home, first, second } = await fixture("absent-target");
+    await initial(home, first);
+    const registry = join(home, ".dev.toml");
+    const before = await fs.readText(registry);
+    const result = await invoke(home, ["init", second, "--alias", "taken", "--json"]);
+    expect(result.code).toBe(3);
+    expect(result.stdout).toBe("");
+    expect(JSON.parse(result.stderr).error).toMatchObject({ code: "ROOT_ALIAS_EXISTS" });
+    expect(await fs.readText(registry)).toBe(before);
+    expect(fs.exists(second)).toBe(false);
+    expect(fs.exists(join(first, "dev.yaml"))).toBe(true);
+  });
+
+  it("refuses before touching a pre-existing target's configuration or instructions", async () => {
+    const { home, first, second } = await fixture("existing-target");
+    await initial(home, first);
+    await fs.ensureDir(second);
+    await fs.writeText(join(second, "dev.yaml"), "# customized\nproviders: []\n");
+    await fs.writeText(join(second, "AGENTS.md"), "# keep these instructions\n");
+    const before = await fs.readText(join(home, ".dev.toml"));
+    const result = await invoke(home, ["init", second, "--alias", "taken", "--json"]);
+    expect(result.code).toBe(3);
+    expect(JSON.parse(result.stderr).error.code).toBe("ROOT_ALIAS_EXISTS");
+    expect(await fs.readText(join(home, ".dev.toml"))).toBe(before);
+    expect(await fs.readText(join(second, "dev.yaml"))).toBe("# customized\nproviders: []\n");
+    expect(await fs.readText(join(second, "AGENTS.md"))).toBe("# keep these instructions\n");
+  });
+
+  it("force replaces only the alias, preserving the old root and customized target", async () => {
+    const { home, first, second } = await fixture("force-target");
+    await initial(home, first);
+    const oldConfig = await fs.readText(join(first, "dev.yaml"));
+    await fs.ensureDir(second);
+    await fs.writeText(join(second, "dev.yaml"), "# customized\nproviders: []\n");
+    await fs.writeText(join(second, "AGENTS.md"), "# customized instructions\n");
+    const result = await invoke(home, ["init", second, "--alias", "taken", "--force", "--json"]);
+    expect(result.code, result.stderr).toBe(0);
+    const registry = parseGlobalToml(await fs.readText(join(home, ".dev.toml")));
+    expect(registry.roots.taken?.path).toBe(second.replace(/\\/g, "/"));
+    expect(registry.default_root).toBe("taken");
+    expect(await fs.readText(join(first, "dev.yaml"))).toBe(oldConfig);
+    expect(await fs.readText(join(second, "dev.yaml"))).toBe("# customized\nproviders: []\n");
+    expect(await fs.readText(join(second, "AGENTS.md"))).toBe("# customized instructions\n");
+  });
+
+  it("allows the same normalized alias/path without force", async () => {
+    const { home, first } = await fixture("same-target");
+    await initial(home, first);
+    const registry = join(home, ".dev.toml");
+    const before = await fs.readText(registry);
+    const result = await invoke(home, ["init", join(first, "."), "--alias", "taken", "--json"]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      alias: "taken",
+      defaultRoot: "taken",
+      defaultRootChanged: false,
+    });
+    expect(await fs.readText(registry)).toBe(before);
+  });
+
+  it("publishes a changed default and preserves the existing explicit-alias policy", async () => {
+    const { home, first, second } = await fixture("default-json");
+    const firstResult = await initial(home, first);
+    expect(firstResult).toMatchObject({ defaultRoot: "taken", defaultRootChanged: true });
+    const result = await invoke(home, ["init", second, "--alias", "second", "--json"]);
+    expect(result.code, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      defaultRoot: "second",
+      defaultRootChanged: true,
+    });
+    expect(parseGlobalToml(await fs.readText(join(home, ".dev.toml"))).default_root).toBe("second");
+  });
+
+  it("prints a changed default; an unaliased explicit path keeps the previous default", async () => {
+    const { home, first, second } = await fixture("default-human");
+    await initial(home, first);
+    const unchanged = await invoke(home, ["init", second, "--json"]);
+    expect(unchanged.code, unchanged.stderr).toBe(0);
+    expect(JSON.parse(unchanged.stdout)).toMatchObject({
+      defaultRoot: "taken",
+      defaultRootChanged: false,
+    });
+    const changed = await invoke(home, ["init", second, "--alias", "other"]);
+    expect(changed.code, changed.stderr).toBe(0);
+    expect(changed.stdout).toContain("Default Root:  other");
+    expect(changed.stderr).toBe("");
   });
 });

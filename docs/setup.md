@@ -67,6 +67,8 @@ With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an
 
 After choosing the path, it writes `dev.yaml` and a root-scoped `AGENTS.md`, then registers the root in `~/.dev.toml`. If you edit this registry, write Windows paths with forward slashes (`path = "C:/dev"`) or valid TOML escaping (`path = "C:\\dev"`). When `dev` reads an invalid registry, it reports the file to fix instead of falling back to `~/dev`.
 
+If a root alias already points to another directory, `dev init <path> --alias <alias>` refuses before creating files. Use `--force` to replace that registration; it does not delete either root's files. An explicit alias also selects the global default, and init reports when that default changes.
+
 The registry accepts an optional string `default_root` and a `roots` table whose alias entries are tables with a string `path`. Invalid value types produce the same `INVALID_GLOBAL_TOML` error as invalid syntax; the diagnostic names the file without printing its contents.
 
 `dev.yaml` is the root configuration: defaults, providers, sources, labels, worksets, hooks, and plugins. Generated repositories and caches do not belong there.

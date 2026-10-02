@@ -132,7 +132,7 @@ Developer CLI & Workspace Engine
 
 Initialize or update a dev root; without arguments, guide providers and inventory
 
-**Usage:** `dev init [path] [--alias <value>] [--adoOrg <value>] [--githubOwner <value>] [--json]`
+**Usage:** `dev init [path] [--alias <value>] [--adoOrg <value>] [--githubOwner <value>] [--force] [--json]`
 
 | Argument                | Type       | Description                                                |
 | ----------------------- | ---------- | ---------------------------------------------------------- |
@@ -140,6 +140,7 @@ Initialize or update a dev root; without arguments, guide providers and inventor
 | `--alias <value>`       | string     | Named root alias for ~/.dev.toml (default: directory name) |
 | `--adoOrg <value>`      | string     | Default Azure DevOps organization                          |
 | `--githubOwner <value>` | string     | Default GitHub owner/organization                          |
+| `--force`               | boolean    | Replace a root alias that points to another directory      |
 | `--json`                | boolean    | Output in structured JSON format                           |
 
 ## `dev ls`
