@@ -76,7 +76,7 @@ export class FileLockError extends Error {
   ) {
     super(
       reclaimPath
-        ? `Timed out waiting for file lock: ${lockPath}. A reclaim guard is stuck at ${reclaimPath}; remove both only if you know their owners are gone.`
+        ? `Timed out waiting for file lock: ${lockPath}. Its reclaim guard ${reclaimPath} was also held; remove either only if you know its owner is gone.`
         : `Timed out waiting for file lock: ${lockPath}. Remove it only if you know it is stale.`,
     );
     this.name = "FileLockError";
@@ -144,8 +144,14 @@ export async function withFileLock<T>(
       }
 
       if (Date.now() - startedAt >= (options.timeoutMs ?? 10_000)) {
-        const guard = reclaimCreated ? undefined : await readLockOwner(reclaimPath, localHostname);
-        throw new FileLockError(targetPath, lockPath, owner, guard?.dead ? reclaimPath : undefined);
+        // Name a guard that blocked this attempt whatever its owner file says: a
+        // waiter that crashed before writing it leaves a guard with no owner at all.
+        throw new FileLockError(
+          targetPath,
+          lockPath,
+          owner,
+          reclaimCreated ? undefined : reclaimPath,
+        );
       }
       await Bun.sleep(50);
     }
