@@ -10,7 +10,7 @@ The reclaim guard is a sibling directory (`<file>.lock.reclaim`), never an entry
 
 ## Contract
 
-`fs.withFileLock<T>(targetPath, fn, options?: { timeoutMs?: number }): Promise<T>` allows callers to adjust how long they wait, not how old a lock may become. A timeout returns `FileLockError` with code `FILE_LOCKED` and details containing the target `path`, `lockPath`, `owner` (PID and hostname) when available, and `reclaimPath` when a guard whose local owner exited blocks the reclaim. See [`src/fs.ts`](../../src/fs.ts) for the implementation.
+`fs.withFileLock<T>(targetPath, fn, options?: { timeoutMs?: number }): Promise<T>` allows callers to adjust how long they wait, not how old a lock may become. A timeout returns `FileLockError` with code `FILE_LOCKED` and details containing the target `path`, `lockPath`, `owner` (PID and hostname) when available, and `reclaimPath` when the reclaim guard was held at the last attempt, whether or not its owner file can be read. See [`src/fs.ts`](../../src/fs.ts) for the implementation.
 
 ## Rejected alternative
 

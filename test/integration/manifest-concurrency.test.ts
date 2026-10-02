@@ -172,6 +172,33 @@ describe("file lock ownership", () => {
     expect(fs.exists(targetPath)).toBe(false);
   });
 
+  it("names a reclaim guard that has no owner file", async () => {
+    const targetPath = join(root, "ownerless-reclaimer.md");
+    const lockPath = `${targetPath}.lock`;
+    const reclaimPath = `${lockPath}.reclaim`;
+    const child = Bun.spawn([process.execPath, "-e", "process.exit(0)"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await child.exited).toBe(0);
+    await mkdir(lockPath);
+    await fs.writeText(
+      join(lockPath, "owner"),
+      JSON.stringify({ pid: child.pid, hostname: hostname() }),
+    );
+    await mkdir(reclaimPath);
+
+    const error = await failureFrom(
+      fs.withFileLock(targetPath, async () => fs.writeText(targetPath, "unexpected"), {
+        timeoutMs: 300,
+      }),
+    );
+    expect(error.code).toBe("FILE_LOCKED");
+    expect(error.details).toMatchObject({ lockPath, reclaimPath });
+    expect(fs.exists(lockPath)).toBe(true);
+    expect(fs.exists(reclaimPath)).toBe(true);
+  });
+
   it("keeps a live lock when only the reclaim guard is stale", async () => {
     const targetPath = join(root, "live-owner-dead-reclaimer.md");
     const lockPath = `${targetPath}.lock`;
