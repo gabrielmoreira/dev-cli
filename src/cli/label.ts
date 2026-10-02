@@ -619,8 +619,11 @@ export const labelCommand = defineCommand({
   },
   async run({ rawArgs }) {
     if (await hasExplicitSubcommand(labelCommand, rawArgs)) return;
-    if (canPrompt() && !rawArgs.some((arg) => !arg.startsWith("-")))
-      return await labelMenu(rawArgs);
+    // `--root <path>` takes a value; that value is not a label to list.
+    const positionals = rawArgs.filter(
+      (arg, index) => !arg.startsWith("-") && rawArgs[index - 1] !== "--root",
+    );
+    if (canPrompt() && positionals.length === 0) return await labelMenu(rawArgs);
     return await runNestedCommand(labelListCommand, rawArgs);
   },
 });
