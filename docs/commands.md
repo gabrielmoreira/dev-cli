@@ -509,15 +509,16 @@ Pin mount to an immutable tag
 
 Remove mount worktree and prune from ws.md
 
-**Usage:** `dev ws remove [mount] [--ws <value>] [--force] [--root <value>] [--json]`
+**Usage:** `dev ws remove [mount] [--ws <value>] [--yes] [--force] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                      |
-| ---------------- | ---------- | -------------------------------- |
-| `mount`          | positional | Mount path or name               |
-| `--ws <value>`   | string     | Target workspace name            |
-| `--force`        | boolean    | Force removal of dirty worktree  |
-| `--root <value>` | string     | Explicit dev root directory      |
-| `--json`         | boolean    | Output in structured JSON format |
+| Argument         | Type       | Description                                                                               |
+| ---------------- | ---------- | ----------------------------------------------------------------------------------------- |
+| `mount`          | positional | Mount path or name                                                                        |
+| `--ws <value>`   | string     | Target workspace name                                                                     |
+| `--yes`          | boolean    | Skip confirmation; refuse uncommitted changes, unpushed commits, or an unmanaged checkout |
+| `--force`        | boolean    | Confirm removal even with uncommitted changes, unpushed commits, or an unmanaged checkout |
+| `--root <value>` | string     | Explicit dev root directory                                                               |
+| `--json`         | boolean    | Output in structured JSON format                                                          |
 
 ## `dev ws list`
 
@@ -674,17 +675,18 @@ Set up a sibling worktree tracking an additional branch
 
 Remove a sibling worktree for a secondary branch
 
-**Usage:** `dev mirror untrack [source] [branch] [--branchFlag <value>] [--name <value>] [--force] [--root <value>] [--json]`
+**Usage:** `dev mirror untrack [source] [branch] [--branchFlag <value>] [--name <value>] [--yes] [--force] [--root <value>] [--json]`
 
-| Argument               | Type       | Description                      |
-| ---------------------- | ---------- | -------------------------------- |
-| `source`               | positional | mirror source URL or alias       |
-| `branch`               | positional | Branch worktree to remove        |
-| `--branchFlag <value>` | string     | Branch to untrack                |
-| `--name <value>`       | string     | Custom alias name                |
-| `--force`              | boolean    | Force removal of dirty worktree  |
-| `--root <value>`       | string     | Explicit dev root directory      |
-| `--json`               | boolean    | Output in structured JSON format |
+| Argument               | Type       | Description                                           |
+| ---------------------- | ---------- | ----------------------------------------------------- |
+| `source`               | positional | mirror source URL or alias                            |
+| `branch`               | positional | Branch worktree to remove                             |
+| `--branchFlag <value>` | string     | Branch to untrack                                     |
+| `--name <value>`       | string     | Custom alias name                                     |
+| `--yes`                | boolean    | Skip confirmation; refuse modified or untracked files |
+| `--force`              | boolean    | Confirm removal even with modified or untracked files |
+| `--root <value>`       | string     | Explicit dev root directory                           |
+| `--json`               | boolean    | Output in structured JSON format                      |
 
 ## `dev mirror pick`
 

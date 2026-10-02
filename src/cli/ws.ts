@@ -1278,7 +1278,16 @@ export const wsRemoveCommand = defineCommand({
   args: {
     mount: { type: "positional", description: "Mount path or name", required: false },
     ws: { type: "string", description: "Target workspace name" },
-    force: { type: "boolean", description: "Force removal of dirty worktree" },
+    yes: {
+      type: "boolean",
+      description:
+        "Skip confirmation; refuse uncommitted changes, unpushed commits, or an unmanaged checkout",
+    },
+    force: {
+      type: "boolean",
+      description:
+        "Confirm removal even with uncommitted changes, unpushed commits, or an unmanaged checkout",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -1301,13 +1310,13 @@ export const wsRemoveCommand = defineCommand({
       usage: "dev ws remove [mount] [--ws <name>]",
     });
     const confirmed = await resolveConfirmation({
-      confirmed: args.force,
+      confirmed: args.yes || args.force,
       message: `Remove mount '${mount.value}' from workspace '${workspace.value}'?`,
       required: {
         command: "ws remove",
         field: "confirmation",
-        usage: "dev ws remove [mount] [--ws <name>] --force",
-        description: "Explicit confirmation (--force)",
+        usage: "dev ws remove [mount] [--ws <name>] --yes",
+        description: "Explicit confirmation (--yes)",
       },
     });
     if (!confirmed) {

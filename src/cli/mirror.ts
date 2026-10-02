@@ -348,7 +348,11 @@ export const mirrorUntrackCommand = defineCommand({
     branch: { type: "positional", description: "Branch worktree to remove", required: false },
     branchFlag: { type: "string", description: "Branch to untrack" },
     name: { type: "string", description: "Custom alias name" },
-    force: { type: "boolean", description: "Force removal of dirty worktree" },
+    yes: { type: "boolean", description: "Skip confirmation; refuse modified or untracked files" },
+    force: {
+      type: "boolean",
+      description: "Confirm removal even with modified or untracked files",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -372,13 +376,13 @@ export const mirrorUntrackCommand = defineCommand({
       },
     });
     const confirmed = await resolveConfirmation({
-      confirmed: args.force,
+      confirmed: args.yes || args.force,
       message: `Untrack branch '${branch.value}'?`,
       required: {
         command: "mirror untrack",
         field: "confirmation",
-        usage: "dev mirror untrack <source> <branch> --force",
-        description: "Explicit confirmation (--force)",
+        usage: "dev mirror untrack <source> <branch> --yes",
+        description: "Explicit confirmation (--yes)",
       },
     });
     if (!confirmed) {
