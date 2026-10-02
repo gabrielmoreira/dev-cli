@@ -533,8 +533,30 @@ export async function sync(
     canonicalPrefix: input.canonicalPrefix,
   });
   let worktreePaths = await findRepoWorktrees(checkoutsPath, deps);
-
+  // A checkout whose admin repository vanished lost its HEAD and index with it:
+  // its branch cannot be recovered, so report it instead of guessing one.
+  // Partition first: the source filter below asks the admin for its origin URL.
   const targetSourceKey = input.source ? deps.git.normalizeSourceKey(input.source) : undefined;
+  const unlinked: MirrorSyncItemResult[] = [];
+  const linkedPaths: string[] = [];
+  for (const wtPath of worktreePaths) {
+    const adminRepoPath = await deps.git.worktreeAdminRepoPath(wtPath);
+    if (!adminRepoPath || deps.fs.exists(adminRepoPath)) {
+      linkedPaths.push(wtPath);
+      continue;
+    }
+    // The admin is named after its source key, so a targeted sync still finds it.
+    if (targetSourceKey && basename(adminRepoPath) !== `${targetSourceKey}.git`) continue;
+    unlinked.push({
+      path: wtPath,
+      branch: "unknown",
+      status: "skipped",
+      code: "MIRROR_ADMIN_MISSING",
+      reason: `MIRROR_ADMIN_MISSING: ${adminRepoPath} no longer exists, so this checkout has no branch. Its files are untouched: copy anything you need from it, move the folder aside, then run 'dev mirror add <repository> --branch <branch>'.`,
+    });
+  }
+  worktreePaths = linkedPaths;
+
   if (targetSourceKey) {
     const identified = await Promise.all(
       worktreePaths.map(async (path) => ({ path, source: await deps.git.worktreeOriginUrl(path) })),
@@ -714,9 +736,10 @@ export async function sync(
   const updated: MirrorSyncItemResult[] = itemResults
     .filter((r) => r.item.status === "updated")
     .map((r) => r.item);
-  const skipped: MirrorSyncItemResult[] = itemResults
-    .filter((r) => r.item.status === "skipped")
-    .map((r) => r.item);
+  const skipped: MirrorSyncItemResult[] = [
+    ...unlinked,
+    ...itemResults.filter((r) => r.item.status === "skipped").map((r) => r.item),
+  ];
 
   let hookWarning: string | undefined;
   if (updated.length > 0 && input.globalHooks?.post_sync) {

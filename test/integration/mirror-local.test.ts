@@ -227,6 +227,57 @@ describe("Canonical repository local integration (Phase 8)", () => {
     if (process.platform !== "win32") expect(scriptMode & 0o100).not.toBe(0);
   });
 
+  it("reports a mirror whose admin repository vanished and syncs the others", async () => {
+    const vanishedRoot = join(tempRoot, "vanished-admin");
+    const broken = await mirror.ensure({
+      root: vanishedRoot,
+      source: bareRemotePath,
+      branch: "main",
+    });
+    const healthy = await mirror.ensure({
+      root: vanishedRoot,
+      source: bareRemotePath,
+      branch: "feature/canon",
+    });
+    const adminRepoPath = await git.worktreeAdminRepoPath(broken.path);
+    await fs.writeText(join(broken.path, "notes.local"), "keep me");
+    // Both checkouts share one admin; point the broken one at an admin path that is gone.
+    await fs.removeFile(join(broken.path, ".git"));
+    await fs.writeText(
+      join(broken.path, ".git"),
+      `gitdir: ${join(adminRepoPath!, "..", "gone.git", "worktrees", "x").replace(/\\/g, "/")}\n`,
+    );
+
+    const result = await mirror.sync({ root: vanishedRoot });
+
+    const byPath = new Map(result.skipped.map((item) => [item.path, item]));
+    expect(byPath.get(broken.path)).toMatchObject({ code: "MIRROR_ADMIN_MISSING" });
+    expect(byPath.get(broken.path)?.reason).toContain("dev mirror add");
+    // The other checkout was still inspected and synced normally.
+    expect(byPath.get(healthy.path)).toMatchObject({
+      branch: "feature/canon",
+      reason: "UP_TO_DATE",
+    });
+    expect(await fs.readText(join(broken.path, "notes.local"))).toBe("keep me");
+  });
+
+  it("reports a vanished admin when the sync targets that source", async () => {
+    const targetedRoot = join(tempRoot, "vanished-admin-targeted");
+    const added = await mirror.ensure({
+      root: targetedRoot,
+      source: bareRemotePath,
+      branch: "main",
+    });
+    await rm((await git.worktreeAdminRepoPath(added.path))!, { recursive: true, force: true });
+
+    const result = await mirror.sync({ root: targetedRoot, source: bareRemotePath });
+
+    expect(result.skipped).toEqual([
+      expect.objectContaining({ path: added.path, code: "MIRROR_ADMIN_MISSING" }),
+    ]);
+    expect(fs.exists(join(added.path, "file.txt"))).toBe(true);
+  });
+
   it("lists canonical repositories with branch and status", async () => {
     const list = await mirror.list({ root: tempRoot });
     expect(list.length).toBeGreaterThanOrEqual(1);
