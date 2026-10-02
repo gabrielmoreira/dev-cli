@@ -6,7 +6,7 @@ Use `fs.withFileLock` per manifest or configuration file around read-mutate-writ
 
 Missing, unreadable, or other-host ownership is not evidence that a writer died. Those locks time out and require operator review; do not delete them automatically. PID reuse also keeps a lock held rather than risking a live writer.
 
-The reclaim guard is a sibling directory (`<file>.lock.reclaim`), never an entry inside the lock. Creating it inside the lock raced the owner's recursive removal on Linux and left an empty, ownerless lock that every waiter then timed out on.
+The reclaim guard is a sibling directory (`<file>.lock.reclaim`), never an entry inside the lock. Creating it inside the lock raced the owner's recursive removal on Linux and left an empty, ownerless lock that every waiter then timed out on. Because the guard now outlives the lock, it carries its own owner file under the same rule: a guard whose local owner has provably exited is removed; any other guard is waited on.
 
 ## Contract
 
