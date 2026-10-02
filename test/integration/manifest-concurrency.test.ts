@@ -144,4 +144,51 @@ describe("file lock ownership", () => {
     });
     expect(fs.exists(lockPath)).toBe(false);
   });
+
+  it("recovers a reclaim guard left by a waiter that exited", async () => {
+    const targetPath = join(root, "dead-reclaimer.md");
+    const lockPath = `${targetPath}.lock`;
+    const child = Bun.spawn([process.execPath, "-e", "process.exit(0)"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await child.exited).toBe(0);
+    const deadOwner = JSON.stringify({ pid: child.pid, hostname: hostname() });
+    await mkdir(lockPath);
+    await fs.writeText(join(lockPath, "owner"), deadOwner);
+    await mkdir(`${lockPath}.reclaim`);
+    await fs.writeText(join(`${lockPath}.reclaim`, "owner"), deadOwner);
+
+    await fs.withFileLock(targetPath, async () => fs.writeText(targetPath, "written"), {
+      timeoutMs: 2_000,
+    });
+    expect(await fs.readText(targetPath)).toBe("written");
+    expect(fs.exists(lockPath)).toBe(false);
+    expect(fs.exists(`${lockPath}.reclaim`)).toBe(false);
+  });
+
+  it("keeps a live lock when only the reclaim guard is stale", async () => {
+    const targetPath = join(root, "live-owner-dead-reclaimer.md");
+    const lockPath = `${targetPath}.lock`;
+    const child = Bun.spawn([process.execPath, "-e", "process.exit(0)"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(await child.exited).toBe(0);
+    await fs.withFileLock(targetPath, async () => {
+      await mkdir(`${lockPath}.reclaim`);
+      await fs.writeText(
+        join(`${lockPath}.reclaim`, "owner"),
+        JSON.stringify({ pid: child.pid, hostname: hostname() }),
+      );
+      const error = await failureFrom(
+        fs.withFileLock(targetPath, async () => fs.writeText(targetPath, "unexpected"), {
+          timeoutMs: 300,
+        }),
+      );
+      expect(error.code).toBe("FILE_LOCKED");
+      expect(fs.exists(lockPath)).toBe(true);
+      expect(fs.exists(targetPath)).toBe(false);
+    });
+  });
 });

@@ -99,7 +99,8 @@ export async function withFileLock<T>(
         if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       }
 
-      // Only one waiter may verify and reclaim a dead owner at a time.
+      // Only one waiter may verify and reclaim a dead owner at a time. The guard
+      // records its own owner so a waiter that crashed holding it cannot strand it.
       let reclaimCreated = false;
       try {
         await mkdir(reclaimPath);
@@ -109,29 +110,20 @@ export async function withFileLock<T>(
         if (code === "ENOENT") continue;
         if (code !== "EEXIST") throw error;
       }
+      if (!reclaimCreated && (await readLockOwner(reclaimPath, localHostname)).dead) {
+        await rm(reclaimPath, { recursive: true, force: true });
+        continue;
+      }
       if (reclaimCreated) {
         let dead = false;
-        owner = undefined;
         try {
-          try {
-            const parsed = JSON.parse(await readText(join(lockPath, "owner")));
-            if (
-              Number.isInteger(parsed.pid) &&
-              parsed.pid > 0 &&
-              typeof parsed.hostname === "string"
-            ) {
-              owner = { pid: parsed.pid, hostname: parsed.hostname };
-              if (owner.hostname === localHostname) {
-                try {
-                  process.kill(owner.pid, 0);
-                } catch (error) {
-                  dead = (error as NodeJS.ErrnoException).code === "ESRCH";
-                }
-              }
-            }
-          } catch {
-            // Missing or unreadable ownership is not proof that the writer died.
-          }
+          await writeText(
+            join(reclaimPath, "owner"),
+            JSON.stringify({ pid: process.pid, hostname: localHostname }),
+          );
+          const lockOwner = await readLockOwner(lockPath, localHostname);
+          owner = lockOwner.owner;
+          dead = lockOwner.dead;
           if (dead) await rm(lockPath, { recursive: true, force: true });
         } finally {
           await rm(reclaimPath, { recursive: true, force: true });
@@ -152,6 +144,29 @@ export async function withFileLock<T>(
     return await fn();
   } finally {
     if (created) await rm(lockPath, { recursive: true, force: true });
+  }
+}
+
+/** Missing, unreadable, or other-host ownership is not proof that the owner died. */
+async function readLockOwner(
+  dir: string,
+  localHostname: string,
+): Promise<{ owner?: { pid: number; hostname: string }; dead: boolean }> {
+  let parsed: { pid?: unknown; hostname?: unknown };
+  try {
+    parsed = JSON.parse(await readText(join(dir, "owner")));
+  } catch {
+    return { dead: false };
+  }
+  if (!Number.isInteger(parsed.pid) || (parsed.pid as number) <= 0) return { dead: false };
+  if (typeof parsed.hostname !== "string") return { dead: false };
+  const owner = { pid: parsed.pid as number, hostname: parsed.hostname };
+  if (owner.hostname !== localHostname) return { owner, dead: false };
+  try {
+    process.kill(owner.pid, 0);
+    return { owner, dead: false };
+  } catch (error) {
+    return { owner, dead: (error as NodeJS.ErrnoException).code === "ESRCH" };
   }
 }
 
