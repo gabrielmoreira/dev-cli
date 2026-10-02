@@ -12,7 +12,13 @@ import { providerCommand } from "./provider.ts";
 import { type AmbientContext, setAmbient } from "./context.ts";
 import { detectWorkspaceFromCwd, WorkspaceError } from "../ws.ts";
 import { ui } from "../ui.ts";
-import { EXIT_CODE_MEANINGS, reportError, takeReportedExitCode } from "./errors.ts";
+import {
+  EXIT_CODE_MEANINGS,
+  EXIT_CODES,
+  NEXT_STEPS,
+  reportError,
+  takeReportedExitCode,
+} from "./errors.ts";
 import { qmdCommand, qmdSearchCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
@@ -121,6 +127,12 @@ export async function formatHelp(isLlms = false): Promise<string> {
       options: command.arguments,
       commands: command.subcommands ?? [],
       exitCodes: EXIT_CODE_MEANINGS,
+      errorCodes: Object.fromEntries(
+        Object.entries(EXIT_CODES).map(([code, exitCode]) => [
+          code,
+          { exitCode, nextStep: NEXT_STEPS[code] ?? null },
+        ]),
+      ),
     },
     null,
     2,

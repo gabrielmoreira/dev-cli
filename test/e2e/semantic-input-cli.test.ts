@@ -74,4 +74,18 @@ describe("semantic CLI input errors", () => {
       matches: ["https://github.com/acme/docs", "https://github.com/other/docs"],
     });
   });
+  it("refuses to replace a registered alias and preserves its original target", async () => {
+    const first = await run(["root", "add", root, "--alias", "fixture"]);
+    expect(first.exitCode).toBe(0);
+    const registry = await Bun.file(join(root, ".dev.toml")).text();
+    const other = join(root, "other");
+    await Bun.write(join(other, "dev.yaml"), "version: 1\n");
+    const result = await run(["root", "add", other, "--alias", "fixture"]);
+    expect(result.exitCode).toBe(3);
+    expect(JSON.parse(result.stderr).error).toMatchObject({
+      code: "ROOT_ALIAS_EXISTS",
+      alias: "fixture",
+    });
+    expect(await Bun.file(join(root, ".dev.toml")).text()).toBe(registry);
+  });
 });

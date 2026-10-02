@@ -18,7 +18,11 @@ const globalConfigSchema = z.object({
 });
 
 export class GlobalRootError extends Error {
-  constructor(message: string) {
+  constructor(
+    readonly code: "ROOT_ALIAS_EXISTS" | "ROOT_NOT_FOUND",
+    message: string,
+    readonly details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "GlobalRootError";
   }
@@ -93,7 +97,9 @@ export function registerGlobalRoot(
   const existing = config.roots[input.alias];
   if (existing && resolve(existing.path) !== resolve(input.path) && !input.force) {
     throw new GlobalRootError(
+      "ROOT_ALIAS_EXISTS",
       `Root alias '${input.alias}' already points to '${existing.path}'. Use --force to replace it.`,
+      { alias: input.alias, path: existing.path },
     );
   }
   const entry = { path: resolve(input.path).replace(/\\/g, "/") };
@@ -110,7 +116,10 @@ export function unregisterGlobalRoot(
   const alias = Object.hasOwn(config.roots, aliasOrPath)
     ? aliasOrPath
     : Object.entries(config.roots).find(([, entry]) => resolve(entry.path) === resolvedTarget)?.[0];
-  if (!alias) throw new GlobalRootError(`Registered root '${aliasOrPath}' was not found.`);
+  if (!alias)
+    throw new GlobalRootError("ROOT_NOT_FOUND", `Registered root '${aliasOrPath}' was not found.`, {
+      target: aliasOrPath,
+    });
 
   const path = config.roots[alias].path;
   const wasDefault = config.default_root === alias;

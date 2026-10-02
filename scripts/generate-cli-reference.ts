@@ -1,4 +1,5 @@
 import { formatHelp } from "../src/cli/index.ts";
+import { EXIT_CODE_MEANINGS, EXIT_CODES, NEXT_STEPS } from "../src/cli/errors.ts";
 
 interface ArgumentDescription {
   name: string;
@@ -116,6 +117,26 @@ const output = [
   "# CLI command reference",
   "",
   "Complete command, argument, option, and subcommand reference generated from the CLI definitions.",
+  "",
+  "## Exit statuses",
+  "",
+  "| Exit | Meaning |",
+  "| --- | --- |",
+  ...Object.entries(EXIT_CODE_MEANINGS).map(
+    ([code, meaning]) => `| ${code} | ${escapeCell(meaning)} |`,
+  ),
+  "",
+  "## Error codes",
+  "",
+  "An empty next step means the error message supplies the context; no generic remedy is added.",
+  "",
+  "| Code | Exit | Next step |",
+  "| --- | --- | --- |",
+  ...Object.entries(EXIT_CODES)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([code, exitCode]) => `| \`${code}\` | ${exitCode} | ${escapeCell(NEXT_STEPS[code] ?? "")} |`,
+    ),
   "",
   ...renderCommand(rootCommand, []),
 ].join("\n");
