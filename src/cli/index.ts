@@ -448,7 +448,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   if (argv.includes("--version") || argv.includes("-v")) {
     ui.result({
       data: { version: VERSION },
-      json: argv.includes("--json"),
+      json: ui.isJson(),
       text: `dev v${VERSION}`,
     });
     return 0;
@@ -469,7 +469,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
         command: unknownOption.unknownCommand,
         usage: `${unknownOption.command} --help`,
       }),
-      currentAmbient.argv.includes("--json"),
+      ui.isJson(),
     );
   }
   if (unknownOption) {
@@ -480,7 +480,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
         `'${command}' has no option ${option}${suggestion ? `; did you mean ${suggestion}?` : "."}`,
         { option, usage: suggestion ? `${command} ${suggestion}` : `${command} --help` },
       ),
-      currentAmbient.argv.includes("--json"),
+      ui.isJson(),
     );
   }
 
@@ -492,7 +492,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
         command: rootWord,
         usage: (await suggestCommand(normalizedArgs)) ?? "dev --help",
       }),
-      currentAmbient.argv.includes("--json"),
+      ui.isJson(),
     );
   }
 
@@ -513,7 +513,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     return takeReportedExitCode() ?? (ui.hasError() ? 1 : 0);
   } catch (error: unknown) {
     if (error instanceof CliInputRequiredError) {
-      if (currentAmbient.argv.includes("--json")) {
+      if (ui.isJson()) {
         return reportError(error, true);
       }
       ui.error(`✗ ${error.message}`);
@@ -521,7 +521,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
       return EXIT_USAGE;
     }
 
-    return reportError(error, currentAmbient.argv.includes("--json"));
+    return reportError(error, ui.isJson());
   }
 }
 

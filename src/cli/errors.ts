@@ -151,7 +151,7 @@ export function reportError(error: unknown, json?: boolean): number {
   const described = describeError(error);
   reportedExitCode = exitCodeOf(described.code);
 
-  if (json) {
+  if (json || ui.isJson()) {
     ui.error(
       JSON.stringify(
         {

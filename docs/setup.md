@@ -55,6 +55,12 @@ if ($actual -ne $expected) { throw "Checksum mismatch" }
 
 Extract the archive and move `dev` or `dev.exe` to a directory on `PATH`.
 
+## Use `dev` in scripts
+
+Global `--json`, `--quiet` (`-q`), and `--non-interactive` flags work before or after the command group. `dev --json ws ls` and `dev ws ls --json` return the same JSON. Answers go to stdout; errors go to stderr, including JSON errors. `--quiet` hides narration, not answers or errors.
+
+Boolean flags accept `--json=true`, `--json=false`, and `--no-json`; the same spellings apply to `--quiet` and `--non-interactive`. JSON and non-interactive modes never prompt. Flags after `--` belong to the forwarded command, not to `dev`.
+
 ## What `dev init` creates
 
 With no arguments, `dev init` guides the complete setup. It offers `~/dev` as an editable path, detects when you are already inside a dev root, and lets you update that root or create another one. It can then add providers and synchronizes their repository inventory before returning.

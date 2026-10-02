@@ -16,6 +16,7 @@ export class CancelledError extends Error {
 }
 
 let isQuietMode = false;
+let isJsonMode = false;
 let errorReported = false;
 
 export interface ResultOptions<T = unknown> {
@@ -76,6 +77,7 @@ export function rankOptions<T extends { label: string; value: string }>(
 export const ui = {
   reset(): void {
     errorReported = false;
+    isJsonMode = false;
   },
 
   hasError(): boolean {
@@ -88,6 +90,14 @@ export const ui = {
 
   isQuiet(): boolean {
     return isQuietMode;
+  },
+
+  setJson(json: boolean): void {
+    isJsonMode = json;
+  },
+
+  isJson(): boolean {
+    return isJsonMode;
   },
 
   log(...args: unknown[]): void {
@@ -124,7 +134,7 @@ export const ui = {
   },
 
   result<T>(options: ResultOptions<T>): void {
-    if (options.json) {
+    if (options.json || isJsonMode) {
       console.log(JSON.stringify(options.data, null, 2));
       return;
     }

@@ -1,3 +1,4 @@
+import { parseArgs } from "citty";
 import type { RuntimeConfig } from "../config.ts";
 import { resolveConfig } from "../config.ts";
 import { ui } from "../ui.ts";
@@ -26,11 +27,18 @@ export function getAmbient(): AmbientContext {
 
 export function setAmbient(ambient: AmbientContext): void {
   currentAmbient = ambient;
-  const isQuiet =
-    ambient.argv.includes("--quiet") ||
-    ambient.argv.includes("-q") ||
-    ambient.argv.includes("--json");
-  ui.setQuiet(isQuiet);
+  const flags = readGlobalFlags(ambient.argv);
+  ui.setQuiet(Boolean(flags.quiet || flags.json));
+  ui.setJson(Boolean(flags.json));
+}
+
+/** One parser definition keeps narration, output, and prompt policy in lockstep. */
+function readGlobalFlags(argv: string[]) {
+  return parseArgs(argv, {
+    json: { type: "boolean" },
+    quiet: { type: "boolean", alias: "q" },
+    "non-interactive": { type: "boolean" },
+  });
 }
 
 /**
@@ -48,11 +56,12 @@ const AGENT_ENV = [
 ];
 
 export function canPrompt(ambient: AmbientContext = currentAmbient): boolean {
+  const flags = readGlobalFlags(ambient.argv);
   return (
     (ambient.stdinIsTTY ?? ambient.isTTY) &&
     ambient.isTTY &&
-    !ambient.argv.includes("--json") &&
-    !ambient.argv.includes("--non-interactive") &&
+    !flags.json &&
+    !flags["non-interactive"] &&
     !ambient.env.CI &&
     !AGENT_ENV.some((name) => ambient.env[name])
   );
