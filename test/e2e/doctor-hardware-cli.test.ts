@@ -53,6 +53,21 @@ describe("dev doctor & hardware CLI E2E (Phase 18)", () => {
     expect(parsed.tools.some((t: { name: string }) => t.name === "bun")).toBe(true);
   });
 
+  it("dev doctor exits 1 when a required tool is missing", async () => {
+    const noTools = join(tempRoot, "no-tools");
+    await fs.ensureDir(noTools);
+    const proc = Bun.spawn([process.execPath, cliPath, "doctor", "--root", tempRoot, "--json"], {
+      env: { ...process.env, PATH: noTools, Path: noTools },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await proc.exited;
+    const report = JSON.parse(await new Response(proc.stdout).text());
+
+    expect(report.status).toBe("error");
+    expect(exitCode).toBe(1);
+  });
+
   it("dev hardware outputs human-readable hardware profile and model recommendations", async () => {
     const proc = Bun.spawn(["bun", "run", cliPath, "hardware"], {
       stdout: "pipe",

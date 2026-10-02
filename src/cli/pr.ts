@@ -11,7 +11,7 @@ import * as labels from "../labels.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { CancelledError, ui } from "../ui.ts";
 import * as shell from "../shell.ts";
-import { reportError } from "./errors.ts";
+import { reportError, reportExitCode } from "./errors.ts";
 import { warnHealFailures } from "./ws.ts";
 import * as ws from "../ws.ts";
 import * as fs from "../fs.ts";
@@ -394,7 +394,7 @@ export const prListCommand = defineCommand({
         return out.trimEnd();
       },
     });
-    if (errors.length > 0 && shown.length === 0) return 1;
+    if (errors.length > 0 && shown.length === 0) return reportExitCode(1);
     return canPrompt() && shown.length > 0 ? await actOnPullRequest(shown, args.root) : 0;
   },
 });

@@ -9,7 +9,7 @@ import type { ProviderConfig } from "../config.ts";
 import { resolveChoiceInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
-import { reportError } from "./errors.ts";
+import { reportError, reportExitCode } from "./errors.ts";
 
 function adoTenant(org: string): string {
   return org.includes("/") ? org : `dev.azure.com/${org}`;
@@ -241,7 +241,7 @@ export const wiListCommand = defineCommand({
         return out.trimEnd();
       },
     });
-    return errors.length > 0 && shown.length === 0 ? 1 : 0;
+    return reportExitCode(errors.length > 0 && shown.length === 0 ? 1 : 0);
   },
 });
 

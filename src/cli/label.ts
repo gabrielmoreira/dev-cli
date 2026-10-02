@@ -10,7 +10,7 @@ import * as mirror from "../mirror.ts";
 import { createPluginBase, emit } from "../plugins/index.ts";
 import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig } from "./context.ts";
-import { reportError } from "./errors.ts";
+import { reportError, reportExitCode } from "./errors.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 type Declared = labels.SourceDeclaration;
@@ -238,7 +238,7 @@ async function createMirrors(config: RuntimeConfig, json?: boolean): Promise<num
     },
   });
   if (!json) for (const failure of result.failures) ui.warn(`⚠ ${failure.url}: ${failure.reason}`);
-  return result.failures.length > 0 ? 1 : 0;
+  return reportExitCode(result.failures.length > 0 ? 1 : 0);
 }
 
 export const labelAddCommand = defineCommand({
@@ -599,7 +599,7 @@ async function labelMenu(rawArgs: string[]): Promise<unknown> {
     ]);
     code ||= Number(result ?? 0);
   }
-  return code;
+  return reportExitCode(code);
 }
 
 export const labelCommand = defineCommand({

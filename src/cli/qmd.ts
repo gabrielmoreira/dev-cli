@@ -3,6 +3,7 @@ import { getActiveConfig } from "./context.ts";
 import { createPluginBase } from "../plugins/index.ts";
 import { createQmdPlugin } from "../plugins/qmd.ts";
 import { ui } from "../ui.ts";
+import { reportExitCode } from "./errors.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 export const qmdSyncCommand = defineCommand({
@@ -32,7 +33,7 @@ export const qmdSyncCommand = defineCommand({
     if (code === 0) {
       ui.result({ data: { exitCode: code }, json: args.json, text: () => "qmd sync complete" });
     }
-    return code;
+    return reportExitCode(code);
   },
 });
 

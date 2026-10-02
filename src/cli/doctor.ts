@@ -2,6 +2,7 @@ import { defineCommand } from "citty";
 import { inspectEnvironment, inspectHardware } from "../doctor.ts";
 import { ui } from "../ui.ts";
 import { getActiveConfig } from "./context.ts";
+import { reportExitCode } from "./errors.ts";
 
 export const doctorCommand = defineCommand({
   meta: {
@@ -60,7 +61,7 @@ export const doctorCommand = defineCommand({
       },
     });
 
-    return report.status === "error" ? 1 : 0;
+    return reportExitCode(report.status === "error" ? 1 : 0);
   },
 });
 

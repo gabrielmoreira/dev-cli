@@ -128,8 +128,10 @@ export function describeError(error: unknown): StructuredError {
 // are kept here for runCli to read.
 let reportedExitCode: number | undefined;
 
-export function reportExitCode(code: number): void {
-  reportedExitCode = code;
+/** Records a handler's failure code, since citty drops what a nested `run` returns. */
+export function reportExitCode(code: number): number {
+  if (code !== 0) reportedExitCode = code;
+  return code;
 }
 
 /** The last reported exit code since the previous call, if any. */

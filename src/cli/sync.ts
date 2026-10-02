@@ -594,8 +594,8 @@ export const syncCommand = defineCommand({
       json: args.json,
       text: () => formatProviderSync(result),
     });
-    return result.errors.length > 0 && result.inventory.length === 0 && result.data.length === 0
-      ? 1
-      : 0;
+    return reportExitCode(
+      result.errors.length > 0 && result.inventory.length === 0 && result.data.length === 0 ? 1 : 0,
+    );
   },
 });
