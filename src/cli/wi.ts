@@ -6,7 +6,7 @@ import { resolveAzureDevOpsCredential } from "../credentials.ts";
 import { ui } from "../ui.ts";
 import { findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
-import { resolveChoiceInput } from "./input.ts";
+import { parsePositiveInteger, resolveChoiceInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
 import { reportError, reportExitCode } from "./errors.ts";
@@ -30,11 +30,15 @@ export const wiListCommand = defineCommand({
       description: "Read strictly from local cache with zero network access",
     },
     refresh: { type: "boolean", description: "Force fresh synchronization from remote provider" },
-    limit: { type: "string", description: "Maximum number of results to show (default: 50)" },
+    limit: { type: "string", description: "Positive integer maximum results (default: 50)" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
+    const limit =
+      args.limit === undefined
+        ? 50
+        : parsePositiveInteger(args.limit, "--limit", "dev wi list --limit <count>");
     const config = getActiveConfig(args.root);
     const workspaceContext = await resolveWorkspaceQueryContext({
       value: args.ws || findWorkspaceFlag(getAmbient().argv),
@@ -51,7 +55,6 @@ export const wiListCommand = defineCommand({
           `${adoTenant(repository.organization).toLowerCase()}/${repository.project.toLowerCase()}`,
       ),
     );
-    const limit = args.limit ? parseInt(args.limit, 10) : 50;
     const shouldRefresh = Boolean(args.refresh || args.project || args.provider);
 
     const configuredProviders = config.providers.filter(
@@ -262,9 +265,13 @@ export const wiViewCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
+    let idStr = args.id;
+    const explicitId =
+      idStr === undefined
+        ? undefined
+        : parsePositiveInteger(idStr, "id", "dev wi view <id> [--project <name>]");
     const config = getActiveConfig(args.root);
     let selected: cache.WorkItemRecord | undefined;
-    let idStr = args.id;
     if (!idStr) {
       const candidates = (await cache.loadAllCachedWorkItems(config.root)).filter(
         (item) => !args.project || item.project === args.project,
@@ -287,10 +294,8 @@ export const wiViewCommand = defineCommand({
       idStr = selected ? String(selected.id) : undefined;
     }
     if (!idStr) throw new Error("Selected work item is unavailable.");
-    const id = parseInt(idStr, 10);
-    if (isNaN(id)) {
-      return reportError(`Invalid work item ID '${idStr}'.`, args.json);
-    }
+    const id =
+      explicitId ?? parsePositiveInteger(idStr, "id", "dev wi view <id> [--project <name>]");
 
     const adoProvider = config.providers.find(
       (p): p is Extract<ProviderConfig, { type: "azure_devops" }> =>

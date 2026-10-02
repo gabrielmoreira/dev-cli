@@ -774,7 +774,7 @@ Inspect and cache pull requests
 | `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
 | `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
 | `--ws <value>`        | string     | Use repositories from a workspace                                                              |
-| `--limit <value>`     | string     | Show at most this many pull requests (default: all)                                            |
+| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                |
 | `--root <value>`      | string     | Explicit dev root directory                                                                    |
 | `--json`              | boolean    | Output in structured JSON format                                                               |
 
@@ -803,7 +803,7 @@ List open pull requests across all configured providers
 | `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
 | `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
 | `--ws <value>`        | string     | Use repositories from a workspace                                                              |
-| `--limit <value>`     | string     | Show at most this many pull requests (default: all)                                            |
+| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                |
 | `--root <value>`      | string     | Explicit dev root directory                                                                    |
 | `--json`              | boolean    | Output in structured JSON format                                                               |
 
@@ -854,7 +854,7 @@ Inspect and cache work items
 | `--ws <value>`       | string  | Use projects from a workspace                           |
 | `--offline`          | boolean | Read strictly from local cache with zero network access |
 | `--refresh`          | boolean | Force fresh synchronization from remote provider        |
-| `--limit <value>`    | string  | Maximum number of results to show (default: 50)         |
+| `--limit <value>`    | string  | Positive integer maximum results (default: 50)          |
 | `--root <value>`     | string  | Explicit dev root directory                             |
 | `--json`             | boolean | Output in structured JSON format                        |
 
@@ -877,7 +877,7 @@ List work items across all configured ADO providers (cached or live)
 | `--ws <value>`       | string  | Use projects from a workspace                           |
 | `--offline`          | boolean | Read strictly from local cache with zero network access |
 | `--refresh`          | boolean | Force fresh synchronization from remote provider        |
-| `--limit <value>`    | string  | Maximum number of results to show (default: 50)         |
+| `--limit <value>`    | string  | Positive integer maximum results (default: 50)          |
 | `--root <value>`     | string  | Explicit dev root directory                             |
 | `--json`             | boolean | Output in structured JSON format                        |
 

@@ -18,7 +18,7 @@ import * as fs from "../fs.ts";
 import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
 import { canPrompt, findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
-import { resolveChoiceInput } from "./input.ts";
+import { parsePositiveInteger, resolveChoiceInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
@@ -64,11 +64,15 @@ export const prListCommand = defineCommand({
     },
     project: { type: "string", description: "Filter by Azure DevOps project" },
     ws: { type: "string", description: "Use repositories from a workspace" },
-    limit: { type: "string", description: "Show at most this many pull requests (default: all)" },
+    limit: { type: "string", description: "Positive integer maximum results (default: all)" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
+    const limit =
+      args.limit === undefined
+        ? Infinity
+        : parsePositiveInteger(args.limit, "--limit", "dev pr list --limit <count>");
     const config = getActiveConfig(args.root);
     const requestedRepository = args.repoPositional || args.repo;
     const requestedLabel = args.label;
@@ -84,7 +88,6 @@ export const prListCommand = defineCommand({
         args.json,
       );
     }
-    const limit = args.limit ? parseInt(args.limit, 10) : Infinity;
     const providers = config.providers.filter(
       (provider): provider is Extract<ProviderConfig, { type: "azure_devops" }> =>
         provider.type === "azure_devops" && (!args.provider || provider.id === args.provider),
@@ -476,12 +479,20 @@ export const prCheckoutCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const config = getActiveConfig(args.root);
-    const cached = await cache.loadAllCachedPullRequests(config.root);
-    const inventory = await cache.loadAllCachedInventories(config.root);
     const urlReference = args.reference
       ? parseAzureDevOpsPullRequestUrl(args.reference)
       : undefined;
+    const explicitId =
+      args.reference !== undefined && !urlReference
+        ? parsePositiveInteger(
+            args.reference,
+            "reference",
+            "dev pr checkout <url-or-id> [--review]",
+          )
+        : undefined;
+    const config = getActiveConfig(args.root);
+    const cached = await cache.loadAllCachedPullRequests(config.root);
+    const inventory = await cache.loadAllCachedInventories(config.root);
     let selected: cache.PullRequestRecord | undefined;
 
     if (urlReference) {
@@ -509,10 +520,9 @@ export const prCheckoutCommand = defineCommand({
         },
       });
       selected = open[Number(choice.value)];
-    } else if (/^\d+$/.test(args.reference)) {
-      const id = Number(args.reference);
+    } else if (explicitId !== undefined) {
       const matches = cached.filter(
-        (item) => item.id === id && (!args.repo || item.repository === args.repo),
+        (item) => item.id === explicitId && (!args.repo || item.repository === args.repo),
       );
       if (matches.length === 1) selected = matches[0];
       else if (matches.length > 1) {
@@ -532,8 +542,6 @@ export const prCheckoutCommand = defineCommand({
         });
         selected = matches[Number(choice.value)];
       }
-    } else if (!urlReference) {
-      return reportError(`Invalid pull request reference '${args.reference}'.`, args.json);
     }
 
     const reference =
@@ -555,13 +563,20 @@ export const prCheckoutCommand = defineCommand({
         (!reference ||
           candidate.organization.toLowerCase() === reference.organization.toLowerCase()),
     );
-    const pullRequestId = urlReference?.pullRequestId ?? selected?.id ?? Number(args.reference);
+    const pullRequestId = urlReference?.pullRequestId ?? selected?.id ?? explicitId;
     const project = args.project ?? reference?.project ?? provider?.project;
     const repository = args.repo ?? reference?.repository ?? selected?.repository;
     const organization =
       provider?.organization ?? (args.provider ? undefined : reference?.organization);
 
-    if (!selected && organization && project && repository && Number.isSafeInteger(pullRequestId)) {
+    if (
+      !selected &&
+      organization &&
+      project &&
+      repository &&
+      pullRequestId !== undefined &&
+      Number.isSafeInteger(pullRequestId)
+    ) {
       const credential = await resolveAzureDevOpsCredential(config);
       const client = createAzureDevOps({ organization, token: credential.token });
       const raw = await client.getPullRequest(repository, pullRequestId, { project });
@@ -676,10 +691,14 @@ export const prViewCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const config = getActiveConfig(args.root);
-    let selected: cache.PullRequestRecord | undefined;
     const urlReference = args.id ? parseAzureDevOpsPullRequestUrl(args.id) : undefined;
     let idStr = urlReference ? String(urlReference.pullRequestId) : args.id;
+    const explicitId =
+      idStr === undefined
+        ? undefined
+        : parsePositiveInteger(idStr, "id", "dev pr view <id> [--repo <name>]");
+    const config = getActiveConfig(args.root);
+    let selected: cache.PullRequestRecord | undefined;
     if (!idStr) {
       // The picker offers open pull requests; a closed one is viewed by its id or URL.
       const candidates = (await cache.loadAllCachedPullRequests(config.root)).filter(
@@ -703,10 +722,7 @@ export const prViewCommand = defineCommand({
       idStr = selected ? String(selected.id) : undefined;
     }
     if (!idStr) throw new Error("Selected pull request is unavailable.");
-    const id = parseInt(idStr, 10);
-    if (isNaN(id)) {
-      return reportError(`Invalid pull request ID '${idStr}'.`, args.json);
-    }
+    const id = explicitId ?? parsePositiveInteger(idStr, "id", "dev pr view <id> [--repo <name>]");
 
     // A URL names its organization, project, and repository, so a closed pull request
     // that no listing shows is still read live.

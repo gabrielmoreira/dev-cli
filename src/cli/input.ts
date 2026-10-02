@@ -36,6 +36,22 @@ export class CliInputError extends Error {
   }
 }
 
+export function parsePositiveInteger(value: string, field: string, usage: string): number {
+  const parsed = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new CliInputError(
+      "INVALID_ARGUMENT",
+      `Invalid ${field} '${value}': expected a positive safe integer.`,
+      {
+        field,
+        value,
+        usage,
+      },
+    );
+  }
+  return parsed;
+}
+
 export interface ResolveTextInputOptions {
   value?: string;
   defaultValue?: string;
