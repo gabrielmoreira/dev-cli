@@ -1087,8 +1087,8 @@ export const wsTrackCommand = defineCommand({
   },
   args: {
     mount: { type: "positional", description: "Mount path or name", required: false },
-    branch: { type: "positional", description: "Branch to track", required: false },
-    branchFlag: { type: "string", description: "Branch to track" },
+    branchName: { type: "positional", description: "Branch to track", required: false },
+    branch: { type: "string", description: "Branch to track" },
     ws: { type: "string", description: "Target workspace name" },
     "manifest-only": {
       type: "boolean",
@@ -1104,7 +1104,7 @@ export const wsTrackCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws track",
-      usage: "dev ws track [mount] [branch] [--ws <name>]",
+      usage: "dev ws track [mount] [branchName] [--branch <branch>] [--ws <name>]",
     });
     const mount = await resolveWorkspaceMountInput({
       value: args.mount,
@@ -1112,16 +1112,16 @@ export const wsTrackCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws track",
-      usage: "dev ws track [mount] [branch] [--ws <name>]",
+      usage: "dev ws track [mount] [branchName] [--branch <branch>] [--ws <name>]",
     });
     const branch = await resolveTextInput({
-      value: args.branch || args.branchFlag,
+      value: args.branchName || args.branch,
       message: "Branch to track",
       hint: "The mount follows this branch on future workspace updates.",
       required: {
         command: "ws track",
         field: "branch",
-        usage: "dev ws track [mount] [branch] [--ws <name>]",
+        usage: "dev ws track [mount] [branchName] [--branch <branch>] [--ws <name>]",
         description: "Branch",
       },
     });
@@ -1228,8 +1228,8 @@ export const wsUnlockCommand = defineCommand({
   args: {
     mount: { type: "positional", description: "Mount path or name", required: false },
     all: { type: "boolean", description: "Apply to every mount in the workspace" },
-    branch: { type: "positional", description: "Branch to track", required: false },
-    branchFlag: { type: "string", description: "Branch to track" },
+    branchName: { type: "positional", description: "Branch to track", required: false },
+    branch: { type: "string", description: "Branch to track" },
     ws: { type: "string", description: "Target workspace name" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -1237,15 +1237,15 @@ export const wsUnlockCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     // With --all there is no mount, so a lone positional names the branch.
-    const mountValue = args.all && !args.branch ? undefined : args.mount;
-    const branch = args.branch || args.branchFlag || (args.all ? args.mount : undefined);
+    const mountValue = args.all && !args.branchName ? undefined : args.mount;
+    const branch = args.branchName || args.branch || (args.all ? args.mount : undefined);
 
     const workspace = await resolveWorkspaceInput({
       value: args.ws,
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws unlock",
-      usage: "dev ws unlock [mount] [branch] [--all] [--ws <name>]",
+      usage: "dev ws unlock [mount] [branchName] [--branch <branch>] [--all] [--ws <name>]",
     });
     const mountPath = await resolveWorkspaceMountScope({
       value: mountValue,
@@ -1254,7 +1254,7 @@ export const wsUnlockCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws unlock",
-      usage: "dev ws unlock [mount] [branch] [--all] [--ws <name>]",
+      usage: "dev ws unlock [mount] [branchName] [--branch <branch>] [--all] [--ws <name>]",
     });
 
     try {
@@ -1326,8 +1326,8 @@ export const wsTagCommand = defineCommand({
   },
   args: {
     mount: { type: "positional", description: "Mount path or name", required: false },
-    tag: { type: "positional", description: "Tag to pin to", required: false },
-    tagFlag: { type: "string", description: "Tag to pin to" },
+    tagName: { type: "positional", description: "Tag to pin to", required: false },
+    tag: { type: "string", description: "Tag to pin to" },
     ws: { type: "string", description: "Target workspace name" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -1339,7 +1339,7 @@ export const wsTagCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws tag",
-      usage: "dev ws tag [mount] [tag] [--ws <name>]",
+      usage: "dev ws tag [mount] [tagName] [--tag <tag>] [--ws <name>]",
     });
     const mount = await resolveWorkspaceMountInput({
       value: args.mount,
@@ -1347,16 +1347,16 @@ export const wsTagCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws tag",
-      usage: "dev ws tag [mount] [tag] [--ws <name>]",
+      usage: "dev ws tag [mount] [tagName] [--tag <tag>] [--ws <name>]",
     });
     const tag = await resolveTextInput({
-      value: args.tag || args.tagFlag,
+      value: args.tagName || args.tag,
       message: "Tag to pin",
       hint: "Keep the mount at this tag; updates no longer follow a branch.",
       required: {
         command: "ws tag",
         field: "tag",
-        usage: "dev ws tag [mount] [tag] [--ws <name>]",
+        usage: "dev ws tag [mount] [tagName] [--tag <tag>] [--ws <name>]",
         description: "Tag",
       },
     });

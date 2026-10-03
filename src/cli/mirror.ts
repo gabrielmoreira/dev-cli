@@ -331,8 +331,12 @@ export const mirrorTrackCommand = defineCommand({
       description: "mirror source URL or alias",
       required: false,
     },
-    branch: { type: "positional", description: "Branch to check out and track", required: false },
-    branchFlag: { type: "string", description: "Branch to track" },
+    branchName: {
+      type: "positional",
+      description: "Branch to check out and track",
+      required: false,
+    },
+    branch: { type: "string", description: "Branch to track" },
     name: { type: "string", description: "Custom alias name" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -344,16 +348,16 @@ export const mirrorTrackCommand = defineCommand({
       root: config.root,
       canonicalPrefix: config.canonicalPrefix,
       command: "mirror track",
-      usage: "dev mirror track <source> <branch>",
+      usage: "dev mirror track <source> [branchName] [--branch <branch>]",
     });
     const branch = await resolveTextInput({
-      value: args.branch || args.branchFlag,
+      value: args.branchName || args.branch,
       message: "Branch to track",
       hint: "Keep a reference copy of this branch for reading and search.",
       required: {
         command: "mirror track",
         field: "branch",
-        usage: "dev mirror track <source> <branch>",
+        usage: "dev mirror track <source> [branchName] [--branch <branch>]",
         description: "Branch to track",
       },
     });
@@ -396,8 +400,8 @@ export const mirrorUntrackCommand = defineCommand({
       description: "mirror source URL or alias",
       required: false,
     },
-    branch: { type: "positional", description: "Branch worktree to remove", required: false },
-    branchFlag: { type: "string", description: "Branch to untrack" },
+    branchName: { type: "positional", description: "Branch worktree to remove", required: false },
+    branch: { type: "string", description: "Branch to untrack" },
     name: { type: "string", description: "Custom alias name" },
     yes: { type: "boolean", description: "Skip confirmation; refuse modified or untracked files" },
     force: {
@@ -414,16 +418,16 @@ export const mirrorUntrackCommand = defineCommand({
       root: config.root,
       canonicalPrefix: config.canonicalPrefix,
       command: "mirror untrack",
-      usage: "dev mirror untrack <source> <branch>",
+      usage: "dev mirror untrack <source> [branchName] [--branch <branch>]",
     });
     const branch = await resolveTextInput({
-      value: args.branch || args.branchFlag,
+      value: args.branchName || args.branch,
       message: "Branch to untrack",
       hint: "Stop updating this reference branch; other mirrors stay.",
       required: {
         command: "mirror untrack",
         field: "branch",
-        usage: "dev mirror untrack <source> <branch>",
+        usage: "dev mirror untrack <source> [branchName] [--branch <branch>]",
         description: "Branch to untrack",
       },
     });
@@ -434,7 +438,7 @@ export const mirrorUntrackCommand = defineCommand({
       required: {
         command: "mirror untrack",
         field: "confirmation",
-        usage: "dev mirror untrack <source> <branch> --yes",
+        usage: "dev mirror untrack <source> [branchName] [--branch <branch>] --yes",
         description: "Explicit confirmation (--yes)",
       },
     });

@@ -486,17 +486,17 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 
 Switch mount to track a branch tip
 
-**Usage:** `dev ws track [mount] [branch] [--branchFlag <value>] [--ws <value>] [--manifest-only] [--root <value>] [--json]`
+**Usage:** `dev ws track [mount] [branchName] [--branch <value>] [--ws <value>] [--manifest-only] [--root <value>] [--json]`
 
-| Argument               | Type       | Description                                 |
-| ---------------------- | ---------- | ------------------------------------------- |
-| `mount`                | positional | Mount path or name                          |
-| `branch`               | positional | Branch to track                             |
-| `--branchFlag <value>` | string     | Branch to track                             |
-| `--ws <value>`         | string     | Target workspace name                       |
-| `--manifest-only`      | boolean    | Update ws.md without changing disk worktree |
-| `--root <value>`       | string     | Explicit dev root directory                 |
-| `--json`               | boolean    | Output in structured JSON format            |
+| Argument           | Type       | Description                                 |
+| ------------------ | ---------- | ------------------------------------------- |
+| `mount`            | positional | Mount path or name                          |
+| `branchName`       | positional | Branch to track                             |
+| `--branch <value>` | string     | Branch to track                             |
+| `--ws <value>`     | string     | Target workspace name                       |
+| `--manifest-only`  | boolean    | Update ws.md without changing disk worktree |
+| `--root <value>`   | string     | Explicit dev root directory                 |
+| `--json`           | boolean    | Output in structured JSON format            |
 
 ## `dev ws lock`
 
@@ -517,32 +517,32 @@ Freeze mount to current disk or specified commit
 
 Unlock mount back to tracking a branch
 
-**Usage:** `dev ws unlock [mount] [--all] [branch] [--branchFlag <value>] [--ws <value>] [--root <value>] [--json]`
+**Usage:** `dev ws unlock [mount] [--all] [branchName] [--branch <value>] [--ws <value>] [--root <value>] [--json]`
 
-| Argument               | Type       | Description                           |
-| ---------------------- | ---------- | ------------------------------------- |
-| `mount`                | positional | Mount path or name                    |
-| `--all`                | boolean    | Apply to every mount in the workspace |
-| `branch`               | positional | Branch to track                       |
-| `--branchFlag <value>` | string     | Branch to track                       |
-| `--ws <value>`         | string     | Target workspace name                 |
-| `--root <value>`       | string     | Explicit dev root directory           |
-| `--json`               | boolean    | Output in structured JSON format      |
+| Argument           | Type       | Description                           |
+| ------------------ | ---------- | ------------------------------------- |
+| `mount`            | positional | Mount path or name                    |
+| `--all`            | boolean    | Apply to every mount in the workspace |
+| `branchName`       | positional | Branch to track                       |
+| `--branch <value>` | string     | Branch to track                       |
+| `--ws <value>`     | string     | Target workspace name                 |
+| `--root <value>`   | string     | Explicit dev root directory           |
+| `--json`           | boolean    | Output in structured JSON format      |
 
 ## `dev ws tag`
 
 Pin mount to an immutable tag
 
-**Usage:** `dev ws tag [mount] [tag] [--tagFlag <value>] [--ws <value>] [--root <value>] [--json]`
+**Usage:** `dev ws tag [mount] [tagName] [--tag <value>] [--ws <value>] [--root <value>] [--json]`
 
-| Argument            | Type       | Description                      |
-| ------------------- | ---------- | -------------------------------- |
-| `mount`             | positional | Mount path or name               |
-| `tag`               | positional | Tag to pin to                    |
-| `--tagFlag <value>` | string     | Tag to pin to                    |
-| `--ws <value>`      | string     | Target workspace name            |
-| `--root <value>`    | string     | Explicit dev root directory      |
-| `--json`            | boolean    | Output in structured JSON format |
+| Argument         | Type       | Description                      |
+| ---------------- | ---------- | -------------------------------- |
+| `mount`          | positional | Mount path or name               |
+| `tagName`        | positional | Tag to pin to                    |
+| `--tag <value>`  | string     | Tag to pin to                    |
+| `--ws <value>`   | string     | Target workspace name            |
+| `--root <value>` | string     | Explicit dev root directory      |
+| `--json`         | boolean    | Output in structured JSON format |
 
 ## `dev ws remove`
 
@@ -699,33 +699,33 @@ Preserve local edits, then synchronize one or all mirrors
 
 Set up a sibling worktree tracking an additional branch
 
-**Usage:** `dev mirror track [source] [branch] [--branchFlag <value>] [--name <value>] [--root <value>] [--json]`
+**Usage:** `dev mirror track [source] [branchName] [--branch <value>] [--name <value>] [--root <value>] [--json]`
 
-| Argument               | Type       | Description                      |
-| ---------------------- | ---------- | -------------------------------- |
-| `source`               | positional | mirror source URL or alias       |
-| `branch`               | positional | Branch to check out and track    |
-| `--branchFlag <value>` | string     | Branch to track                  |
-| `--name <value>`       | string     | Custom alias name                |
-| `--root <value>`       | string     | Explicit dev root directory      |
-| `--json`               | boolean    | Output in structured JSON format |
+| Argument           | Type       | Description                      |
+| ------------------ | ---------- | -------------------------------- |
+| `source`           | positional | mirror source URL or alias       |
+| `branchName`       | positional | Branch to check out and track    |
+| `--branch <value>` | string     | Branch to track                  |
+| `--name <value>`   | string     | Custom alias name                |
+| `--root <value>`   | string     | Explicit dev root directory      |
+| `--json`           | boolean    | Output in structured JSON format |
 
 ## `dev mirror untrack`
 
 Remove a sibling worktree for a secondary branch
 
-**Usage:** `dev mirror untrack [source] [branch] [--branchFlag <value>] [--name <value>] [--yes] [--force] [--root <value>] [--json]`
+**Usage:** `dev mirror untrack [source] [branchName] [--branch <value>] [--name <value>] [--yes] [--force] [--root <value>] [--json]`
 
-| Argument               | Type       | Description                                           |
-| ---------------------- | ---------- | ----------------------------------------------------- |
-| `source`               | positional | mirror source URL or alias                            |
-| `branch`               | positional | Branch worktree to remove                             |
-| `--branchFlag <value>` | string     | Branch to untrack                                     |
-| `--name <value>`       | string     | Custom alias name                                     |
-| `--yes`                | boolean    | Skip confirmation; refuse modified or untracked files |
-| `--force`              | boolean    | Confirm removal even with modified or untracked files |
-| `--root <value>`       | string     | Explicit dev root directory                           |
-| `--json`               | boolean    | Output in structured JSON format                      |
+| Argument           | Type       | Description                                           |
+| ------------------ | ---------- | ----------------------------------------------------- |
+| `source`           | positional | mirror source URL or alias                            |
+| `branchName`       | positional | Branch worktree to remove                             |
+| `--branch <value>` | string     | Branch to untrack                                     |
+| `--name <value>`   | string     | Custom alias name                                     |
+| `--yes`            | boolean    | Skip confirmation; refuse modified or untracked files |
+| `--force`          | boolean    | Confirm removal even with modified or untracked files |
+| `--root <value>`   | string     | Explicit dev root directory                           |
+| `--json`           | boolean    | Output in structured JSON format                      |
 
 ## `dev mirror pick`
 
