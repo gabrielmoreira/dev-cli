@@ -61,6 +61,8 @@ Global `--json`, `--quiet` (`-q`), and `--non-interactive` flags work before or 
 
 Boolean flags accept `--json=true`, `--json=false`, and `--no-json`; the same spellings apply to `--quiet` and `--non-interactive`. JSON and non-interactive modes never prompt. Flags after `--` belong to the forwarded command, not to `dev`.
 
+On `ws status`, `ws update`, `ws path`, `ws jump`, and `pr list`, a positional selector and `--ws` or `--repo` must name the same target when you pass both. A `ws.md` path counts as its workspace's name. Different targets fail with `CONFLICTING_OPTIONS` and exit 2 before anything is fetched or changed; pass one selector, or the same one twice. Argument names are in the [command reference](commands.md).
+
 `label add --json` retains `sources` for the requested repositories and separates changed assignments in `added` from identical assignments in `unchanged`; each entry includes its URL, ref/path and effective metadata. `init --json` returns `created` for a new dev.yaml and `changed` for configuration creation, instructions repair or a registry change. Its `agentsCreated`, `registrationChanged`, and `defaultRootChanged` fields identify those effects.
 
 ## What `dev init` creates
