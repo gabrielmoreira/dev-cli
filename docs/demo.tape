@@ -58,7 +58,7 @@ Sleep 500ms
 Enter
 Type "source ~/.zshrc"
 Enter
-Sleep 2s
+Sleep 6s
 
 # First-time setup: accept ~/dev and skip remote providers for this local demo.
 Type "clear"
@@ -103,7 +103,7 @@ Type "ls -A ws/gh-gabrielmoreira-skills"
 Sleep 500ms
 Enter
 Wait+Screen@20s /ws\.md/
-Sleep 3s
+Sleep 6s
 
 # Start empty, then add a repository through the picker.
 Type "clear"
@@ -152,14 +152,14 @@ Wait+Screen@20s /Create these mounts/
 Sleep 1s
 Type "y"
 Wait+Screen@30s /✓ Mounted checkout-api @/
-Sleep 3s
+Sleep 6s
 Type "clear"
 Enter
 Type "dev status"
 Sleep 500ms
 Enter
 Wait+Screen@20s /checkout-api/
-Sleep 3s
+Sleep 6s
 
 # Reusable path: describe a recurring setup once through the interactive manager.
 Type "clear"
@@ -200,7 +200,7 @@ Enter
 # The confirmation and result land past the row budget: pace them, and let the next scenes prove the save.
 Sleep 1s
 Type "y"
-Sleep 2s
+Sleep 6s
 Type "clear"
 Enter
 Sleep 1s
@@ -226,7 +226,7 @@ Wait+Screen@20s /Add this repository/
 Sleep 1s
 Type "y"
 Wait+Screen@20s /to workset 'incident'/
-Sleep 2s
+Sleep 6s
 Type "clear"
 Enter
 Type "dev workset show incident"
@@ -234,7 +234,7 @@ Sleep 500ms
 Enter
 Wait+Screen@20s /Affected service/
 Wait+Screen@20s /Debugging skills/
-Sleep 3s
+Sleep 6s
 
 # A fresh workspace from the workset, through the command the saved workset suggested.
 Type "clear"
@@ -257,7 +257,7 @@ Wait+Screen@20s /Create this workspace/
 Sleep 1s
 Type "y"
 Wait+Screen@90s /Initialized workspace 'incident'/
-Sleep 3s
+Sleep 6s
 
 # Shell integration turns workspace selection into a real directory jump.
 Type "clear"
@@ -279,7 +279,7 @@ Type "ls -A"
 Sleep 500ms
 Enter
 Wait+Screen@20s /ws\.md/
-Sleep 3s
+Sleep 6s
 
 # Start OMP early so indexing never delays the product handoff.
 Type "clear"
@@ -329,7 +329,7 @@ Enter
 Wait+Screen@20s /missing mirror/
 Enter
 Wait+Screen@180s /Mirrored skills/
-Sleep 2s
+Sleep 6s
 Type "clear"
 Enter
 Type "dev qmd sync  # build the search index"
@@ -338,7 +338,7 @@ Enter
 Hide
 Wait+Screen@300s /2 collection\(s\) reconciled/
 Show
-Sleep 2s
+Sleep 6s
 Type "clear"
 Enter
 Type@25ms "# Search the index yourself"
@@ -348,7 +348,7 @@ Type "dev qmd x search debugging-by-evidence"
 Sleep 500ms
 Enter
 Wait+Screen@30s /Title:/
-Sleep 3s
+Sleep 6s
 
 # Return to the already-running OMP agent with the new QMD index.
 Type "clear"
