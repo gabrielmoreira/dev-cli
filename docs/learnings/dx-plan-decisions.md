@@ -37,3 +37,21 @@ The decisions taken while executing `.local/plan-2026-10-02-dx/`, one section ea
 **Decision.** In JSON mode `ui.error` writes the payload to `process.stderr` directly, without colour, because Bun's `console.error` wraps a string in ANSI escapes whenever a terminal or `FORCE_COLOR` says so. A regression test runs the CLI as a subprocess with `FORCE_COLOR=1` and parses stderr, and asserts no escape sequence is present. Committed fe8eae4.
 
 **Rejected alternative.** Stripping ANSI in tests: the consumer is a script, not the test, and the bytes on stderr are the contract. Per-call-site `process.stderr.write` was rejected too, because every error path goes through one renderer.
+
+## D15: Keep the six names and teach them where they appear
+
+**Decision.** Root, workspace, mount, mirror, workset and label keep their names. Each is introduced at the point of use instead: `src/concepts.ts` holds one job sentence and one contrast sentence per concept, and help, README and `docs/commands.md` render that table; prompts carry a hint line that says what the answer becomes. The maintainer chose this on 2026-10-03: the problem is how the commands explain themselves, above all the interactive ones, not the words. Committed b8320d9 and 0f476df.
+
+**Rejected alternative.** Renaming `mount` (to `checkout`, say) or `workset` (to `template` or `recipe`). Each fixes one association, but breaks commands, `dev.yaml` keys, JSON fields, `ws.md` frontmatter, docs and the demo, and needs a major release for a problem a definition at the point of use already solves.
+
+## D16: An error shows the way out, not the whole help
+
+**Decision.** An error prints its message, then one remedy chosen by the producer for the user's state: a close name from `details.candidates` through `closestName`, otherwise at most five known names, otherwise the usage line. Help prints only when the user asks for it. Committed 4fba62e.
+
+**Rejected alternative.** Printing the full help on every error. It buries the one line that helps under every flag of the command, and it cannot know the user's state: a root without a provider would still be told to sync repositories.
+
+## D17: The demo carries no captions
+
+**Decision.** The terminal demo explains itself through the CLI's own prompts, hints and next-step lines; the tape types commands and answers, nothing else. Where the hints made prompts taller, scenes take the shorter path the CLI itself suggests (`dev ws init --workset incident`, `dev label add index:incident`) to stay inside VHS's row budget. Committed ff7c45c.
+
+**Rejected alternative.** Captions, or typed `# ...` comment lines explaining each step. They explain the demo and leave the product as unclear as before, and a person who installs `dev` never sees them.
