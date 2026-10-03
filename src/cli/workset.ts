@@ -51,6 +51,10 @@ export const worksetCreateCommand = defineCommand({
       required: false,
     },
     description: { type: "string", description: "Workset description" },
+    setup: {
+      type: "string",
+      description: "Command run in every repository after a workspace is created from this workset",
+    },
     ref: { type: "string", description: "Branch, tag, or revision" },
     path: { type: "string", description: "Workspace mount path" },
     reason: { type: "string", description: "Reason this repository belongs in the workset" },
@@ -134,7 +138,11 @@ export const worksetCreateCommand = defineCommand({
                 )
               : undefined,
       };
-      const draft = { description: optionalText(description), members: [member] };
+      const draft = {
+        description: optionalText(description),
+        setup: optionalText(args.setup),
+        members: [member],
+      };
       if (canPrompt(ambient) && !args.yes) {
         ui.log(renderWorkset(config, name.value, draft));
         if (
@@ -229,20 +237,37 @@ function optionalText(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
+/** `--setup` takes a command; `--skip-setup` (or the negated `--no-setup`) leaves it out. */
+function parseMemberSetup(
+  setup: unknown,
+  skipSetup: boolean | undefined,
+): string | false | undefined {
+  if (skipSetup && setup !== undefined) {
+    throw Object.assign(new Error("Use either --setup or --skip-setup, not both."), {
+      code: "CONFLICTING_OPTIONS",
+    });
+  }
+  if (skipSetup || setup === false) return false;
+  return typeof setup === "string" ? optionalText(setup) : undefined;
+}
+
 function renderMember(config: RuntimeConfig, member: WorksetMember): string {
   const reason = member.reason ? ` — ${member.reason}` : "";
+  const setupOverride =
+    member.setup === false ? " (setup: none)" : member.setup ? ` (setup: ${member.setup})` : "";
   if (member.label !== undefined) {
     const count = workset.declaredLabels(config).get(member.label) ?? 0;
     return `label ${member.label} (${count} ${count === 1 ? "repository" : "repositories"})${reason}`;
   }
   const ref = member.ref ? ` @ ${member.ref}` : "";
   const path = member.path ? ` → ${member.path}` : "";
-  return `${member.source}${ref}${path}${reason}`;
+  return `${member.source}${ref}${path}${setupOverride}${reason}`;
 }
 
 function renderWorkset(config: RuntimeConfig, name: string, definition: WorksetDefinition): string {
   const lines = [
     `Workset '${name}': saved workspace recipe${definition.description ? `: ${definition.description}` : ""}`,
+    ...(definition.setup ? [`  setup: ${definition.setup}`] : []),
     ...definition.members.map((member) => `  ${renderMember(config, member)}`),
   ];
   return lines.join("\n");
@@ -333,6 +358,7 @@ export const worksetManageCommand = defineCommand({
         options: [
           { label: "Rename workset", value: "rename" },
           { label: "Edit description", value: "description" },
+          { label: "Edit setup command", value: "setup" },
           { label: "Add repository", value: "add" },
           ...(labelCounts.size > 0 ? [{ label: "Add label", value: "add-label" }] : []),
           ...(hasRepository ? [{ label: "Edit repository", value: "edit" }] : []),
@@ -379,6 +405,17 @@ export const worksetManageCommand = defineCommand({
             initial: draft.description,
           }),
         );
+        continue;
+      }
+      if (action === "setup") {
+        const value = await ui.text({
+          message: "Setup command",
+          hint: "Runs in every mount after a workspace is created. Enter keeps the shown command; type 'none' to remove it.",
+          initial: draft.setup,
+        });
+        if (value !== undefined) {
+          draft.setup = value.trim() === "none" ? undefined : optionalText(value);
+        }
         continue;
       }
       if (action === "add") {
@@ -535,6 +572,11 @@ export const worksetRepoAddCommand = defineCommand({
     ref: { type: "string", description: "Branch, tag, or revision" },
     path: { type: "string", description: "Workspace mount path" },
     reason: { type: "string", description: "Reason this repository belongs in the workset" },
+    setup: {
+      type: "string",
+      description: "Command this repository runs after a workspace is created",
+    },
+    skipSetup: { type: "boolean", description: "Run no setup for this repository" },
     yes: { type: "boolean", description: "Add without interactive confirmation" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -605,6 +647,7 @@ export const worksetRepoAddCommand = defineCommand({
                   }),
                 )
               : undefined,
+        setup: parseMemberSetup(args.setup, args.skipSetup),
       };
       if (canPrompt(ambient) && !args.yes) {
         ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
@@ -650,6 +693,11 @@ export const worksetRepoEditCommand = defineCommand({
     ref: { type: "string", description: "Branch, tag, or revision" },
     path: { type: "string", description: "Workspace mount path" },
     reason: { type: "string", description: "Reason this repository belongs in the workset" },
+    setup: {
+      type: "string",
+      description: "Command this repository runs after a workspace is created",
+    },
+    skipSetup: { type: "boolean", description: "Run no setup for this repository" },
     yes: { type: "boolean", description: "Update without interactive confirmation" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -741,10 +789,12 @@ export const worksetRepoEditCommand = defineCommand({
                 }),
               )
             : undefined;
+      const setupChange = parseMemberSetup(args.setup, args.skipSetup);
       const changes = {
         ...(ref !== undefined ? { ref } : {}),
         ...(path !== undefined ? { path } : {}),
         ...(reason !== undefined ? { reason } : {}),
+        ...(setupChange !== undefined ? { setup: setupChange } : {}),
       };
       if (canPrompt(ambient) && !args.yes) {
         if (

@@ -32,6 +32,12 @@ export interface MountDefinition {
   readonly?: boolean;
   revision: MountRevision;
   hooks?: MountHooks;
+  /**
+   * Command run in this mount's directory after the workspace is created, and
+   * again on `dev ws setup`. Recorded here from the workset or `ws init --setup`
+   * so an existing workspace keeps the command it was created with.
+   */
+  setup?: string;
 }
 
 export interface WorkspaceManifest {

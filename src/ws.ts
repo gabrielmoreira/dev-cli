@@ -63,6 +63,8 @@ export interface WorkspaceAddInput {
   trustedScopes?: TrustedScope[];
   explicitConsent?: boolean;
   hooks?: manifest.MountHooks;
+  /** Command this mount runs after workspace creation; recorded in ws.md. */
+  setup?: string;
   globalHooks?: GlobalHooksConfig;
 }
 
@@ -444,7 +446,8 @@ export async function executeHook(params: {
 
   if (res.exitCode !== 0) {
     const output = (res.stderr || res.stdout).trim();
-    const errorMsg = `${params.hookName} hook failed with exit code ${res.exitCode}${output ? `: ${output}` : ""}`;
+    const subject = params.hookName === "setup" ? "setup command" : `${params.hookName} hook`;
+    const errorMsg = `${subject} failed with exit code ${res.exitCode}${output ? `: ${output}` : ""}`;
     if (params.throwOnFailure) {
       throw new WorkspaceError("HOOK_FAILED", errorMsg, {
         exitCode: res.exitCode,
@@ -860,6 +863,7 @@ export async function add(
         readonly: plan.readonly ? true : undefined,
         revision,
         hooks: input.hooks,
+        setup: input.setup,
       };
 
       try {
@@ -1753,6 +1757,193 @@ export async function update(
 
 export type { ObservedWorktree } from "./git.ts";
 
+export type MountSetupStatus = "ok" | "failed" | "skipped";
+
+export type MountSetupSkipReason =
+  | "no_setup"
+  | "mount_missing"
+  | "not_selected"
+  | "consent_required";
+
+export interface MountSetupResult {
+  /** Mount path inside the workspace. */
+  mount: string;
+  path: string;
+  source: string;
+  status: MountSetupStatus;
+  command?: string;
+  exitCode?: number;
+  reason?: MountSetupSkipReason;
+  /** Failure output, or why the command did not run. */
+  message?: string;
+  durationMs?: number;
+}
+
+export interface WorkspaceSetupInput {
+  root: string;
+  workspacePrefix?: string;
+  workspaceName: string;
+  trustedScopes?: TrustedScope[];
+  explicitConsent?: boolean;
+  /** Run only these mounts (paths inside the workspace); every mount when omitted. */
+  mountPaths?: string[];
+}
+
+export interface WorkspaceSetupResult {
+  workspaceName: string;
+  workspacePath: string;
+  manifestPath: string;
+  results: MountSetupResult[];
+  succeeded: number;
+  failed: number;
+  skipped: number;
+  /** Mounts whose admin repository could not be rebuilt before the command ran. */
+  healWarnings: string[];
+}
+
+export function summarizeSetup(results: MountSetupResult[]): {
+  succeeded: number;
+  failed: number;
+  skipped: number;
+} {
+  return {
+    succeeded: results.filter((result) => result.status === "ok").length,
+    failed: results.filter((result) => result.status === "failed").length,
+    skipped: results.filter((result) => result.status === "skipped").length,
+  };
+}
+
+/**
+ * Folds a retry of some mounts into an earlier run. A mount the retry did not
+ * select keeps its earlier verdict, so a retry never erases what already ran.
+ */
+export function mergeSetupRetry(
+  first: WorkspaceSetupResult,
+  retry: WorkspaceSetupResult,
+): WorkspaceSetupResult {
+  const retried = new Map(
+    retry.results
+      .filter((entry) => entry.reason !== "not_selected")
+      .map((entry) => [entry.mount, entry]),
+  );
+  const results = first.results.map((entry) => retried.get(entry.mount) ?? entry);
+  return { ...first, results, ...summarizeSetup(results) };
+}
+
+/**
+ * Runs the setup command each mount declares, in that mount's own directory,
+ * after the workspace exists. A mount that fails, is missing, or needs consent
+ * leaves the other mounts alone: the run always attempts every eligible mount
+ * and reports each verdict. Rerunning is safe by design, since a setup command
+ * that is not repeatable is not a setup command.
+ */
+export async function setup(
+  input: WorkspaceSetupInput,
+  deps: WorkspaceDeps = defaultDeps,
+): Promise<WorkspaceSetupResult> {
+  const {
+    workspacePath,
+    manifestPath,
+    manifest: workspaceManifest,
+    healWarnings,
+  } = await loadWorkspaceContext(input.root, input.workspaceName, deps, input.workspacePrefix);
+  const selected = input.mountPaths ? new Set(input.mountPaths) : undefined;
+  const results: MountSetupResult[] = [];
+
+  for (const mount of workspaceManifest.mounts) {
+    const mountPath = join(workspacePath, mount.path);
+    const base = { mount: mount.path, path: mountPath, source: mount.source };
+    if (selected && !selected.has(mount.path)) {
+      results.push({ ...base, status: "skipped", reason: "not_selected" });
+      continue;
+    }
+    if (!mount.setup) {
+      results.push({ ...base, status: "skipped", reason: "no_setup" });
+      continue;
+    }
+    if (!deps.fs.exists(mountPath)) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: "mount_missing",
+        command: mount.setup,
+        message: `${mountPath} is not checked out, so its setup command was not run`,
+      });
+      continue;
+    }
+
+    const resolved = deps.trust.resolveHookExecution({
+      sourceUrl: mount.source,
+      hookName: "setup",
+      mountHook: mount.setup,
+      trustedScopes: input.trustedScopes,
+      explicitConsent: input.explicitConsent,
+    });
+    if (!resolved.allowed || !resolved.command) {
+      results.push({
+        ...base,
+        status: "skipped",
+        reason: "consent_required",
+        command: mount.setup,
+        message: `dev does not trust ${mount.source} yet, so its setup command was not run`,
+      });
+      continue;
+    }
+
+    const started = Date.now();
+    try {
+      const outcome = await executeHook({
+        command: resolved.command,
+        allowed: true,
+        cwd: mountPath,
+        env: {
+          DEV_ROOT: input.root,
+          DEV_WORKSPACE: input.workspaceName,
+          DEV_WORKSPACE_PATH: workspacePath,
+          DEV_MOUNT: mount.path,
+          DEV_MOUNT_PATH: mountPath,
+          DEV_SOURCE: mount.source,
+          DEV_REVISION: revisionTarget(mount.revision),
+        },
+        hookName: "setup",
+        throwOnFailure: false,
+        deps,
+      });
+      const durationMs = Date.now() - started;
+      results.push(
+        outcome.exitCode === 0
+          ? { ...base, status: "ok", command: resolved.command, exitCode: 0, durationMs }
+          : {
+              ...base,
+              status: "failed",
+              command: resolved.command,
+              exitCode: outcome.exitCode,
+              message: outcome.warning,
+              durationMs,
+            },
+      );
+    } catch (error) {
+      // A shell that throws is this mount's failure: every other mount still runs.
+      results.push({
+        ...base,
+        status: "failed",
+        command: resolved.command,
+        message: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - started,
+      });
+    }
+  }
+
+  return {
+    workspaceName: input.workspaceName,
+    workspacePath,
+    manifestPath,
+    results,
+    ...summarizeSetup(results),
+    healWarnings,
+  };
+}
+
 export function transitionRevision(
   mount: manifest.MountDefinition,
   revision: manifest.MountRevision,
@@ -2177,6 +2368,7 @@ export function planDuplication(
       readonly: m.readonly,
       revision: { ...m.revision },
       hooks: m.hooks ? { ...m.hooks } : undefined,
+      setup: m.setup,
     })),
   };
 }

@@ -110,6 +110,29 @@ export async function renameWorkset(
   return definition;
 }
 
+/** Sets the command every mount of this workset runs after creation; undefined clears it. */
+export async function setWorksetSetup(
+  config: RuntimeConfig,
+  name: string,
+  setup: string | undefined,
+): Promise<WorksetDefinition> {
+  const definition = config.worksets[name];
+  if (!definition) {
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`, {
+      kind: "workset",
+      value: name,
+      candidates: Object.keys(config.worksets),
+    });
+  }
+  const command = setup?.trim();
+  const next = structuredClone(definition);
+  if (command) next.setup = command;
+  else delete next.setup;
+  const updated = WorksetDefinitionSchema.parse(next);
+  await persistWorksets(config, { ...config.worksets, [name]: updated });
+  return updated;
+}
+
 function memberIdentity(member: WorksetMember): string {
   return member.label !== undefined
     ? JSON.stringify(["label", member.label])
@@ -155,6 +178,19 @@ export function declaredLabels(config: Pick<RuntimeConfig, "sources">): Map<stri
     for (const label of Object.keys(source.labels)) counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   return counts;
+}
+
+/**
+ * The setup command one member resolves to: its own override, else the workset
+ * default; `setup: false` on the member opts that mount out of it.
+ */
+export function memberSetupCommand(
+  definition: WorksetDefinition,
+  member: WorksetMember,
+  override?: string,
+): string | undefined {
+  if (member.setup === false) return undefined;
+  return member.setup ?? override ?? definition.setup;
 }
 
 /** added is false when the same member (source, ref and path, or label) is already there. */
@@ -226,7 +262,7 @@ export async function editWorksetMember(
   config: RuntimeConfig,
   name: string,
   target: string,
-  changes: { ref?: string; path?: string; reason?: string },
+  changes: { ref?: string; path?: string; reason?: string; setup?: string | false },
 ): Promise<WorksetDefinition> {
   const definition = config.worksets[name];
   if (!definition) {
@@ -238,7 +274,7 @@ export async function editWorksetMember(
   }
   const index = findMemberIndex(definition, target);
   const members = definition.members.map((member, memberIndex) =>
-    memberIndex === index ? { ...member, ...changes } : member,
+    memberIndex === index && member.source !== undefined ? { ...member, ...changes } : member,
   );
   validateUniqueMembers(members);
   const updated = WorksetDefinitionSchema.parse({ ...definition, members });

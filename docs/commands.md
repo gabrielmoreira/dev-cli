@@ -89,6 +89,8 @@ An empty next step means the error message supplies the context; no generic reme
 | `REMOVE_FAILED`              | 1    | git -C "<path>" status                                                                    |
 | `ROOT_ALIAS_EXISTS`          | 3    | dev roots                                                                                 |
 | `ROOT_NOT_FOUND`             | 2    | dev roots                                                                                 |
+| `SETUP_BLOCKED`              | 3    | dev ws setup <workspaceName> --consent # allow the setup commands dev does not trust      |
+| `SETUP_FAILED`               | 4    | Fix the command that failed, then rerun: dev ws setup <workspaceName>                     |
 | `SOURCE_AMBIGUOUS`           | 2    | <usage>                                                                                   |
 | `SOURCE_NOT_FOUND`           | 2    | <usage>                                                                                   |
 | `STASH_RESTORE_FAILED`       | 1    | <recovery>                                                                                |
@@ -394,6 +396,7 @@ Manage task-oriented multi-repo workspaces
 | `dev ws add`       | Mount a repository into the workspace                                                 |
 | `dev ws status`    | Compare each mount with the plan in ws.md                                             |
 | `dev ws update`    | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones |
+| `dev ws setup`     | Run the setup command each mount of a workspace declares                              |
 | `dev ws track`     | Switch mount to track a branch tip                                                    |
 | `dev ws lock`      | Freeze mount to current disk or specified commit                                      |
 | `dev ws unlock`    | Unlock mount back to tracking a branch                                                |
@@ -410,7 +413,7 @@ Manage task-oriented multi-repo workspaces
 
 Initialize a new workspace with ws.md and .local/
 
-**Usage:** `dev ws init [workspace] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--json]`
+**Usage:** `dev ws init [workspace] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--setup <value>] [--consent] [--json]`
 
 | Argument            | Type       | Description                                                            |
 | ------------------- | ---------- | ---------------------------------------------------------------------- |
@@ -420,6 +423,8 @@ Initialize a new workspace with ws.md and .local/
 | `--workset <value>` | string     | Initialize from a configured workset                                   |
 | `--label <value>`   | string     | Add every repository carrying this label (comma-separated for several) |
 | `--yes`             | boolean    | Accept the generated mount plan                                        |
+| `--setup <value>`   | string     | Command to run in every mount after the workspace is created           |
+| `--consent`         | boolean    | Allow setup commands from repositories dev does not trust              |
 | `--json`            | boolean    | Output in structured JSON format                                       |
 
 ## `dev ws add`
@@ -481,6 +486,20 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 | `--offline`      | boolean    | Read strictly from local mirror without network                                               |
 | `--root <value>` | string     | Explicit dev root directory                                                                   |
 | `--json`         | boolean    | Output in structured JSON format                                                              |
+
+## `dev ws setup`
+
+Run the setup command each mount of a workspace declares
+
+**Usage:** `dev ws setup [workspace] [--ws <value>] [--consent] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                                               |
+| ---------------- | ---------- | --------------------------------------------------------- |
+| `workspace`      | positional | Workspace name                                            |
+| `--ws <value>`   | string     | Workspace name                                            |
+| `--consent`      | boolean    | Allow setup commands from repositories dev does not trust |
+| `--root <value>` | string     | Explicit dev root directory                               |
+| `--json`         | boolean    | Output in structured JSON format                          |
 
 ## `dev ws track`
 
@@ -1137,19 +1156,20 @@ List configured worksets
 
 Create a reusable repository workset
 
-**Usage:** `dev workset create [workset] [repository] [--description <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+**Usage:** `dev workset create [workset] [repository] [--description <value>] [--setup <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
 
-| Argument                | Type       | Description                                      |
-| ----------------------- | ---------- | ------------------------------------------------ |
-| `workset`               | positional | Workset name                                     |
-| `repository`            | positional | First repository: URL, path, or a name dev knows |
-| `--description <value>` | string     | Workset description                              |
-| `--ref <value>`         | string     | Branch, tag, or revision                         |
-| `--path <value>`        | string     | Workspace mount path                             |
-| `--reason <value>`      | string     | Reason this repository belongs in the workset    |
-| `--yes`                 | boolean    | Create without interactive confirmation          |
-| `--root <value>`        | string     | Explicit dev root directory                      |
-| `--json`                | boolean    | Output in structured JSON format                 |
+| Argument                | Type       | Description                                                                    |
+| ----------------------- | ---------- | ------------------------------------------------------------------------------ |
+| `workset`               | positional | Workset name                                                                   |
+| `repository`            | positional | First repository: URL, path, or a name dev knows                               |
+| `--description <value>` | string     | Workset description                                                            |
+| `--setup <value>`       | string     | Command run in every repository after a workspace is created from this workset |
+| `--ref <value>`         | string     | Branch, tag, or revision                                                       |
+| `--path <value>`        | string     | Workspace mount path                                                           |
+| `--reason <value>`      | string     | Reason this repository belongs in the workset                                  |
+| `--yes`                 | boolean    | Create without interactive confirmation                                        |
+| `--root <value>`        | string     | Explicit dev root directory                                                    |
+| `--json`                | boolean    | Output in structured JSON format                                               |
 
 ## `dev workset rename`
 
@@ -1192,35 +1212,39 @@ Manage repositories in a workset
 
 Add a repository to a workset
 
-**Usage:** `dev workset repo add [workset] [repository] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+**Usage:** `dev workset repo add [workset] [repository] [--ref <value>] [--path <value>] [--reason <value>] [--setup <value>] [--skipSetup] [--yes] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                                   |
-| ------------------ | ---------- | --------------------------------------------- |
-| `workset`          | positional | Workset name                                  |
-| `repository`       | positional | Repository URL, path, or a name dev knows     |
-| `--ref <value>`    | string     | Branch, tag, or revision                      |
-| `--path <value>`   | string     | Workspace mount path                          |
-| `--reason <value>` | string     | Reason this repository belongs in the workset |
-| `--yes`            | boolean    | Add without interactive confirmation          |
-| `--root <value>`   | string     | Explicit dev root directory                   |
-| `--json`           | boolean    | Output in structured JSON format              |
+| Argument           | Type       | Description                                               |
+| ------------------ | ---------- | --------------------------------------------------------- |
+| `workset`          | positional | Workset name                                              |
+| `repository`       | positional | Repository URL, path, or a name dev knows                 |
+| `--ref <value>`    | string     | Branch, tag, or revision                                  |
+| `--path <value>`   | string     | Workspace mount path                                      |
+| `--reason <value>` | string     | Reason this repository belongs in the workset             |
+| `--setup <value>`  | string     | Command this repository runs after a workspace is created |
+| `--skipSetup`      | boolean    | Run no setup for this repository                          |
+| `--yes`            | boolean    | Add without interactive confirmation                      |
+| `--root <value>`   | string     | Explicit dev root directory                               |
+| `--json`           | boolean    | Output in structured JSON format                          |
 
 ## `dev workset repo edit`
 
 Edit repository metadata in a workset
 
-**Usage:** `dev workset repo edit [workset] [member] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+**Usage:** `dev workset repo edit [workset] [member] [--ref <value>] [--path <value>] [--reason <value>] [--setup <value>] [--skipSetup] [--yes] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                                   |
-| ------------------ | ---------- | --------------------------------------------- |
-| `workset`          | positional | Workset name                                  |
-| `member`           | positional | Declared repository path or URL               |
-| `--ref <value>`    | string     | Branch, tag, or revision                      |
-| `--path <value>`   | string     | Workspace mount path                          |
-| `--reason <value>` | string     | Reason this repository belongs in the workset |
-| `--yes`            | boolean    | Update without interactive confirmation       |
-| `--root <value>`   | string     | Explicit dev root directory                   |
-| `--json`           | boolean    | Output in structured JSON format              |
+| Argument           | Type       | Description                                               |
+| ------------------ | ---------- | --------------------------------------------------------- |
+| `workset`          | positional | Workset name                                              |
+| `member`           | positional | Declared repository path or URL                           |
+| `--ref <value>`    | string     | Branch, tag, or revision                                  |
+| `--path <value>`   | string     | Workspace mount path                                      |
+| `--reason <value>` | string     | Reason this repository belongs in the workset             |
+| `--setup <value>`  | string     | Command this repository runs after a workspace is created |
+| `--skipSetup`      | boolean    | Run no setup for this repository                          |
+| `--yes`            | boolean    | Update without interactive confirmation                   |
+| `--root <value>`   | string     | Explicit dev root directory                               |
+| `--json`           | boolean    | Output in structured JSON format                          |
 
 ## `dev workset repo remove`
 

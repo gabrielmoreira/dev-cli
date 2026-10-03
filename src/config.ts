@@ -259,24 +259,29 @@ export type GlobalHooksConfig = z.infer<typeof GlobalHooksSchema>;
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
 // A member names one repository or one label; exactly one of `source` and `label`.
-// A label member is strict: ref and path belong to each declared source, not to the label.
+// A label member is strict: ref, path and setup belong to each declared source, not to the label.
+// `setup: false` on a repository member opts that mount out of the workset's setup command.
 export const WorksetMemberSchema = z.union([
   z.object({
     source: z.string().min(1),
     label: z.never().optional(),
     ref: z.string().min(1).optional(),
     path: z.string().min(1).optional(),
+    setup: z.union([z.string().min(1), z.literal(false)]).optional(),
     reason: z.string().min(1).optional(),
   }),
   z.strictObject({
     label: z.string().min(1),
     source: z.never().optional(),
+    setup: z.never().optional(),
     reason: z.string().min(1).optional(),
   }),
 ]);
 
 export const WorksetDefinitionSchema = z.object({
   description: z.string().optional(),
+  /** Command run once in every mount after a workspace from this workset is created. */
+  setup: z.string().min(1).optional(),
   members: z.array(WorksetMemberSchema).min(1),
 });
 

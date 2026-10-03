@@ -93,6 +93,9 @@ export const NEXT_STEPS: Record<string, string | undefined> = {
   ROOT_ALIAS_EXISTS: "dev roots",
   ROOT_NOT_FOUND: "dev roots",
   REF_NOT_FOUND: 'git ls-remote --heads --tags "<repository>"',
+  SETUP_BLOCKED:
+    "dev ws setup <workspaceName> --consent    # allow the setup commands dev does not trust",
+  SETUP_FAILED: "Fix the command that failed, then rerun: dev ws setup <workspaceName>",
   SOURCE_AMBIGUOUS: "<usage>",
   SOURCE_NOT_FOUND: "<usage>",
   STASH_RESTORE_FAILED: "<recovery>",
@@ -180,6 +183,7 @@ export const EXIT_CODES: Record<string, number> = {
   MOUNT_PATH_EXISTS_ON_DISK: 3,
   UNSAFE_REMOVE: 3,
   UNTRUSTED_HOOK_BLOCKED: 3,
+  SETUP_BLOCKED: 3,
   WORKSET_EXISTS: 3,
   WORKSET_LAST_MEMBER: 3,
   WORKSET_MEMBER_EXISTS: 3,
@@ -198,6 +202,7 @@ export const EXIT_CODES: Record<string, number> = {
   NETWORK: 4,
   QMD_FAILED: 4,
   RATE_LIMITED: 4,
+  SETUP_FAILED: 4,
 };
 
 export interface StructuredError {

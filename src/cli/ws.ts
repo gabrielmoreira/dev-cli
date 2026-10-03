@@ -9,7 +9,7 @@ import { isExplicitSource, resolveInputSource } from "../inventory.ts";
 import type { RuntimeConfig } from "../config.ts";
 import * as cache from "../cache.ts";
 import type { InventoryRecord } from "../cache.ts";
-import { WorksetError, declaredLabels, labelSources } from "../workset.ts";
+import { WorksetError, declaredLabels, labelSources, memberSetupCommand } from "../workset.ts";
 import { LabelError } from "../labels.ts";
 import { resolveJumpTarget } from "../nav.ts";
 import {
@@ -158,11 +158,23 @@ export const wsInitCommand = defineCommand({
       description: "Add every repository carrying this label (comma-separated for several)",
     },
     yes: { type: "boolean", description: "Accept the generated mount plan" },
+    setup: {
+      type: "string",
+      description: "Command to run in every mount after the workspace is created",
+    },
+    consent: {
+      type: "boolean",
+      description: "Allow setup commands from repositories dev does not trust",
+    },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const ambient = getAmbient();
+    // The negated spelling (`--no-setup`) reaches citty as `setup: false`; only a
+    // non-empty string is a command.
+    const setupCommand =
+      typeof args.setup === "string" && args.setup.trim() ? args.setup.trim() : undefined;
     const inventory = canPrompt(ambient) ? await cache.loadAllCachedInventories(config.root) : [];
     let rawName = args.workspace;
     let suggestedName: string | undefined;
@@ -180,12 +192,15 @@ export const wsInitCommand = defineCommand({
             branch: plan.branch,
             path: plan.repository,
             extraHeader: resolvedPullRequest.extraHeader,
+            setup: setupCommand,
           },
         ];
         suggestedName = plan.workspaceName;
         suggestedDescription = plan.description;
       } else {
-        mounts = [{ source: rawName, path: git.deriveDefaultMountPath(rawName) }];
+        mounts = [
+          { source: rawName, path: git.deriveDefaultMountPath(rawName), setup: setupCommand },
+        ];
         suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
       }
       rawName = undefined;
@@ -196,12 +211,14 @@ export const wsInitCommand = defineCommand({
         .filter(Boolean);
       try {
         const resolved = args.workset
-          ? await resolveWorksetMounts(config, args.workset, inventory)
+          ? await resolveWorksetMounts(config, args.workset, inventory, setupCommand)
           : undefined;
         mounts = dedupeMounts(
           [
             ...(resolved?.mounts ?? []),
-            ...labels.flatMap((label) => resolveLabelMounts(config, label, inventory)),
+            ...labels.flatMap((label) =>
+              resolveLabelMounts(config, label, inventory, `label ${label}`, setupCommand),
+            ),
           ],
           inventory,
         );
@@ -243,6 +260,7 @@ export const wsInitCommand = defineCommand({
           source,
           branch: inventory.find((record) => record.url === source)?.default_branch,
           path: git.deriveDefaultMountPath(source),
+          setup: setupCommand,
         }));
         if (mounts.length === 1) {
           suggestedName = ws.deriveWorkspaceNameFromRepository(mounts[0]!.source);
@@ -258,7 +276,7 @@ export const wsInitCommand = defineCommand({
           })),
         });
         try {
-          const resolved = await resolveWorksetMounts(config, worksetName, inventory);
+          const resolved = await resolveWorksetMounts(config, worksetName, inventory, setupCommand);
           mounts = dedupeMounts(resolved.mounts, inventory);
           suggestedDescription = resolved.description;
         } catch (error) {
@@ -276,7 +294,9 @@ export const wsInitCommand = defineCommand({
           })),
         });
         mounts = dedupeMounts(
-          labels.flatMap((label) => resolveLabelMounts(config, label, inventory)),
+          labels.flatMap((label) =>
+            resolveLabelMounts(config, label, inventory, `label ${label}`, setupCommand),
+          ),
           inventory,
         );
         if (labels.length === 1) suggestedName = labels[0]!.replaceAll(":", "-");
@@ -349,17 +369,62 @@ export const wsInitCommand = defineCommand({
             extraHeader: mount.extraHeader ?? (await resolveExtraHeader(config, mount.source)),
             trustedScopes: config.trustedScopes,
             globalHooks: config.hooks,
+            setup: mount.setup,
           }),
         );
       }
       warnHealFailures(mounted);
 
+      // Setup runs once the mounts exist, and only for the mounts this run
+      // created: a repeated init never re-runs what an earlier one already did.
+      let setupResults: ws.WorkspaceSetupResult | undefined;
+      const freshMounts = mounted.filter((mount) => mount.outcome !== "already_mounted");
+      if (mounts.some((mount) => mount.setup) && freshMounts.length > 0) {
+        try {
+          const attempt = async (explicitConsent: boolean, mountPaths: string[]) =>
+            await ws.setup({
+              root: config.root,
+              workspacePrefix: config.workspacePrefix,
+              workspaceName: result.name,
+              trustedScopes: config.trustedScopes,
+              explicitConsent,
+              mountPaths,
+            });
+          setupResults = await attempt(
+            Boolean(args.consent),
+            freshMounts.map((m) => m.mountName),
+          );
+          const blocked = setupResults.results.filter(
+            (entry) => entry.status === "skipped" && entry.reason === "consent_required",
+          );
+          if (blocked.length > 0 && !args.consent && !args.json && canPrompt(ambient)) {
+            const granted = await ui.confirm({
+              message: "Run setup for repositories dev does not trust yet?",
+              hint: "Yes runs those setup commands now; No leaves them for you to run later.",
+            });
+            if (granted) {
+              const retried = await attempt(
+                true,
+                blocked.map((entry) => entry.mount),
+              );
+              setupResults = ws.mergeSetupRetry(setupResults, retried);
+            }
+          }
+        } catch (error) {
+          // The workspace exists; setup not running is reported, not rolled back.
+          ui.warn(
+            `⚠ Setup could not run: ${error instanceof Error ? error.message : String(error)}`,
+          );
+          setupResults = undefined;
+        }
+      }
+
       const data =
         mounted.length === 0
-          ? result
+          ? { ...result, ...(setupResults ? { setup: setupResults } : {}) }
           : mounted.length === 1
-            ? { ...result, mount: mounted[0] }
-            : { ...result, mounts: mounted };
+            ? { ...result, mount: mounted[0], ...(setupResults ? { setup: setupResults } : {}) }
+            : { ...result, mounts: mounted, ...(setupResults ? { setup: setupResults } : {}) };
       ui.result({
         data,
         json: args.json,
@@ -375,6 +440,12 @@ export const wsInitCommand = defineCommand({
                 ? `\n  ○ Mounted: ${mount.mountName} (already there)`
                 : `\n  ✓ Mounted: ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
           }
+          for (const entry of setupResults?.results ?? []) {
+            out += `\n  ${setupResultLine(entry)}`;
+            if (entry.status === "failed" && entry.message) {
+              out += `\n      ${entry.message.split("\n")[0]}`;
+            }
+          }
           return out;
         },
         next: [
@@ -384,6 +455,17 @@ export const wsInitCommand = defineCommand({
                 {
                   command: `dev ws add <repository-url> --ws ${result.name}`,
                   why: "add a repository to the task",
+                },
+              ]
+            : []),
+          ...(setupResults &&
+          setupResults.results.some(
+            (entry) => entry.status === "failed" || entry.reason === "consent_required",
+          )
+            ? [
+                {
+                  command: `dev ws setup ${result.name} --consent`,
+                  why: "run the setup commands that did not succeed",
                 },
               ]
             : []),
@@ -397,21 +479,119 @@ export const wsInitCommand = defineCommand({
   },
 });
 
+export const wsSetupCommand = defineCommand({
+  meta: {
+    name: "setup",
+    description: "Run the setup command each mount of a workspace declares",
+  },
+  args: {
+    workspace: { type: "positional", description: "Workspace name", required: false },
+    ws: { type: "string", description: "Workspace name" },
+    consent: {
+      type: "boolean",
+      description: "Allow setup commands from repositories dev does not trust",
+    },
+    root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Output in structured JSON format" },
+  },
+  async run({ args }) {
+    const config = getActiveConfig(args.root);
+    const workspace = await resolveWorkspaceInput({
+      value: resolveDualInput(args.workspace, args.ws, {
+        command: "ws setup",
+        usage: "dev ws setup [workspace] [--ws <name>] [--consent]",
+        positionalName: "workspace",
+        flagName: "--ws",
+      }),
+      root: config.root,
+      workspacePrefix: config.workspacePrefix,
+      command: "ws setup",
+      usage: "dev ws setup [workspace] [--ws <name>] [--consent]",
+    });
+    try {
+      const result = await ws.setup({
+        root: config.root,
+        workspacePrefix: config.workspacePrefix,
+        workspaceName: workspace.value,
+        trustedScopes: config.trustedScopes,
+        explicitConsent: args.consent,
+      });
+      warnHealFailures([result]);
+
+      const failed = result.results.filter((entry) => entry.status === "failed");
+      const blocked = result.results.filter(
+        (entry) => entry.status === "skipped" && entry.reason === "consent_required",
+      );
+      // Every mount was attempted first; only then does an incomplete run fail.
+      if (failed.length > 0 || blocked.length > 0) {
+        if (!args.json) {
+          for (const entry of result.results) {
+            ui.info(setupResultLine(entry));
+            if (entry.status === "failed" && entry.message) {
+              ui.info(`    ${entry.message.split("\n")[0]}`);
+            }
+          }
+        }
+        return reportWorkspaceError(
+          new ws.WorkspaceError(
+            failed.length > 0 ? "SETUP_FAILED" : "SETUP_BLOCKED",
+            failed.length > 0
+              ? `Setup failed for ${failed.length} of ${result.results.length} mounts.`
+              : `Setup did not run for ${blocked.length} of ${result.results.length} mounts, whose repositories dev does not trust.`,
+            {
+              workspaceName: result.workspaceName,
+              mounts: result.results,
+              succeeded: result.succeeded,
+              failed: result.failed,
+              skipped: result.skipped,
+              // The rerun must work in the user's state: a run that needed consent, or had
+              // mounts blocked for lack of it, needs --consent again.
+              ...(failed.length > 0 && (args.consent || blocked.length > 0)
+                ? {
+                    usage: `Fix the command that failed, then rerun: dev ws setup ${result.workspaceName} --consent`,
+                  }
+                : {}),
+            },
+          ),
+          config,
+          args.json,
+        );
+      }
+
+      ui.result({
+        data: result,
+        json: args.json,
+        text: () =>
+          result.results.length > 0
+            ? result.results.map((entry) => setupResultLine(entry)).join("\n")
+            : `○ No mount in '${result.workspaceName}' declares a setup command.`,
+        next: [{ command: `dev ws status --ws ${result.workspaceName}`, why: "review the mounts" }],
+      });
+      return 0;
+    } catch (error) {
+      return reportWorkspaceError(error, config, args.json);
+    }
+  },
+});
+
 interface PlannedMount {
   source: string;
   branch?: string;
   path: string;
   reason?: string;
   extraHeader?: string;
+  /** Command this mount runs after the workspace is created. */
+  setup?: string;
 }
 
 function renderMountPlan(title: string, mounts: PlannedMount[]): string {
   const rows = [
-    ["Repository", "Branch", "Path", "Reason"],
+    ["Repository", "Branch", "Path", "Setup", "Reason"],
     ...mounts.map((mount) => [
       git.deriveDefaultMountPath(mount.source),
       mount.branch ?? "unknown default",
       mount.path,
+      mount.setup ?? "",
       mount.reason ?? "",
     ]),
   ];
@@ -428,6 +608,21 @@ function renderMountPlan(title: string, mounts: PlannedMount[]): string {
     .join("\n")}`;
 }
 
+/** One line per mount: what happened to the setup command it declares. */
+function setupResultLine(entry: ws.MountSetupResult): string {
+  if (entry.status === "ok") return `✓ Setup: ${entry.mount}`;
+  if (entry.status === "failed")
+    return `✗ Setup failed: ${entry.mount}${entry.exitCode !== undefined ? ` (exit ${entry.exitCode})` : ""}`;
+  switch (entry.reason) {
+    case "consent_required":
+      return `○ Setup skipped: ${entry.mount} (needs --consent)`;
+    case "mount_missing":
+      return `○ Setup skipped: ${entry.mount} (not checked out)`;
+    default:
+      return `○ Setup skipped: ${entry.mount}`;
+  }
+}
+
 function duplicateMountPath(path: string, branch: string): string {
   const suffix = branch
     .replace(/[^a-z0-9]+/gi, "-")
@@ -440,6 +635,7 @@ async function resolveWorksetMounts(
   config: RuntimeConfig,
   name: string,
   inventory: InventoryRecord[],
+  setupOverride?: string,
 ): Promise<{ mounts: PlannedMount[]; description?: string }> {
   const definition = config.worksets[name];
   if (!definition) {
@@ -468,7 +664,15 @@ async function resolveWorksetMounts(
   const mounts: PlannedMount[] = [];
   for (const member of definition.members) {
     if (member.label !== undefined) {
-      mounts.push(...resolveLabelMounts(config, member.label, inventory, member.reason));
+      mounts.push(
+        ...resolveLabelMounts(
+          config,
+          member.label,
+          inventory,
+          member.reason,
+          memberSetupCommand(definition, member, setupOverride),
+        ),
+      );
       continue;
     }
     const resolved = await resolveInputSource(config.root, member.source);
@@ -480,6 +684,7 @@ async function resolveWorksetMounts(
       branch: member.ref,
       path: member.path ?? git.deriveDefaultMountPath(resolved.sourceUrl),
       reason: member.reason,
+      setup: memberSetupCommand(definition, member, setupOverride),
     });
   }
   return { mounts, description: definition.description };
@@ -490,6 +695,7 @@ function resolveLabelMounts(
   label: string,
   inventory: InventoryRecord[],
   reason = `label ${label}`,
+  setup?: string,
 ): PlannedMount[] {
   return labelSources(config, label).map((source) => ({
     source: source.url,
@@ -499,6 +705,7 @@ function resolveLabelMounts(
       inventory.find((record) => record.url === source.url)?.default_branch,
     path: source.path ?? git.deriveDefaultMountPath(source.url),
     reason,
+    setup,
   }));
 }
 
@@ -540,7 +747,7 @@ async function reviewMountPlan(
   ui.log(renderMountPlan("Selected repositories", mounts));
   const selected = await ui.multiSelect({
     message: "Select repositories to customize",
-    hint: "Change branch or folder; Continue with defaults keeps the plan.",
+    hint: "Change branch, folder or setup; Continue with defaults keeps the plan.",
     options: [
       { label: "Continue with defaults", value: "defaults" },
       ...mounts.map((mount, index) => ({
@@ -705,7 +912,7 @@ export const wsAddCommand = defineCommand({
 
         const selected = await ui.multiSelect({
           message: "Select mounts to customize",
-          hint: "Change branch or folder; Continue with defaults keeps the plan.",
+          hint: "Change branch, folder or setup; Continue with defaults keeps the plan.",
           options: [
             { label: "Continue with defaults", value: "defaults" },
             ...plannedMounts.map((mount, index) => ({
@@ -2041,6 +2248,7 @@ export const wsCommand = defineCommand({
     status: wsStatusCommand,
     update: wsUpdateCommand,
     sync: wsUpdateCommand,
+    setup: wsSetupCommand,
     track: wsTrackCommand,
     lock: wsLockCommand,
     unlock: wsUnlockCommand,

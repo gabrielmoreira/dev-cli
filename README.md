@@ -11,7 +11,7 @@
 
 ![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=v5.0.1)
 
-Under three minutes from `dev init`: a workspace from one URL, an incident workspace built from a workset, a jump with `dev go`, and a coding agent answering from the indexed docs. [MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
+Under three minutes from `dev init`: a workspace from one URL and a jump into it with `dev go`, an incident workspace built from a workset, and a coding agent answering from the indexed docs. [MP4 with playback controls](docs/assets/dev-cli-demo.mp4).
 
 ## Why
 
@@ -72,7 +72,7 @@ Paste a repository URL. `dev` asks for a name and a one-line objective; accept t
 
 ```bash
 dev ws init https://github.com/can1357/oh-my-pi
-cd ~/dev/ws/gh-can1357-oh-my-pi
+dev go
 ```
 
 ```text
@@ -134,7 +134,7 @@ Start empty and add what the task needs. With a provider connected, `dev ws add`
 
 ```bash
 dev ws init checkout-incident --desc "Checkout times out two or three times a day"
-cd ~/dev/ws/checkout-incident
+dev go checkout-incident
 
 dev ws add                                   # pick from your repositories
 dev ws add checkout-api --tag v2026.09.1     # by name or URL; pin exactly what production runs
@@ -171,11 +171,13 @@ If a workspace's `ws.md` is invalid, `dev ls` marks only that workspace as inval
 If every checkout incident starts with the same four repositories, save the setup as a workset and create a fresh workspace from it each time:
 
 ```bash
-dev workset manage                                     # name, repositories, refs, paths, and why each is there
+dev workset manage                                     # name, repositories, refs, paths, why, and a setup command
 dev ws init incident-0919 --workset checkout-incident
 ```
 
 A workset is a template. A workspace is an instance of one, with its own worktrees.
+
+A workset can carry a setup command, such as `mise install`, and each repository can override it or opt out. `dev ws init` runs it in each new checkout once every repository is in place, never when you open the workspace later. A repository outside your trusted scopes runs it only with `--consent`. A failed or skipped command does not stop the others or undo the workspace; `dev ws setup` runs them again.
 
 ## Search documentation across every repository
 
