@@ -3,7 +3,8 @@
 # Row budget: VHS (0.11 through 0.12) matches Wait+Screen against the first <rows> lines of the terminal buffer
 # since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x800 and
 # 18pt that is about 30 rows. Every scene starts with a clear, and a marker must land within
-# those rows; measure a scene before adding output above its marker.
+# those rows; measure a scene before adding output above its marker. A completed prompt takes
+# 4 rows (spacer, question, hint, answer) and the shell prompt takes 3.
 Output docs/assets/dev-cli-demo.gif
 Output docs/assets/dev-cli-demo.mp4
 
@@ -38,18 +39,19 @@ Sleep 1s
 Type "dev init"
 Sleep 500ms
 Enter
-Wait+Screen@20s /Dev root path/
-Sleep 1s
+Wait+Screen@20s /Where should dev keep your work/
+Sleep 2s
 Enter
-Wait+Screen@20s /Add a provider now/
-Sleep 1s
+Wait+Screen@20s /Connect GitHub or Azure DevOps/
+Sleep 2s
 Right
 Sleep 1s
 Enter
 Sleep 1s
 Type "cd ~/dev"
 Enter
-Sleep 1s
+Type "clear"
+Enter
 
 # Simplest path: one repository URL becomes a ready workspace.
 Type "dev ws init https://github.com/gabrielmoreira/skills.git"
@@ -58,7 +60,7 @@ Enter
 Wait+Screen@20s /Workspace name/
 Sleep 1s
 Enter
-Wait+Screen@20s /Workspace description/
+Wait+Screen@20s /What is this task about/
 Sleep 1s
 Enter
 Wait+Screen@60s /Initialized workspace 'gh-gabrielmoreira-skills'/
@@ -82,7 +84,7 @@ Wait+Screen@20s /Workspace name/
 Sleep 500ms
 Type "scratch"
 Enter
-Wait+Screen@20s /Workspace description/
+Wait+Screen@20s /What is this task about/
 Sleep 1s
 Enter
 Wait+Screen@20s /Initialized workspace 'scratch'/
@@ -152,12 +154,12 @@ Sleep 1s
 Type "Save and exit"
 Sleep 500ms
 Enter
-Wait+Screen@20s /Save this workset/
+# The confirmation and result land past the row budget: pace them, and let the next scenes prove the save.
 Sleep 1s
 Type "y"
-Wait+Screen@20s /Saved workset 'incident'/
 Sleep 2s
-Ctrl+L
+Type "clear"
+Enter
 Sleep 1s
 
 # Add one more member with the focused command; it asks for what it needs.
@@ -187,27 +189,20 @@ Enter
 Type "dev workset show incident"
 Sleep 500ms
 Enter
+Wait+Screen@20s /Affected service/
 Wait+Screen@20s /Debugging skills/
 Sleep 3s
 
-# A fresh workspace from the workset, with nothing but prompts.
+# A fresh workspace from the workset, through the command the saved workset suggested.
 Type "clear"
 Enter
-Type "dev ws init"
+Type "dev ws init --workset incident"
 Sleep 500ms
-Enter
-Wait+Screen@20s /How do you want to start/
-Sleep 1s
-Type "Workset"
-Sleep 500ms
-Enter
-Wait+Screen@20s /Select workset/
-Sleep 1s
 Enter
 Wait+Screen@20s /Workspace name/
 Sleep 1s
 Enter
-Wait+Screen@20s /Workspace description/
+Wait+Screen@20s /What is this task about/
 Sleep 1s
 Enter
 Wait+Screen@20s /Select repositories to customize/
@@ -261,18 +256,15 @@ Sleep 1s
 # Knowledge setup: one index label keeps the OMP docs and the skill catalog mirrored.
 Type "clear"
 Enter
-Type "dev label add"
+Type "dev label add index:incident"
 Sleep 500ms
-Enter
-Wait+Screen@20s /Label name/
-Type "index:incident"
 Enter
 Wait+Screen@20s /Select repositories for/
 Sleep 1s
-Type "omp"
+Type "omp-docs"
 Sleep 1s
 Tab
-Backspace 3
+Backspace 8
 Type "skills"
 Sleep 1s
 Tab
