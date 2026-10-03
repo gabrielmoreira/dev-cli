@@ -52,6 +52,6 @@ The decisions taken while executing `.local/plan-2026-10-02-dx/`, one section ea
 
 ## D17: The demo carries no captions
 
-**Decision.** The terminal demo explains itself through the CLI's own prompts, hints and next-step lines; the tape types commands and answers, nothing else. Where the hints made prompts taller, scenes take the shorter path the CLI itself suggests (`dev ws init --workset incident`, `dev label add index:incident`) to stay inside VHS's row budget. Committed ff7c45c.
+**Decision.** The terminal demo explains itself through the CLI's own prompts, hints and next-step lines; the tape types commands and answers, nothing else. Where the hints made prompts taller, two scenes take a shorter interactive path to stay inside VHS's row budget: `dev ws init --workset incident`, the command the saved workset suggests, and `dev label add index:incident`, which names the label instead of answering its prompt. The row fit was counted in a terminal from source; only the release render proves it. Committed ff7c45c.
 
 **Rejected alternative.** Captions, or typed `# ...` comment lines explaining each step. They explain the demo and leave the product as unclear as before, and a person who installs `dev` never sees them.

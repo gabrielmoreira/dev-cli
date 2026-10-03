@@ -50,6 +50,7 @@ Enter
 Sleep 1s
 Type "cd ~/dev"
 Enter
+Sleep 500ms
 Type "clear"
 Enter
 
