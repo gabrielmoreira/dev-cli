@@ -36,7 +36,15 @@ export async function resolveJumpTarget(input: ResolveJumpTargetInput): Promise<
 
 export type ShellRunner = "direct" | "mise";
 
-export function generateShellInit(shellType: string, runner: ShellRunner = "direct"): string {
+export const DEFAULT_SHELL_BY_PLATFORM = { win32: "powershell", other: "bash" } as const;
+export const DEFAULT_SHELL =
+  process.platform === "win32" ? DEFAULT_SHELL_BY_PLATFORM.win32 : DEFAULT_SHELL_BY_PLATFORM.other;
+export const DEFAULT_SHELL_RUNNER: ShellRunner = "direct";
+
+export function generateShellInit(
+  shellType: string = DEFAULT_SHELL,
+  runner: ShellRunner = DEFAULT_SHELL_RUNNER,
+): string {
   const norm = shellType.toLowerCase().trim();
   const choices = ["bash", "zsh", "fish", "powershell", "pwsh"];
   if (!choices.includes(norm)) {

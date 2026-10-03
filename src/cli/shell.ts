@@ -1,5 +1,10 @@
 import { defineCommand } from "citty";
-import { generateShellInit } from "../nav.ts";
+import {
+  DEFAULT_SHELL,
+  DEFAULT_SHELL_BY_PLATFORM,
+  DEFAULT_SHELL_RUNNER,
+  generateShellInit,
+} from "../nav.ts";
 import { ui } from "../ui.ts";
 import { WorkspaceError } from "../ws.ts";
 
@@ -11,17 +16,17 @@ export const shellInitCommand = defineCommand({
   args: {
     shell: {
       type: "positional",
-      description: "Target shell: bash, zsh, fish, powershell, or pwsh",
+      description: `Target shell: bash, zsh, fish, powershell, or pwsh (default: ${DEFAULT_SHELL_BY_PLATFORM.win32} on Windows, ${DEFAULT_SHELL_BY_PLATFORM.other} elsewhere)`,
       required: false,
     },
     runner: {
       type: "string",
-      description: "CLI runner used by wrappers: direct or mise",
+      description: `CLI runner used by wrappers: direct or mise (default: ${DEFAULT_SHELL_RUNNER})`,
     },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   run({ args }) {
-    const shellType = args.shell ?? (process.platform === "win32" ? "powershell" : "bash");
+    const shellType = args.shell;
     const runner = args.runner;
     if (runner !== undefined && runner !== "direct" && runner !== "mise") {
       throw new WorkspaceError(
@@ -32,7 +37,7 @@ export const shellInitCommand = defineCommand({
     }
     const script = generateShellInit(shellType, runner);
     ui.result({
-      data: { shell: shellType, script },
+      data: { shell: shellType ?? DEFAULT_SHELL, script },
       json: args.json,
       text: () => script,
     });

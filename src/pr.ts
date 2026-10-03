@@ -61,6 +61,19 @@ export const PULL_REQUEST_STATUS_FILTERS = [
 ] as const;
 export type PullRequestStatusFilter = (typeof PULL_REQUEST_STATUS_FILTERS)[number];
 
+export const DEFAULT_PR_LIST_STATUS: PullRequestStatusFilter = "open";
+export const DEFAULT_PR_LIST_LIMIT = Infinity;
+
+export function resolvePullRequestListOptions(input: {
+  status?: PullRequestStatusFilter;
+  limit?: number;
+}): { status: PullRequestStatusFilter; limit: number } {
+  return {
+    status: input.status ?? DEFAULT_PR_LIST_STATUS,
+    limit: input.limit ?? DEFAULT_PR_LIST_LIMIT,
+  };
+}
+
 export function isPullRequestStatusFilter(value: string): value is PullRequestStatusFilter {
   return (PULL_REQUEST_STATUS_FILTERS as readonly string[]).includes(value);
 }

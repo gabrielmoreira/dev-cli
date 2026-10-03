@@ -66,14 +66,16 @@ function collectionName(label: string, checkoutPath: string): string {
   return `${label}--${repoFolder}`;
 }
 
-export function qmdSyncLabels(config: RuntimeConfig, explicitLabel: string): string[] {
+export const DEFAULT_QMD_LABEL_PREFIX = "index:";
+
+export function qmdSyncLabels(config: RuntimeConfig, explicitLabel?: string): string[] {
   if (explicitLabel) return [explicitLabel];
   const labels = new Set<string>();
   const { sources } = parseDeclaredSources(config.sources);
   for (const source of sources) {
     for (const label of Object.keys(source.labels)) labels.add(label);
   }
-  return [...labels].filter((label) => label.startsWith("index:")).sort();
+  return [...labels].filter((label) => label.startsWith(DEFAULT_QMD_LABEL_PREFIX)).sort();
 }
 
 /** Reconciles index labels only against existing mirror checkouts. Mirror
@@ -84,7 +86,8 @@ async function reconcileIndexLabel(
   config: QmdPluginConfig,
   label: string,
 ): Promise<void> {
-  if (!label.startsWith("index:") || qmdSyncLabels(base.config, "").length === 0) return;
+  if (!label.startsWith(DEFAULT_QMD_LABEL_PREFIX) || qmdSyncLabels(base.config).length === 0)
+    return;
   const { matches } = resolveLabelAssignments(base.config, label);
   const checkouts = await mirror.list({
     root: base.root,
@@ -128,7 +131,7 @@ export function createQmdPlugin(base: PluginBase): Plugin {
 
       if (sub === "sync") {
         return syncCollections(base, config, {
-          label: String(args.label ?? ""),
+          label: args.label === undefined ? undefined : String(args.label ?? ""),
           noEmbed: Boolean(args.noEmbed),
         });
       }
@@ -143,7 +146,7 @@ export function createQmdPlugin(base: PluginBase): Plugin {
       // A root without index:* labels does not use qmd: stay silent there.
       "mirror:sync:after": async (b, data) => {
         if (data.updated.length === 0) return;
-        if (qmdSyncLabels(b.config, "").length === 0) return;
+        if (qmdSyncLabels(b.config).length === 0) return;
         await qmd(b, config, ["update"]);
       },
       "label:add:after": (b, data) => reconcileIndexLabel(b, config, data.label),
@@ -155,13 +158,15 @@ export function createQmdPlugin(base: PluginBase): Plugin {
 export async function syncCollections(
   base: PluginBase,
   config: QmdPluginConfig,
-  opts: { label: string; noEmbed: boolean },
+  opts: { label?: string; noEmbed: boolean },
 ): Promise<number> {
   const labels = qmdSyncLabels(base.config, opts.label);
   if (labels.length === 0) {
     // An empty state, not a failure: nothing is labeled for indexing yet.
-    base.ui.info("No index:* labels in dev.yaml, so there is nothing to index.");
-    base.ui.info("↳ dev label add index:docs <repository>");
+    base.ui.info(
+      `No ${DEFAULT_QMD_LABEL_PREFIX}* labels in dev.yaml, so there is nothing to index.`,
+    );
+    base.ui.info(`↳ dev label add ${DEFAULT_QMD_LABEL_PREFIX}docs <repository>`);
     return 0;
   }
 

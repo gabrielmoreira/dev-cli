@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { getActiveConfig } from "./context.ts";
 import { createPluginBase } from "../plugins/index.ts";
-import { createQmdPlugin } from "../plugins/qmd.ts";
+import { createQmdPlugin, DEFAULT_QMD_LABEL_PREFIX } from "../plugins/qmd.ts";
 import { ui } from "../ui.ts";
 import { reportExitCode } from "./errors.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
@@ -14,7 +14,7 @@ export const qmdSyncCommand = defineCommand({
   args: {
     label: {
       type: "positional",
-      description: "Label whose sources become collections",
+      description: `Label whose sources become collections (default: all ${DEFAULT_QMD_LABEL_PREFIX}* labels)`,
       required: false,
     },
     "no-embed": { type: "boolean", description: "Skip vector indexing (lexical-only / CI)" },
@@ -27,7 +27,7 @@ export const qmdSyncCommand = defineCommand({
     const code =
       (await plugin.run({
         subcommand: "sync",
-        label: String(args.label ?? ""),
+        label: args.label,
         noEmbed: args.embed === false,
       })) ?? 0;
     if (code === 0) {

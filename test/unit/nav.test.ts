@@ -8,6 +8,16 @@ import { formatCommandHelp, formatHelp } from "../../src/cli";
 
 describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)", () => {
   describe("generateShellInit", () => {
+    test("generates the platform wrapper when shell and runner are omitted", () => {
+      const omitted = generateShellInit(undefined, undefined);
+      const explicit = generateShellInit(
+        process.platform === "win32" ? "powershell" : "bash",
+        "direct",
+      );
+      expect(omitted).toBe(explicit);
+      expect(omitted).toContain(process.platform === "win32" ? "function dev {" : "dev() {");
+    });
+
     test("generates bash/zsh shell wrapper functions", () => {
       const bashScript = generateShellInit("bash");
       expect(bashScript).toContain("dev() {");

@@ -30,15 +30,19 @@ export const wiListCommand = defineCommand({
       description: "Read strictly from local cache with zero network access",
     },
     refresh: { type: "boolean", description: "Force fresh synchronization from remote provider" },
-    limit: { type: "string", description: "Positive integer maximum results (default: 50)" },
+    limit: {
+      type: "string",
+      description: `Positive integer maximum results (default: ${workitem.DEFAULT_WORK_ITEM_LIST_LIMIT})`,
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const limit =
+    const requestedLimit =
       args.limit === undefined
-        ? 50
+        ? undefined
         : parsePositiveInteger(args.limit, "--limit", "dev wi list --limit <count>");
+    const { limit } = workitem.resolveWorkItemListOptions({ limit: requestedLimit });
     const config = getActiveConfig(args.root);
     const workspaceContext = await resolveWorkspaceQueryContext({
       value: args.ws || findWorkspaceFlag(getAmbient().argv),

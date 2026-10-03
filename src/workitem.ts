@@ -112,6 +112,12 @@ export const DEFAULT_WORK_ITEM_WINDOW_DAYS = 90;
 /** Most work items a default sync reads. */
 export const DEFAULT_WORK_ITEM_LIMIT = 1000;
 
+export const DEFAULT_WORK_ITEM_LIST_LIMIT = 50;
+
+export function resolveWorkItemListOptions(input: { limit?: number }): { limit: number } {
+  return { limit: input.limit ?? DEFAULT_WORK_ITEM_LIST_LIMIT };
+}
+
 /**
  * Synchronizes work items from an Azure DevOps client to the local JSONL cache.
  */

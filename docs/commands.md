@@ -785,22 +785,22 @@ Inspect and cache pull requests
 
 **Usage:** `dev pr [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json] <command>`
 
-| Argument              | Type       | Description                                                                                    |
-| --------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                                                         |
-| `--repo <value>`      | string     | Target repository name                                                                         |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                 |
-| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                 |
-| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                     |
-| `--all`               | boolean    | Show all pull requests instead of only mine                                                    |
-| `--status <value>`    | string     | Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all |
-| `--provider <value>`  | string     | Limit to a specific provider id                                                                |
-| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
-| `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
-| `--ws <value>`        | string     | Use repositories from a workspace                                                              |
-| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                |
-| `--root <value>`      | string     | Explicit dev root directory                                                                    |
-| `--json`              | boolean    | Output in structured JSON format                                                               |
+| Argument              | Type       | Description                                                                                          |
+| --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `repoPositional`      | positional | Target repository name                                                                               |
+| `--repo <value>`      | string     | Target repository name                                                                               |
+| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                       |
+| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
+| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
+| `--all`               | boolean    | Show all pull requests instead of only mine                                                          |
+| `--status <value>`    | string     | Status to list: open, completed, abandoned, closed (completed and abandoned), or all (default: open) |
+| `--provider <value>`  | string     | Limit to a specific provider id                                                                      |
+| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                       |
+| `--project <value>`   | string     | Filter by Azure DevOps project                                                                       |
+| `--ws <value>`        | string     | Use repositories from a workspace                                                                    |
+| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                      |
+| `--root <value>`      | string     | Explicit dev root directory                                                                          |
+| `--json`              | boolean    | Output in structured JSON format                                                                     |
 
 | Subcommand        | Description                                             |
 | ----------------- | ------------------------------------------------------- |
@@ -814,22 +814,22 @@ List open pull requests across all configured providers
 
 **Usage:** `dev pr list [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json]`
 
-| Argument              | Type       | Description                                                                                    |
-| --------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                                                         |
-| `--repo <value>`      | string     | Target repository name                                                                         |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                 |
-| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                 |
-| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                     |
-| `--all`               | boolean    | Show all pull requests instead of only mine                                                    |
-| `--status <value>`    | string     | Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all |
-| `--provider <value>`  | string     | Limit to a specific provider id                                                                |
-| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                 |
-| `--project <value>`   | string     | Filter by Azure DevOps project                                                                 |
-| `--ws <value>`        | string     | Use repositories from a workspace                                                              |
-| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                |
-| `--root <value>`      | string     | Explicit dev root directory                                                                    |
-| `--json`              | boolean    | Output in structured JSON format                                                               |
+| Argument              | Type       | Description                                                                                          |
+| --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
+| `repoPositional`      | positional | Target repository name                                                                               |
+| `--repo <value>`      | string     | Target repository name                                                                               |
+| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                       |
+| `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
+| `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
+| `--all`               | boolean    | Show all pull requests instead of only mine                                                          |
+| `--status <value>`    | string     | Status to list: open, completed, abandoned, closed (completed and abandoned), or all (default: open) |
+| `--provider <value>`  | string     | Limit to a specific provider id                                                                      |
+| `--offline`           | boolean    | Read the last synchronized pull requests from the local cache, without network                       |
+| `--project <value>`   | string     | Filter by Azure DevOps project                                                                       |
+| `--ws <value>`        | string     | Use repositories from a workspace                                                                    |
+| `--limit <value>`     | string     | Positive integer maximum results (default: all)                                                      |
+| `--root <value>`      | string     | Explicit dev root directory                                                                          |
+| `--json`              | boolean    | Output in structured JSON format                                                                     |
 
 ## `dev pr checkout`
 
@@ -1024,11 +1024,11 @@ Generate shell wrapper functions for bash, zsh, fish, or powershell
 
 **Usage:** `dev shell-init [shell] [--runner <value>] [--json]`
 
-| Argument           | Type       | Description                                        |
-| ------------------ | ---------- | -------------------------------------------------- |
-| `shell`            | positional | Target shell: bash, zsh, fish, powershell, or pwsh |
-| `--runner <value>` | string     | CLI runner used by wrappers: direct or mise        |
-| `--json`           | boolean    | Output in structured JSON format                   |
+| Argument           | Type       | Description                                                                                         |
+| ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
+| `shell`            | positional | Target shell: bash, zsh, fish, powershell, or pwsh (default: powershell on Windows, bash elsewhere) |
+| `--runner <value>` | string     | CLI runner used by wrappers: direct or mise (default: direct)                                       |
+| `--json`           | boolean    | Output in structured JSON format                                                                    |
 
 ## `dev qmd`
 
@@ -1036,12 +1036,12 @@ QMD plugin: collections from labeled sources (scoped registry)
 
 **Usage:** `dev qmd [label] [--no-embed] [--root <value>] [--json] <command>`
 
-| Argument         | Type       | Description                              |
-| ---------------- | ---------- | ---------------------------------------- |
-| `label`          | positional | Label whose sources become collections   |
-| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
-| `--root <value>` | string     | Explicit dev root directory              |
-| `--json`         | boolean    | Output in structured JSON format         |
+| Argument         | Type       | Description                                                          |
+| ---------------- | ---------- | -------------------------------------------------------------------- |
+| `label`          | positional | Label whose sources become collections (default: all index:* labels) |
+| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                             |
+| `--root <value>` | string     | Explicit dev root directory                                          |
+| `--json`         | boolean    | Output in structured JSON format                                     |
 
 | Subcommand       | Description                                               |
 | ---------------- | --------------------------------------------------------- |
@@ -1055,12 +1055,12 @@ Reconcile qmd collections from sources carrying a label
 
 **Usage:** `dev qmd sync [label] [--no-embed] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                              |
-| ---------------- | ---------- | ---------------------------------------- |
-| `label`          | positional | Label whose sources become collections   |
-| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI) |
-| `--root <value>` | string     | Explicit dev root directory              |
-| `--json`         | boolean    | Output in structured JSON format         |
+| Argument         | Type       | Description                                                          |
+| ---------------- | ---------- | -------------------------------------------------------------------- |
+| `label`          | positional | Label whose sources become collections (default: all index:* labels) |
+| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                             |
+| `--root <value>` | string     | Explicit dev root directory                                          |
+| `--json`         | boolean    | Output in structured JSON format                                     |
 
 ## `dev qmd search`
 

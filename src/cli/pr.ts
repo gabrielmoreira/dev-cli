@@ -54,8 +54,7 @@ export const prListCommand = defineCommand({
     all: { type: "boolean", description: "Show all pull requests instead of only mine" },
     status: {
       type: "string",
-      description:
-        "Status to list: open (default), completed, abandoned, closed (completed and abandoned), or all",
+      description: `Status to list: open, completed, abandoned, closed (completed and abandoned), or all (default: ${pr.DEFAULT_PR_LIST_STATUS})`,
     },
     provider: { type: "string", description: "Limit to a specific provider id" },
     offline: {
@@ -64,14 +63,17 @@ export const prListCommand = defineCommand({
     },
     project: { type: "string", description: "Filter by Azure DevOps project" },
     ws: { type: "string", description: "Use repositories from a workspace" },
-    limit: { type: "string", description: "Positive integer maximum results (default: all)" },
+    limit: {
+      type: "string",
+      description: `Positive integer maximum results (default: ${pr.DEFAULT_PR_LIST_LIMIT === Infinity ? "all" : pr.DEFAULT_PR_LIST_LIMIT})`,
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const limit =
+    const requestedLimit =
       args.limit === undefined
-        ? Infinity
+        ? undefined
         : parsePositiveInteger(args.limit, "--limit", "dev pr list --limit <count>");
     const config = getActiveConfig(args.root);
     const requestedRepository = args.repoPositional || args.repo;
@@ -81,13 +83,17 @@ export const prListCommand = defineCommand({
       root: config.root,
       workspacePrefix: config.workspacePrefix,
     });
-    const statusFilter = args.status ?? "open";
-    if (!pr.isPullRequestStatusFilter(statusFilter)) {
+    const requestedStatus = args.status;
+    if (requestedStatus !== undefined && !pr.isPullRequestStatusFilter(requestedStatus)) {
       return reportError(
-        `Unknown --status '${statusFilter}'. Use one of: ${pr.PULL_REQUEST_STATUS_FILTERS.join(", ")}.`,
+        `Unknown --status '${requestedStatus}'. Use one of: ${pr.PULL_REQUEST_STATUS_FILTERS.join(", ")}.`,
         args.json,
       );
     }
+    const { status: statusFilter, limit } = pr.resolvePullRequestListOptions({
+      status: requestedStatus,
+      limit: requestedLimit,
+    });
     const providers = config.providers.filter(
       (provider): provider is Extract<ProviderConfig, { type: "azure_devops" }> =>
         provider.type === "azure_devops" && (!args.provider || provider.id === args.provider),
