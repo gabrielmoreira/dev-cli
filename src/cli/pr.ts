@@ -427,7 +427,7 @@ async function actOnPullRequest(items: cache.PullRequestRecord[], root?: string)
       if (opened.exitCode !== 0) {
         return reportError(`Could not open a browser (${opened.stderr}). Open ${item.url}`);
       }
-      ui.success(`Opened ${item.url}`);
+      ui.success(`✓ Opened ${item.url}`);
       return 0;
     }
     // A web URL names the organization and project; the REST fallback does not parse.
@@ -667,7 +667,7 @@ export const prCheckoutCommand = defineCommand({
       },
       json: args.json,
       text: () =>
-        `${workspace.created ? "Created" : "Reused"} workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${workspace.path}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
+        `${workspace.created || mounted.outcome !== "already_mounted" ? "✓" : "○"} ${workspace.created ? "Created" : "Reused"} workspace '${workspaceName}' for PR #${selected.id}:\n  Path:   ${workspace.path}\n  Repo:   ${mounted.mountName}\n  Branch: ${branch}`,
     });
     return 0;
   },

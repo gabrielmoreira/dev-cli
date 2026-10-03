@@ -88,6 +88,8 @@ Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are c
 
 Repeating an identical initialization reports that the root is already configured. A new alias/default or a missing instructions file is reported as an update rather than a no-op.
 
+Results use `✓` for a completed action, `○` for a fact or an already-applied request, `⚠` for a caveat, `✗` for a failure, and `↳` for the next command. Fetching and other progress use `↻` on stderr; JSON carries the same state without presentation symbols.
+
 Every repository is cloned once, as a bare mirror under `.dev/git/<host>/<owner>/<repo>.git`. Workspace mounts and `mirrors/` checkouts are Git worktrees on that clone, so the same repository in ten workspaces is downloaded once.
 
 `dev ws remove <mount> --yes` skips confirmation but refuses uncommitted changes, unpushed commits, and unmanaged checkouts. `dev mirror untrack <source> <branch> --yes` skips confirmation but refuses modified or untracked files. Use `--force` only when you intend to remove those checkouts despite the named hazard; it also skips confirmation.

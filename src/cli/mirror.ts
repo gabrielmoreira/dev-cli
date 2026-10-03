@@ -403,7 +403,7 @@ export const mirrorUntrackCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => `Untracked canonical worktree: ${result.path}`,
+        text: () => `✓ Untracked canonical worktree: ${result.path}`,
       });
       return 0;
     } catch (error) {

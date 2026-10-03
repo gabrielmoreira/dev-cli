@@ -142,7 +142,7 @@ export const worksetRenameCommand = defineCommand({
       ui.result({
         data: { name: next.value, ...definition },
         json: args.json,
-        text: `Renamed workset '${current.value}' to '${next.value}'.`,
+        text: `✓ Renamed workset '${current.value}' to '${next.value}'.`,
       });
       return 0;
     } catch (error) {
@@ -364,7 +364,7 @@ export const worksetManageCommand = defineCommand({
         ui.result({
           data: { name, ...definition },
           json: args.json,
-          text: `Saved workset '${name}'.`,
+          text: `✓ Saved workset '${name}'.`,
         });
         return 0;
       } catch (error) {
@@ -556,7 +556,7 @@ export const worksetRepoEditCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `Updated repository in workset '${selectedWorkset.value}'.`,
+        text: `✓ Updated repository in workset '${selectedWorkset.value}'.`,
       });
       return 0;
     } catch (error) {
@@ -635,7 +635,7 @@ export const worksetRepoRemoveCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `Removed repository from workset '${selectedWorkset.value}'.`,
+        text: `✓ Removed repository from workset '${selectedWorkset.value}'.`,
       });
       return 0;
     } catch (error) {
@@ -796,7 +796,7 @@ export const worksetLabelRemoveCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `Removed label ${label.value} from workset '${selectedWorkset.value}'.`,
+        text: `✓ Removed label ${label.value} from workset '${selectedWorkset.value}'.`,
       });
       return 0;
     } catch (error) {

@@ -198,8 +198,8 @@ export const initCommand = defineCommand({
       text: () => {
         if (!changed) return `○ ${targetDir} is already a dev root (alias ${alias}).`;
         let out = created
-          ? `Initialized dev root '${alias}' at:\n`
-          : `Updated dev root '${alias}' at:\n`;
+          ? `✓ Initialized dev root '${alias}' at:\n`
+          : `✓ Updated dev root '${alias}' at:\n`;
         out += `  Directory:     ${targetDir}\n`;
         out += `  Configuration: ${devYamlPath}\n`;
         out += `  Global Config: ${globalPath} (alias: ${alias})`;
@@ -297,8 +297,8 @@ export const useCommand = defineCommand({
       json: args.json,
       text: () =>
         args.global
-          ? `Default dev root set to '${alias}' (${resolvedPath}) in ${globalPath}.`
-          : `To activate '${alias}' in this shell session, run:\n  export DEV_ROOT="${resolvedPath}"`,
+          ? `○ Default dev root set to '${alias}' (${resolvedPath}) in ${globalPath}.`
+          : `To activate '${alias}' in this shell session, run:\n  ↳ export DEV_ROOT="${resolvedPath}"`,
     });
     return 0;
   },
@@ -431,7 +431,7 @@ export const rootAddCommand = defineCommand({
       data: result,
       json: args.json,
       text: () =>
-        `Registered dev root '${alias}' at ${entry.path}.${result.isDefault ? " It is now the default." : ""}`,
+        `○ Registered dev root '${alias}' at ${entry.path}.${result.isDefault ? " It is now the default." : ""}`,
     });
     return 0;
   },
@@ -475,7 +475,7 @@ export const rootRemoveCommand = defineCommand({
       data: result,
       json: args.json,
       text: () =>
-        `Unregistered dev root '${removed.alias}'. Files at ${removed.path} were not removed.`,
+        `✓ Unregistered dev root '${removed.alias}'. Files at ${removed.path} were not removed.`,
     });
     return 0;
   },

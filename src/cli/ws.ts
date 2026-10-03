@@ -321,7 +321,7 @@ export const wsInitCommand = defineCommand({
         json: args.json,
         text: () => {
           let out = result.created
-            ? `Initialized workspace '${result.name}' at:\n`
+            ? `✓ Initialized workspace '${result.name}' at:\n`
             : `○ Workspace '${result.name}' already exists at:\n`;
           out += `  Directory: ${result.path}\n`;
           out += `  Manifest:  ${result.manifestPath}`;
@@ -329,7 +329,7 @@ export const wsInitCommand = defineCommand({
             out +=
               mount.outcome === "already_mounted"
                 ? `\n  ○ Mounted: ${mount.mountName} (already there)`
-                : `\n  Mounted:   ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
+                : `\n  ✓ Mounted: ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
           }
           return out;
         },
@@ -807,7 +807,7 @@ export const wsStatusCommand = defineCommand({
           } else {
             out += "Mounts:\n";
             for (const mount of result.mounts) {
-              const sym = mount.state === "clean" ? "✔" : mount.state === "dirty" ? "●" : "✖";
+              const sym = mount.state === "clean" ? "○" : "⚠";
               out += `  ${sym} ${mount.path} [${mount.state}]\n`;
               out += `      Source:   ${mount.source}\n`;
               if (mount.desired.revision.mode === "track") {
@@ -1033,9 +1033,9 @@ export const wsTrackCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          let out = `Mount '${result.path}' is now tracking branch '${result.branch}'.`;
+          let out = `○ Mount '${result.path}' is now tracking branch '${result.branch}'.`;
           if (result.worktreeSwitched) {
-            out += `\nSwitched worktree to branch '${result.branch}'.`;
+            out += `\n✓ Switched worktree to branch '${result.branch}'.`;
           }
           return out;
         },
@@ -1093,10 +1093,10 @@ export const wsLockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          if (!result.changed) return "No revision changes required.";
+          if (!result.changed) return "○ No revision changes required.";
           let out = "";
           for (const m of result.lockedMounts) {
-            out += `Mount '${m.path}' locked to commit ${m.commit.slice(0, 8)}.\n`;
+            out += `✓ Mount '${m.path}' locked to commit ${m.commit.slice(0, 8)}.\n`;
           }
           return out.trimEnd();
         },
@@ -1189,10 +1189,10 @@ export const wsUnlockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          if (!result.changed) return "No revision changes required.";
+          if (!result.changed) return "○ No revision changes required.";
           let out = "";
           for (const m of result.unlockedMounts) {
-            out += `Mount '${m.path}' unlocked to track branch '${m.branch}'.\n`;
+            out += `✓ Mount '${m.path}' unlocked to track branch '${m.branch}'.\n`;
           }
           return out.trimEnd();
         },
@@ -1260,8 +1260,8 @@ export const wsTagCommand = defineCommand({
         json: args.json,
         text: () =>
           result.changed
-            ? `Mount '${result.path}' pinned to tag '${result.tag}'.`
-            : `Mount '${result.path}' is already pinned to tag '${result.tag}'.`,
+            ? `✓ Mount '${result.path}' pinned to tag '${result.tag}'.`
+            : `○ Mount '${result.path}' is already pinned to tag '${result.tag}'.`,
       });
       return 0;
     } catch (error) {
@@ -1339,7 +1339,7 @@ export const wsRemoveCommand = defineCommand({
         json: args.json,
         text: () =>
           result.removed
-            ? `Removed mount '${result.path}' from workspace '${workspace.value}'.`
+            ? `✓ Removed mount '${result.path}' from workspace '${workspace.value}'.`
             : `○ '${result.path}' is not mounted in workspace '${workspace.value}'.`,
       });
       return 0;
@@ -1430,7 +1430,7 @@ export const wsDuplicateCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          let out = `Duplicated workspace '${result.sourceName}' to '${result.targetName}' (${result.mountsCount} mounts).\n`;
+          let out = `✓ Duplicated workspace '${result.sourceName}' to '${result.targetName}' (${result.mountsCount} mounts).\n`;
           out += `  Path: ${result.path}`;
           return out;
         },

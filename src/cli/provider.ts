@@ -107,14 +107,14 @@ export const providerAddCommand = defineCommand({
       data: entry,
       json: args.json,
       text: () => {
-        let out = `Registered provider '${entry.id}' (${entry.type}):\n`;
+        let out = `○ Registered provider '${entry.id}' (${entry.type}):\n`;
         if (entry.type === "azure_devops") {
           out += `  Organization: ${entry.organization}\n`;
           if (entry.project) out += `  Project:      ${entry.project}\n`;
         } else {
           out += `  Owner:        ${entry.owner}\n`;
         }
-        out += `\nRun 'dev sync inventory' to refresh the repository inventory for this provider.`;
+        out += `\n↳ dev sync inventory  (refresh this provider's repository inventory)`;
         return out;
       },
     });
@@ -218,7 +218,7 @@ export const providerRemoveCommand = defineCommand({
     ui.result({
       data: { id: provider.value, removed: true },
       json: args.json,
-      text: `Removed provider '${provider.value}' from dev.yaml.`,
+      text: `✓ Removed provider '${provider.value}' from dev.yaml.`,
     });
 
     return 0;

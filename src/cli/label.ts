@@ -203,7 +203,7 @@ function renderPlan(label: string, targets: PlannedTarget[], mirrors: boolean): 
     `Label '${label}'${mirrors ? " (kept mirrored)" : ""}:`,
     ...targets.map(
       (target) =>
-        `  + ${describeSource(target.selector)}${target.declared ? "" : "  (new in dev.yaml)"}`,
+        `  ○ ${describeSource(target.selector)}${target.declared ? "" : "  (new in dev.yaml)"}`,
     ),
   ].join("\n");
 }
