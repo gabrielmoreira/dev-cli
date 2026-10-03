@@ -32,6 +32,8 @@ ENV MISE_DISABLE_UPDATE_WARNING=true
 ENV SSL_CERT_FILE=/home/demo/.cache/certs/ca-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/home/demo/.cache/certs/ca-bundle.pem
 ENV GIT_SSL_CAINFO=/home/demo/.cache/certs/ca-bundle.pem
+# The tape installs this exact release on screen; nothing of dev is preinstalled.
+ENV DEV_VERSION=${DEV_VERSION}
 
 RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     --mount=type=secret,id=npm_registry,required=false,uid=1000,gid=1000,mode=0444 \
@@ -50,7 +52,6 @@ RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     mise use --global "npm:@tobilu/qmd@${QMD_VERSION}"; \
     mise use --global "github:ogulcancelik/herdr@${HERDR_VERSION}"; \
     mise use --global "github:can1357/oh-my-pi@${OMP_VERSION}"; \
-    mise use --global "github:gabrielmoreira/dev-cli@${DEV_VERSION}"; \
     mkdir -p "$HOME/.cache/omp-docs"; \
     curl --fail --silent --show-error --location \
       "https://raw.githubusercontent.com/can1357/oh-my-pi/v${OMP_VERSION}/docs/models.md" \

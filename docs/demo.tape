@@ -4,7 +4,9 @@
 # since the last clear (testing.go, Buffer()), not against the visible screen. At 1200x800 and
 # 18pt that is about 30 rows. Every scene starts with a clear, and a marker must land within
 # those rows; measure a scene before adding output above its marker. A completed prompt takes
-# 4 rows (spacer, question, hint, answer) and the shell prompt takes 3.
+# 4 rows (spacer, question, hint, answer), the shell prompt 3, and a caption line 3 more.
+# Captions: one short "# ..." line per scene says what comes next; where a scene is near the
+# budget, the caption trails the command on the same line instead.
 Output docs/assets/dev-cli-demo.gif
 Output docs/assets/dev-cli-demo.mp4
 
@@ -35,7 +37,35 @@ Wait+Screen@10s /demo@devbox/
 Show
 Sleep 1s
 
+# Nothing of dev is in the image: install the pinned release and turn on shell integration.
+Type@25ms "# Install the dev release this demo shows"
+Enter
+Sleep 500ms
+Type "mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION"
+Sleep 500ms
+Enter
+# mise prints "<config> tools: <tool>@<version>" once the install is done.
+Wait+Screen@180s /tools: github:gabrielmoreira/
+Type "dev --version"
+Enter
+Wait+Screen@20s /dev v\d/
+Sleep 1s
+Type@25ms "# Let dev go change your shell's directory"
+Enter
+Sleep 500ms
+Type `echo 'eval "$(dev shell-init zsh)"' >> ~/.zshrc`
+Sleep 500ms
+Enter
+Type "source ~/.zshrc"
+Enter
+Sleep 2s
+
 # First-time setup: accept ~/dev and skip remote providers for this local demo.
+Type "clear"
+Enter
+Type@25ms "# Pick where your work lives; skip providers here"
+Enter
+Sleep 500ms
 Type "dev init"
 Sleep 500ms
 Enter
@@ -55,6 +85,9 @@ Type "clear"
 Enter
 
 # Simplest path: one repository URL becomes a ready workspace.
+Type@25ms "# One repository URL becomes a task workspace"
+Enter
+Sleep 500ms
 Type "dev ws init https://github.com/gabrielmoreira/skills.git"
 Sleep 500ms
 Enter
@@ -75,6 +108,9 @@ Sleep 3s
 # Start empty, then add a repository through the picker.
 Type "clear"
 Enter
+Type@25ms "# Start an empty workspace for a task"
+Enter
+Sleep 500ms
 Type "dev ws init"
 Sleep 500ms
 Enter
@@ -94,6 +130,9 @@ Type "cd ws/scratch"
 Enter
 Type "clear"
 Enter
+Type@25ms "# Add a repository from the picker"
+Enter
+Sleep 500ms
 Type "dev ws add"
 Sleep 500ms
 Enter
@@ -129,6 +168,9 @@ Type "cd ~/dev"
 Enter
 Type "clear"
 Enter
+Type@25ms "# Save a reusable recipe: a workset"
+Enter
+Sleep 500ms
 Type "dev workset manage incident"
 Sleep 500ms
 Enter
@@ -164,7 +206,7 @@ Enter
 Sleep 1s
 
 # Add one more member with the focused command; it asks for what it needs.
-Type "dev workset repo add incident"
+Type "dev workset repo add incident  # one more repo"
 Sleep 500ms
 Enter
 Wait+Screen@20s /Select repository to add/
@@ -197,7 +239,7 @@ Sleep 3s
 # A fresh workspace from the workset, through the command the saved workset suggested.
 Type "clear"
 Enter
-Type "dev ws init --workset incident"
+Type "dev ws init --workset incident  # from the recipe"
 Sleep 500ms
 Enter
 Wait+Screen@20s /Workspace name/
@@ -220,6 +262,9 @@ Sleep 3s
 # Shell integration turns workspace selection into a real directory jump.
 Type "clear"
 Enter
+Type@25ms "# dev go jumps into a workspace"
+Enter
+Sleep 500ms
 Type "dev go"
 Sleep 500ms
 Enter
@@ -239,6 +284,9 @@ Sleep 3s
 # Start OMP early so indexing never delays the product handoff.
 Type "clear"
 Enter
+Type@25ms "# Start the workspace's agent session"
+Enter
+Sleep 500ms
 Type "dev ws start --json"
 Sleep 500ms
 Enter
@@ -257,7 +305,7 @@ Sleep 1s
 # Knowledge setup: one index label keeps the OMP docs and the skill catalog mirrored.
 Type "clear"
 Enter
-Type "dev label add index:incident"
+Type "dev label add index:incident  # docs to search"
 Sleep 500ms
 Enter
 Wait+Screen@20s /Select repositories for/
@@ -284,7 +332,7 @@ Wait+Screen@180s /Mirrored skills/
 Sleep 2s
 Type "clear"
 Enter
-Type "dev qmd sync"
+Type "dev qmd sync  # build the search index"
 Sleep 500ms
 Enter
 Hide
@@ -293,6 +341,9 @@ Show
 Sleep 2s
 Type "clear"
 Enter
+Type@25ms "# Search the index yourself"
+Enter
+Sleep 500ms
 Type "dev qmd x search debugging-by-evidence"
 Sleep 500ms
 Enter
@@ -302,6 +353,9 @@ Sleep 3s
 # Return to the already-running OMP agent with the new QMD index.
 Type "clear"
 Enter
+Type@25ms "# Ask the agent; it searches the same index"
+Enter
+Sleep 500ms
 Type "herdr"
 Sleep 500ms
 Enter

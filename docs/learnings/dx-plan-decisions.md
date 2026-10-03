@@ -50,8 +50,14 @@ The decisions taken while executing `.local/plan-2026-10-02-dx/`, one section ea
 
 **Rejected alternative.** Printing the full help on every error. It buries the one line that helps under every flag of the command, and it cannot know the user's state: a root without a provider would still be told to sync repositories.
 
-## D17: The demo carries no captions
+## D17: The demo carries no captions (superseded by D18)
 
 **Decision.** The terminal demo explains itself through the CLI's own prompts, hints and next-step lines; the tape types commands and answers, nothing else. Where the hints made prompts taller, two scenes take a shorter interactive path to stay inside VHS's row budget: `dev ws init --workset incident`, the command the saved workset suggests, and `dev label add index:incident`, which names the label instead of answering its prompt. The row fit was counted in a terminal from source; only the release render proves it. Committed ff7c45c.
 
 **Rejected alternative.** Captions, or typed `# ...` comment lines explaining each step. They explain the demo and leave the product as unclear as before, and a person who installs `dev` never sees them.
+
+## D18: The demo sets itself up and says what comes next
+
+**Decision.** The demo image carries nothing of `dev`: the tape installs the pinned release with `mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION`, appends `eval "$(dev shell-init zsh)"` to `~/.zshrc`, and only then runs `dev init`, so every step a new user takes is on screen. Each scene opens with one short typed `# ...` line saying what comes next; where a scene is near VHS's row budget, the comment trails the command on the same line. The image still seeds scenery (local remotes and an inventory file) because a real provider would need credentials inside a container that runs a model. The maintainer asked for this on 2026-10-03: a preconfigured container made the demo look like magic.
+
+**Rejected alternative.** Keeping D17. The CLI's hints explain each prompt, but a GIF viewer cannot pause, and the setup a user must do (install, shell integration) was invisible. Passing a GitHub token into the container to avoid anonymous API limits during the install was rejected too: the release job's token can write to the repository, and the container runs a model-driven agent.
