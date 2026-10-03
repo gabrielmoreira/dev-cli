@@ -117,9 +117,9 @@ export const providerAddCommand = defineCommand({
         } else {
           out += `  Owner:        ${entry.owner}\n`;
         }
-        out += "\n↳ dev sync inventory  list repositories from this connection";
         return out;
       },
+      next: [{ command: "dev sync inventory", why: "list repositories from this connection" }],
     });
 
     return 0;

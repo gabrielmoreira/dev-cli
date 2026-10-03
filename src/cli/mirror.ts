@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import * as mirror from "../mirror.ts";
 import * as labels from "../labels.ts";
 import { resolveExtraHeader } from "../credentials.ts";
-import { ui } from "../ui.ts";
+import { formatNextStep, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { normalizeSourceKey } from "../git.ts";
 import { createPluginBase, emit } from "../plugins/index.ts";
@@ -89,11 +89,12 @@ export const mirrorAddCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () =>
-          (result.created
-            ? `✓ Mirrored ${result.canonicalUrl} @ ${result.branch} at ${result.path}`
-            : `○ ${result.canonicalUrl} @ ${result.branch} is already mirrored at ${result.path}`) +
-          "\n↳ dev mirror ls  see your reference copies for reading and search",
+        text: result.created
+          ? `✓ Mirrored ${result.canonicalUrl} @ ${result.branch} at ${result.path}`
+          : `○ ${result.canonicalUrl} @ ${result.branch} is already mirrored at ${result.path}`,
+        next: [
+          { command: "dev mirror ls", why: "see your reference copies for reading and search" },
+        ],
       });
       return 0;
     } catch (error) {
@@ -214,7 +215,7 @@ export function formatMirrorSync(
   ].filter(Boolean);
   const lines = [
     total === 0
-      ? "○ No mirrors created yet.\n↳ dev mirror add <repository-url>  keep a reference copy for reading and search"
+      ? `○ No mirrors created yet.\n${formatNextStep({ command: "dev mirror add <repository-url>", why: "keep a reference copy for reading and search" })}`
       : `${problems > 0 ? "⚠" : result.updated.length > 0 ? "✓" : "○"} ${counts.join(", ")}`,
   ];
   for (const item of result.updated) {
@@ -383,11 +384,10 @@ export const mirrorTrackCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () =>
-          (result.created
-            ? `✓ Tracking ${result.branch} at ${result.path}`
-            : `○ ${result.branch} is already tracked at ${result.path}`) +
-          "\n↳ dev mirror ls  see your reference copies",
+        text: result.created
+          ? `✓ Tracking ${result.branch} at ${result.path}`
+          : `○ ${result.branch} is already tracked at ${result.path}`,
+        next: [{ command: "dev mirror ls", why: "see your reference copies" }],
       });
       return 0;
     } catch (error) {
@@ -467,8 +467,8 @@ export const mirrorUntrackCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () =>
-          `✓ Stopped tracking the mirror at ${result.path}\n↳ dev mirror ls  see the remaining reference copies`,
+        text: `✓ Stopped tracking the mirror at ${result.path}`,
+        next: [{ command: "dev mirror ls", why: "see the remaining reference copies" }],
       });
       return 0;
     } catch (error) {

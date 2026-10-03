@@ -208,12 +208,12 @@ export const initCommand = defineCommand({
         const outcome = !changed
           ? `○ Your dev root at ${targetDir} is ready`
           : `${created ? "✓ Created" : "✓ Updated"} your dev root at ${targetDir}${defaultHint}`;
-        return [
-          outcome,
-          "↳ dev ws init <repository-url>  start a workspace for a task",
-          "↳ dev provider add  connect GitHub or Azure DevOps",
-        ].join("\n");
+        return outcome;
       },
+      next: [
+        { command: "dev ws init <repository-url>", why: "start a workspace for a task" },
+        { command: "dev provider add", why: "connect GitHub or Azure DevOps" },
+      ],
     });
 
     if (
@@ -355,8 +355,14 @@ export const currentCommand = defineCommand({
             message: "No dev root yet.",
             next: [{ command: "dev init", why: "choose where to keep your work" }],
           });
-        return `Your dev root: ${config.root}\n↳ dev ls  see your task workspaces\n↳ dev roots  see the roots you can switch to`;
+        return `Your dev root: ${config.root}`;
       },
+      next: config.configPath
+        ? [
+            { command: "dev ls", why: "see your task workspaces" },
+            { command: "dev roots", why: "see the roots you can switch to" },
+          ]
+        : undefined,
     });
 
     return 0;

@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { inspectEnvironment, inspectHardware } from "../doctor.ts";
-import { ui } from "../ui.ts";
+import { formatNextStep, ui } from "../ui.ts";
 import { getActiveConfig } from "./context.ts";
 import { reportExitCode } from "./errors.ts";
 
@@ -36,8 +36,8 @@ export const doctorCommand = defineCommand({
 
         if (report.providerList.length === 0) {
           out += config.configPath
-            ? "\nNo provider connected.\n↳ dev provider add  connect GitHub or Azure DevOps\n"
-            : "\nNo dev root yet.\n↳ dev init  choose where to keep your work\n";
+            ? `\nNo provider connected.\n${formatNextStep({ command: "dev provider add", why: "connect GitHub or Azure DevOps" })}\n`
+            : `\nNo dev root yet.\n${formatNextStep({ command: "dev init", why: "choose where to keep your work" })}\n`;
         } else {
           const maxIdLen = Math.max(...report.providerList.map((p) => p.id.length));
           out += "\nProviders:\n";

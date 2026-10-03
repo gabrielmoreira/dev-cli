@@ -64,6 +64,41 @@ describe("ui stream discipline", () => {
     ]);
   });
 
+  test.each(["text", "callback"])(
+    "renders result next steps after %s with the empty-state line format",
+    (kind) => {
+      const next = [
+        { command: "dev go sample", why: "work in this task folder" },
+        { command: "dev ws status", why: "inspect the repository state" },
+      ] as const;
+      ui.result({
+        data: { name: "sample" },
+        text: kind === "text" ? "Created sample" : () => "Created sample",
+        next,
+      });
+      ui.empty({ message: "No task selected", next });
+      expect(out.join("\n")).toBe(
+        "Created sample\n↳ dev go sample  work in this task folder\n↳ dev ws status  inspect the repository state\n" +
+          "○ No task selected\n↳ dev go sample  work in this task folder\n↳ dev ws status  inspect the repository state",
+      );
+      expect(err).toEqual([]);
+    },
+  );
+
+  test.each(["option", "ambient"])("keeps %s JSON result data unchanged by next steps", (mode) => {
+    ui.setJson(mode === "ambient");
+    ui.result({
+      data: { name: "sample" },
+      json: mode === "option",
+      text: () => {
+        throw new Error("Human text must not render in JSON mode");
+      },
+      next: [{ command: "dev go sample", why: "work in this task folder" }],
+    });
+    expect(out.join("\n")).toBe('{\n  "name": "sample"\n}');
+    expect(err).toEqual([]);
+  });
+
   test("a captured stdout carries only the answer", () => {
     ui.info("Sync action: workspace update (payment-fix).");
     ui.log("/dev/ws/payment-fix");

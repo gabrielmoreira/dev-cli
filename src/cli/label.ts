@@ -399,8 +399,8 @@ export const labelAddCommand = defineCommand({
             ...applied.unchanged.map(
               (source) => `○ ${describeSource(source)} already labeled '${label}'.`,
             ),
-            `↳ dev label ls ${label}  see this group of repositories`,
           ].join("\n"),
+        next: [{ command: `dev label ls ${label}`, why: "see this group of repositories" }],
       });
       if (missing.length === 0) return 0;
       const now =
@@ -561,8 +561,8 @@ export const labelRmCommand = defineCommand({
               (source) =>
                 `  ○ ${describeSource(source)}: no label needs its mirror now; it stays on disk.`,
             ),
-            "↳ dev label ls  see the remaining repository groups",
           ].join("\n"),
+        next: [{ command: "dev label ls", why: "see the remaining repository groups" }],
       });
       return 0;
     } catch (error) {
@@ -635,7 +635,8 @@ export const labelRenameCommand = defineCommand({
         text: () =>
           `✓ Renamed '${from}' to '${to}' on ${renamed.sources} repositor${renamed.sources === 1 ? "y" : "ies"}` +
           `${renamed.def ? ", its definition" : ""}` +
-          `${renamed.worksetMembers > 0 ? `, and ${renamed.worksetMembers} workset member(s)` : ""}.\n↳ dev label ls ${to}  see the renamed repository group`,
+          `${renamed.worksetMembers > 0 ? `, and ${renamed.worksetMembers} workset member(s)` : ""}.`,
+        next: [{ command: `dev label ls ${to}`, why: "see the renamed repository group" }],
       });
       return 0;
     } catch (error) {

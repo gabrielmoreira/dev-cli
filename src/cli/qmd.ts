@@ -60,9 +60,17 @@ export const qmdSyncCommand = defineCommand({
                 `qmd sync '${label}': ${collections} collection(s) reconciled`,
             ),
             "qmd sync complete",
-            "↳ dev qmd search <query>  search your indexed repository documents",
           ].join("\n");
         },
+        next:
+          result.labels.length > 0
+            ? [
+                {
+                  command: "dev qmd search <query>",
+                  why: "search your indexed repository documents",
+                },
+              ]
+            : undefined,
       });
       return 0;
     } catch (error) {

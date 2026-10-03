@@ -4,7 +4,7 @@ import * as ws from "../ws.ts";
 import * as cache from "../cache.ts";
 import { createAzureDevOps } from "../ado.ts";
 import { resolveAzureDevOpsCredential, resolveExtraHeader } from "../credentials.ts";
-import { ui } from "../ui.ts";
+import { formatNextStep, ui } from "../ui.ts";
 import { reportError, reportExitCode } from "./errors.ts";
 import { getActiveConfig, getAmbient } from "./context.ts";
 import { describeSkipReason, warnHealFailures, workspaceSyncOptions } from "./ws.ts";
@@ -42,7 +42,7 @@ function formatInventoryResults(results: sync.InventorySyncSummary[]): string {
   let out = "";
   for (const result of results) {
     out += `✓ Listed ${result.total} repositories from '${result.tenant}' (${result.added} added, ${result.updated} updated).\n`;
-    out += "↳ dev ws init  choose repositories for a task\n";
+    out += formatNextStep({ command: "dev ws init", why: "choose repositories for a task" }) + "\n";
   }
   return out.trimEnd();
 }
@@ -67,7 +67,15 @@ function formatDataResult(result: sync.SyncDataResult): string {
     out += "\nWarnings/Errors:\n";
     for (const err of result.errors) out += `  - ${err.message}\n`;
   }
-  out += "\n↳ dev pr  see pull requests\n↳ dev wi  see saved work items\n";
+  out +=
+    "\n" +
+    [
+      { command: "dev pr", why: "see pull requests" },
+      { command: "dev wi", why: "see saved work items" },
+    ]
+      .map(formatNextStep)
+      .join("\n") +
+    "\n";
   return out.trimEnd();
 }
 
@@ -100,7 +108,7 @@ export const syncInventoryCommand = defineCommand({
         json: args.json,
         text: () =>
           cached.length > 0
-            ? `Offline: ${cached.length} repositories saved locally.\n↳ dev ws init  choose repositories for a task`
+            ? `Offline: ${cached.length} repositories saved locally.`
             : ui.empty({
                 message: !config.configPath
                   ? "No dev root yet, so there are no repositories saved locally."
@@ -121,6 +129,10 @@ export const syncInventoryCommand = defineCommand({
                         },
                       ],
               }),
+        next:
+          cached.length > 0
+            ? [{ command: "dev ws init", why: "choose repositories for a task" }]
+            : undefined,
       });
       return 0;
     }
@@ -221,12 +233,16 @@ export const syncDataCommand = defineCommand({
           out += `  ${inventories.length} repositories\n`;
           out += `  ${workItems.length} work items\n`;
           out += `  ${pullRequests.length} pull requests\n`;
-          out +=
-            config.providers.length > 0
-              ? "↳ dev sync  read current data from your providers"
-              : "↳ dev provider add  connect a provider to refresh this data";
-          return out;
+          return out.trimEnd();
         },
+        next:
+          inventories.length + workItems.length + pullRequests.length > 0
+            ? [
+                config.providers.length > 0
+                  ? { command: "dev sync", why: "read current data from your providers" }
+                  : { command: "dev provider add", why: "connect a provider to refresh this data" },
+              ]
+            : undefined,
       });
       return 0;
     }
@@ -492,9 +508,12 @@ export const syncCommand = defineCommand({
           if (!providers)
             out.push(
               "  ○ No provider connected; repository URLs still work.",
-              config.configPath
-                ? "  ↳ dev provider add  connect GitHub or Azure DevOps"
-                : "  ↳ dev init  choose where to keep your work",
+              "  " +
+                formatNextStep(
+                  config.configPath
+                    ? { command: "dev provider add", why: "connect GitHub or Azure DevOps" }
+                    : { command: "dev init", why: "choose where to keep your work" },
+                ),
             );
           else if (!providers.ok) out.push(`  ✗ ${providers.error}`);
           else out.push(formatProviderSync(providers.result).replace(/^/gm, "  "));
@@ -514,9 +533,12 @@ export const syncCommand = defineCommand({
           if (workspaces.length === 0)
             out.push(
               "  ○ No workspaces created yet.",
-              config.configPath
-                ? "  ↳ dev ws init <repository-url>  start a task workspace"
-                : "  ↳ dev init  choose where to keep your work",
+              "  " +
+                formatNextStep(
+                  config.configPath
+                    ? { command: "dev ws init <repository-url>", why: "start a task workspace" }
+                    : { command: "dev init", why: "choose where to keep your work" },
+                ),
             );
           for (const item of workspaces) {
             if (!item.ok) {
@@ -534,7 +556,11 @@ export const syncCommand = defineCommand({
             );
             if (item.result.mounts.length === 0)
               out.push(
-                `  ↳ dev ws add <repository-url> --ws ${item.name}  add a repository for this task`,
+                "  " +
+                  formatNextStep({
+                    command: `dev ws add <repository-url> --ws ${item.name}`,
+                    why: "add a repository for this task",
+                  }),
               );
             for (const mount of item.result.mounts) {
               if (mount.action !== "skipped") continue;

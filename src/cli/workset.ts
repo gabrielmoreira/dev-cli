@@ -150,11 +150,15 @@ export const worksetCreateCommand = defineCommand({
       ui.result({
         data: { name: name.value, created, ...definition },
         json: args.json,
-        text:
-          (created
-            ? `✓ Created workset '${name.value}' with ${member.source}`
-            : `○ Workset '${name.value}' already exists with this definition`) +
-          `\n↳ dev ws init --workset ${name.value}  start a workspace from this recipe`,
+        text: created
+          ? `✓ Created workset '${name.value}' with ${member.source}`
+          : `○ Workset '${name.value}' already exists with this definition`,
+        next: [
+          {
+            command: `dev ws init --workset ${name.value}`,
+            why: "start a workspace from this recipe",
+          },
+        ],
       });
       return 0;
     } catch (error) {
@@ -205,7 +209,13 @@ export const worksetRenameCommand = defineCommand({
       ui.result({
         data: { name: next.value, ...definition },
         json: args.json,
-        text: `✓ Renamed workset '${current.value}' to '${next.value}'.\n↳ dev ws init --workset ${next.value}  start a workspace from this recipe`,
+        text: `✓ Renamed workset '${current.value}' to '${next.value}'.`,
+        next: [
+          {
+            command: `dev ws init --workset ${next.value}`,
+            why: "start a workspace from this recipe",
+          },
+        ],
       });
       return 0;
     } catch (error) {
@@ -500,7 +510,10 @@ export const worksetManageCommand = defineCommand({
         ui.result({
           data: { name, ...definition },
           json: args.json,
-          text: `✓ Saved workset '${name}'.\n↳ dev ws init --workset ${name}  start a workspace from this recipe`,
+          text: `✓ Saved workset '${name}'.`,
+          next: [
+            { command: `dev ws init --workset ${name}`, why: "start a workspace from this recipe" },
+          ],
         });
         return 0;
       } catch (error) {
@@ -612,11 +625,15 @@ export const worksetRepoAddCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, added, ...definition },
         json: args.json,
-        text:
-          (added
-            ? `✓ Added ${member.source} to workset '${selectedWorkset.value}'`
-            : `○ ${member.source} is already in workset '${selectedWorkset.value}'`) +
-          `\n↳ dev ws init --workset ${selectedWorkset.value}  start a workspace from this recipe`,
+        text: added
+          ? `✓ Added ${member.source} to workset '${selectedWorkset.value}'`
+          : `○ ${member.source} is already in workset '${selectedWorkset.value}'`,
+        next: [
+          {
+            command: `dev ws init --workset ${selectedWorkset.value}`,
+            why: "start a workspace from this recipe",
+          },
+        ],
       });
       return 0;
     } catch (error) {
@@ -748,7 +765,10 @@ export const worksetRepoEditCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `✓ Updated repository in workset '${selectedWorkset.value}'.\n↳ dev workset show ${selectedWorkset.value}  review the saved recipe`,
+        text: `✓ Updated repository in workset '${selectedWorkset.value}'.`,
+        next: [
+          { command: `dev workset show ${selectedWorkset.value}`, why: "review the saved recipe" },
+        ],
       });
       return 0;
     } catch (error) {
@@ -835,7 +855,10 @@ export const worksetRepoRemoveCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `✓ Removed repository from workset '${selectedWorkset.value}'. Existing workspaces stay unchanged.\n↳ dev workset show ${selectedWorkset.value}  review the saved recipe`,
+        text: `✓ Removed repository from workset '${selectedWorkset.value}'. Existing workspaces stay unchanged.`,
+        next: [
+          { command: `dev workset show ${selectedWorkset.value}`, why: "review the saved recipe" },
+        ],
       });
       return 0;
     } catch (error) {
@@ -932,11 +955,15 @@ export const worksetLabelAddCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, added, ...definition },
         json: args.json,
-        text:
-          (added
-            ? `✓ Added label ${member.label} to workset '${selectedWorkset.value}'`
-            : `○ Label ${member.label} is already in workset '${selectedWorkset.value}'`) +
-          `\n↳ dev ws init --workset ${selectedWorkset.value}  start a workspace from this recipe`,
+        text: added
+          ? `✓ Added label ${member.label} to workset '${selectedWorkset.value}'`
+          : `○ Label ${member.label} is already in workset '${selectedWorkset.value}'`,
+        next: [
+          {
+            command: `dev ws init --workset ${selectedWorkset.value}`,
+            why: "start a workspace from this recipe",
+          },
+        ],
       });
       return 0;
     } catch (error) {
@@ -1021,7 +1048,10 @@ export const worksetLabelRemoveCommand = defineCommand({
       ui.result({
         data: { name: selectedWorkset.value, ...definition },
         json: args.json,
-        text: `✓ Removed label ${label.value} from workset '${selectedWorkset.value}'. Existing workspaces stay unchanged.\n↳ dev workset show ${selectedWorkset.value}  review the saved recipe`,
+        text: `✓ Removed label ${label.value} from workset '${selectedWorkset.value}'. Existing workspaces stay unchanged.`,
+        next: [
+          { command: `dev workset show ${selectedWorkset.value}`, why: "review the saved recipe" },
+        ],
       });
       return 0;
     } catch (error) {
@@ -1117,8 +1147,13 @@ export const worksetShowCommand = defineCommand({
       ui.result({
         data: { name: selected.value, ...definition },
         json: args.json,
-        text: () =>
-          `${renderWorkset(config, selected.value, definition)}\n↳ dev ws init --workset ${selected.value}  start a workspace from this recipe`,
+        text: () => renderWorkset(config, selected.value, definition),
+        next: [
+          {
+            command: `dev ws init --workset ${selected.value}`,
+            why: "start a workspace from this recipe",
+          },
+        ],
       });
       return 0;
     } catch (error) {

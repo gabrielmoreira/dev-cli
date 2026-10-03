@@ -26,10 +26,19 @@ let isQuietMode = false;
 let isJsonMode = false;
 let errorReported = false;
 
+export interface NextStep {
+  command: string;
+  why: string;
+}
+
+export function formatNextStep({ command, why }: NextStep): string {
+  return `↳ ${command}  ${why}`;
+}
 export interface ResultOptions<T = unknown> {
   data: T;
   json?: boolean;
   text?: string | (() => string | void);
+  next?: readonly NextStep[];
 }
 
 export function fuzzyScore(query: string, text: string): number | undefined {
@@ -155,27 +164,14 @@ export const ui = {
       if (typeof rendered === "string") {
         console.log(rendered);
       }
-      return;
-    }
-
-    if (typeof options.text === "string") {
+    } else if (typeof options.text === "string") {
       console.log(options.text);
-      return;
-    }
-
-    console.log(JSON.stringify(options.data, null, 2));
+    } else console.log(JSON.stringify(options.data, null, 2));
+    for (const step of options.next ?? []) console.log(formatNextStep(step));
   },
 
-  empty(options: {
-    message: string;
-    next: readonly [{ command: string; why: string }, ...{ command: string; why: string }[]];
-  }): void {
-    console.log(
-      [
-        `○ ${options.message}`,
-        ...options.next.map(({ command, why }) => `↳ ${command}  ${why}`),
-      ].join("\n"),
-    );
+  empty(options: { message: string; next: readonly [NextStep, ...NextStep[]] }): void {
+    console.log([`○ ${options.message}`, ...options.next.map(formatNextStep)].join("\n"));
   },
 
   // Every prompt goes through Clack: mixing prompt libraries left two readers on
