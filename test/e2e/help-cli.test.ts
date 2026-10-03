@@ -159,6 +159,27 @@ describe("CLI help through pipes", () => {
     ).toContain("workitem");
   });
 
+  it("requires ls and rm aliases for every list and remove command at every depth", async () => {
+    const result = await run(["--help", "--llms"]);
+    expect(result.exitCode).toBe(0);
+    interface Command {
+      name: string;
+      aliases?: string[];
+      subcommands?: Command[];
+    }
+    const gaps: string[] = [];
+    function check(commands: Command[], parent: string) {
+      for (const command of commands) {
+        const path = `${parent} ${command.name}`;
+        const short = command.name === "list" ? "ls" : command.name === "remove" ? "rm" : undefined;
+        if (short && !command.aliases?.includes(short)) gaps.push(`${path} needs ${short}`);
+        check(command.subcommands ?? [], path);
+      }
+    }
+    check(JSON.parse(result.stdout).commands, "dev");
+    expect(gaps).toEqual([]);
+  });
+
   it("keeps the published concept definitions in README and reference in sync", async () => {
     const result = await run(["--help", "--llms"]);
     const schema = JSON.parse(result.stdout);
