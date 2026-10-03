@@ -125,7 +125,7 @@ Wait+Screen@20s /What is this task about/
 Sleep 1s
 Enter
 Wait+Screen@20s /Initialized workspace 'scratch'/
-Sleep 1s
+Sleep 6s
 Type "cd ws/scratch"
 Enter
 Type "clear"
@@ -287,14 +287,10 @@ Enter
 Type@25ms "# Start the workspace's agent session"
 Enter
 Sleep 500ms
-Type "dev ws start --json"
+Type "dev ws start"
 Sleep 500ms
 Enter
-Wait+Screen@60s /incident-omp/
-Type "herdr"
-Sleep 500ms
-Enter
-Wait+Screen@30s /OpenRouter Free Models Router/
+Wait+Screen@60s /OpenRouter Free Models Router/
 Sleep 3s
 Ctrl+B
 Sleep 500ms
@@ -356,7 +352,7 @@ Enter
 Type@25ms "# Ask the agent; it searches the same index"
 Enter
 Sleep 500ms
-Type "herdr"
+Type "dev ws start"
 Sleep 500ms
 Enter
 Wait+Screen@30s /OpenRouter Free Models Router/
