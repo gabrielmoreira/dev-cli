@@ -1,5 +1,19 @@
-import { defineCommand, renderUsage, runCommand, type ArgDef, type CommandDef } from "citty";
-import { wsCommand, wsGoCommand, wsListCommand, wsStartCommand, wsStatusCommand } from "./ws.ts";
+import {
+  defineCommand,
+  parseArgs,
+  renderUsage,
+  runCommand,
+  type ArgDef,
+  type CommandDef,
+} from "citty";
+import {
+  wsCommand,
+  wsGoCommand,
+  wsListCommand,
+  wsStartCommand,
+  wsStatusCommand,
+  wsUpdateCommand,
+} from "./ws.ts";
 import { mirrorCommand } from "./mirror.ts";
 import { syncCommand } from "./sync.ts";
 import { prCommand } from "./pr.ts";
@@ -350,27 +364,30 @@ export async function findUnknownOption(
   return undefined;
 }
 
+const globalArgs = {
+  root: { type: "string", description: "Explicit dev root directory" },
+  json: { type: "boolean", description: "Output in structured JSON format" },
+  quiet: { type: "boolean", alias: "q", description: "Silence non-essential output" },
+  "non-interactive": {
+    type: "boolean",
+    description:
+      "Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent",
+  },
+  ws: { type: "string", description: "Target workspace name" },
+} satisfies Record<string, ArgDef>;
+
 export const mainCommand = defineCommand({
   meta: {
     name: "dev",
     description: "Developer CLI & Workspace Engine",
     version: VERSION,
   },
-  args: {
-    root: { type: "string", description: "Explicit dev root directory" },
-    json: { type: "boolean", description: "Output in structured JSON format" },
-    quiet: { type: "boolean", alias: "q", description: "Silence non-essential output" },
-    "non-interactive": {
-      type: "boolean",
-      description:
-        "Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent",
-    },
-    ws: { type: "string", description: "Target workspace name" },
-  },
+  args: globalArgs,
   subCommands: {
     init: initCommand,
     ls: wsListCommand,
     status: wsStatusCommand,
+    update: wsUpdateCommand,
     use: useCommand,
     go: wsGoCommand,
     start: wsStartCommand,
@@ -427,11 +444,7 @@ export function normalizeCliArgs(argv: string[]): string[] {
 
   let normalized = args;
   const first = normalized[0];
-  if (first === "status" || first === "update") {
-    normalized = ["ws", first, ...normalized.slice(1)];
-  } else if (first === "workitem") {
-    normalized = ["wi", ...normalized.slice(1)];
-  } else if (first && parsePullRequestUrl(first)) {
+  if (first && parsePullRequestUrl(first)) {
     // A pull request URL names its own intent: `dev <url>` is `dev ws init <url>`.
     normalized = ["ws", "init", ...normalized];
   } else if (first === "ws" && normalized[1] && parsePullRequestUrl(normalized[1])) {
@@ -441,9 +454,12 @@ export function normalizeCliArgs(argv: string[]): string[] {
   if (!workspace) return normalized;
   if (normalized.length === 0) normalized = ["ws", "status"];
 
+  const [rootCommand, subcommand] = parseArgs(normalized, globalArgs)._;
   if (
-    normalized[0] === "sync" ||
-    (normalized[0] === "ws" && WORKSPACE_TARGET_SUBCOMMANDS.has(normalized[1] ?? "status"))
+    rootCommand === "sync" ||
+    rootCommand === "status" ||
+    rootCommand === "update" ||
+    (rootCommand === "ws" && WORKSPACE_TARGET_SUBCOMMANDS.has(subcommand ?? "status"))
   ) {
     return [...normalized, "--ws", workspace];
   }
@@ -500,9 +516,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     return 0;
   }
 
-  // Handle shortcut commands directly at root:
-  // dev status -> dev ws status
-  // dev update -> dev ws update
+  // Normalize workspace selection and pull-request URL intent before tree dispatch.
   const normalizedArgs = normalizeCliArgs(argv);
   if (normalizedArgs[1] === "init" && !argv.includes("init")) {
     ui.info(`↳ dev ws init ${normalizedArgs[2]}`);

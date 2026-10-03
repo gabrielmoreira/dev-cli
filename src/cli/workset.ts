@@ -650,6 +650,7 @@ export const worksetRepoCommand = defineCommand({
     add: worksetRepoAddCommand,
     edit: worksetRepoEditCommand,
     remove: worksetRepoRemoveCommand,
+    rm: worksetRepoRemoveCommand,
   },
 });
 
@@ -810,6 +811,7 @@ export const worksetLabelCommand = defineCommand({
   subCommands: {
     add: worksetLabelAddCommand,
     remove: worksetLabelRemoveCommand,
+    rm: worksetLabelRemoveCommand,
   },
 });
 
@@ -884,8 +886,10 @@ export const worksetShowCommand = defineCommand({
 
 export const worksetCommand = defineCommand({
   meta: { name: "workset", description: "Manage reusable repository worksets" },
+  args: worksetListCommand.args,
   subCommands: {
     list: worksetListCommand,
+    ls: worksetListCommand,
     create: worksetCreateCommand,
     rename: worksetRenameCommand,
     manage: worksetManageCommand,

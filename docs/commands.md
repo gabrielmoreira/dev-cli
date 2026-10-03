@@ -109,6 +109,7 @@ Developer CLI & Workspace Engine
 | `dev init`       | Initialize or update a dev root; without arguments, guide providers and inventory                                                        |
 | `dev ls`         | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
 | `dev status`     | Inspect Desired vs Observed workspace status                                                                                             |
+| `dev update`     | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones                                                    |
 | `dev use`        | Switch active dev root environment or update global default                                                                              |
 | `dev go`         | Select a workspace and print its path for shell navigation                                                                               |
 | `dev start`      | Start or focus OMP in HerdR for a dev workspace                                                                                          |
@@ -168,6 +169,26 @@ Inspect Desired vs Observed workspace status
 | `--offline`      | boolean    | Read strictly from local mirror without network |
 | `--root <value>` | string     | Explicit dev root directory                     |
 | `--json`         | boolean    | Output in structured JSON format                |
+
+## `dev update`
+
+Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones
+
+**Usage:** `dev update [target] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
+
+| Argument         | Type       | Description                                                                                   |
+| ---------------- | ---------- | --------------------------------------------------------------------------------------------- |
+| `target`         | positional | Workspace name or path to ws.md                                                               |
+| `--ws <value>`   | string     | Target workspace name                                                                         |
+| `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
+| `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
+| `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
+| `--dry-run`      | boolean    | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories    |
+| `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                                                 |
+| `--force`        | boolean    | Alias for --consent                                                                           |
+| `--offline`      | boolean    | Read strictly from local mirror without network                                               |
+| `--root <value>` | string     | Explicit dev root directory                                                                   |
+| `--json`         | boolean    | Output in structured JSON format                                                              |
 
 ## `dev use`
 
@@ -1067,7 +1088,12 @@ Raw qmd passthrough with the scoped registry env
 
 Manage reusable repository worksets
 
-**Usage:** `dev workset <command>`
+**Usage:** `dev workset [--root <value>] [--json] <command>`
+
+| Argument         | Type    | Description                      |
+| ---------------- | ------- | -------------------------------- |
+| `--root <value>` | string  | Explicit dev root directory      |
+| `--json`         | boolean | Output in structured JSON format |
 
 | Subcommand           | Description                          |
 | -------------------- | ------------------------------------ |
