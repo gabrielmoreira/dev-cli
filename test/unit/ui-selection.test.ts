@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, mock, test } from "bun:test";
+import * as prompts from "@clack/prompts";
 
 type Option = { label?: string; value: string };
 type PromptConfig = {
@@ -20,6 +21,7 @@ function visible(config: PromptConfig): string[] {
 }
 
 mock.module("@clack/prompts", () => ({
+  ...prompts,
   autocomplete: async (config: PromptConfig) => visible(config)[0],
   autocompleteMultiselect: async (config: PromptConfig) => visible(config),
   isCancel: () => false,

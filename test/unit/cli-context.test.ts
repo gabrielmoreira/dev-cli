@@ -3,26 +3,54 @@ import { canPrompt, getAmbient, setAmbient } from "../../src/cli/context";
 import { ui } from "../../src/ui.ts";
 
 describe("CLI prompt eligibility", () => {
-  test("allows prompts only when stdin and stdout are interactive", () => {
-    expect(
-      canPrompt({
-        argv: [],
-        cwd: "/workspace",
-        env: {},
-        isTTY: true,
-        stdinIsTTY: true,
-      }),
-    ).toBe(true);
+  test("requires terminal input and at least one terminal output channel", () => {
+    for (const stdinIsTTY of [false, true]) {
+      for (const isTTY of [false, true]) {
+        for (const stderrIsTTY of [false, true]) {
+          expect(
+            canPrompt({ argv: [], cwd: "/workspace", env: {}, stdinIsTTY, isTTY, stderrIsTTY }),
+          ).toBe(stdinIsTTY && (isTTY || stderrIsTTY));
+        }
+      }
+    }
+  });
 
-    expect(
-      canPrompt({
-        argv: [],
-        cwd: "/workspace",
-        env: {},
-        isTTY: true,
-        stdinIsTTY: false,
-      }),
-    ).toBe(false);
+  test("keeps legacy ambient fallback without inventing stderr terminal evidence", () => {
+    const ambient = { argv: [], cwd: "/workspace", env: {} };
+    expect(canPrompt({ ...ambient, isTTY: true })).toBe(true);
+    expect(canPrompt({ ...ambient, isTTY: false })).toBe(false);
+    expect(canPrompt({ ...ambient, isTTY: false, stderrIsTTY: true })).toBe(false);
+    expect(canPrompt({ ...ambient, isTTY: false, stdinIsTTY: true })).toBe(false);
+  });
+
+  test("captured stdout never bypasses parsed automation gates", () => {
+    const ambient = {
+      cwd: "/workspace",
+      env: {},
+      isTTY: false,
+      stdinIsTTY: true,
+      stderrIsTTY: true,
+    };
+    expect(canPrompt({ ...ambient, argv: [] })).toBe(true);
+    for (const name of ["json", "non-interactive"]) {
+      expect(canPrompt({ ...ambient, argv: [`--${name}`] })).toBe(false);
+      expect(canPrompt({ ...ambient, argv: [`--${name}=true`] })).toBe(false);
+      expect(canPrompt({ ...ambient, argv: [`--${name}=false`] })).toBe(true);
+      expect(canPrompt({ ...ambient, argv: [`--no-${name}`] })).toBe(true);
+      expect(canPrompt({ ...ambient, argv: ["--", `--${name}`] })).toBe(true);
+    }
+    for (const name of [
+      "CI",
+      "AI_AGENT",
+      "AGENT",
+      "CLAUDECODE",
+      "CLAUDE_CODE",
+      "CURSOR_AGENT",
+      "GEMINI_CLI",
+      "CODEX_SANDBOX",
+    ]) {
+      expect(canPrompt({ ...ambient, argv: [], env: { [name]: "1" } })).toBe(false);
+    }
   });
 
   test("disables prompts for JSON output", () => {

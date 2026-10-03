@@ -1524,10 +1524,7 @@ export const wsGoCommand = defineCommand({
       : undefined;
     let selected = exact ?? (workspaces.length === 1 ? workspaces[0] : undefined);
     if (!selected) {
-      // The wrapper captures stdout; draw the list on stderr when stdin and stderr are terminals.
-      const ambient = getAmbient();
-      const viaStderr = !ambient.isTTY && Boolean(ambient.stderrIsTTY);
-      if (!canPrompt(viaStderr ? { ...ambient, isTTY: true } : ambient)) {
+      if (!canPrompt()) {
         return reportError(
           new CliInputRequiredError({
             command: "go",
@@ -1547,7 +1544,6 @@ export const wsGoCommand = defineCommand({
             : workspace.name,
           value: workspace.name,
         })),
-        viaStderr ? { output: process.stderr } : undefined,
       );
       selected = workspaces.find((workspace) => workspace.name === name);
     }

@@ -59,7 +59,7 @@ export function canPrompt(ambient: AmbientContext = currentAmbient): boolean {
   const flags = readGlobalFlags(ambient.argv);
   return (
     (ambient.stdinIsTTY ?? ambient.isTTY) &&
-    ambient.isTTY &&
+    (ambient.isTTY || ambient.stderrIsTTY === true) &&
     !flags.json &&
     !flags["non-interactive"] &&
     !ambient.env.CI &&

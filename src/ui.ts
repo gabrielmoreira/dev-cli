@@ -172,11 +172,10 @@ export const ui = {
   async select<T extends string>(
     message: string,
     options: { label: string; value: T }[],
-    stream?: { output: NodeJS.WriteStream },
   ): Promise<T> {
     const selection = await autocomplete<string>({
       message,
-      output: stream?.output,
+      output: process.stderr,
       placeholder: "Type to search...",
       maxItems: 10,
       options() {
@@ -196,6 +195,7 @@ export const ui = {
   ): Promise<T[]> {
     const selection = await autocompleteMultiselect<string>({
       message,
+      output: process.stderr,
       placeholder: "Type to search...",
       maxItems: 10,
       options() {
@@ -211,7 +211,7 @@ export const ui = {
   },
 
   async confirm(message: string, initial = false): Promise<boolean> {
-    const value = await clackConfirm({ message, initialValue: initial });
+    const value = await clackConfirm({ message, initialValue: initial, output: process.stderr });
     if (isCancel(value)) throw new CancelledError();
     return value;
   },
