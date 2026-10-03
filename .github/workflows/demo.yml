@@ -15,6 +15,7 @@ on:
       - "docs/demo/**"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -25,7 +26,8 @@ jobs:
   render:
     name: Render terminal demo
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A push waits for its own Release run, which can take most of an hour.
+    timeout-minutes: 75
     env:
       OPENROUTER_API_KEY: ${{ github.event_name != 'pull_request' && secrets.OPENROUTER_API_KEY || '' }}
     steps:
@@ -74,6 +76,26 @@ jobs:
       # Same renderer as the release workflow: docs/demo/render.sh runs VHS in its own
       # session, so the teardown signal from the tape's shell cannot kill this step, and it
       # validates that both assets exist and are not empty.
+      # The tape describes the CLI this push releases. Reading the latest tag before Release
+      # publishes it renders the previous version, so a push waits for its own Release run.
+      - name: Wait for the release of this commit
+        if: env.OPENROUTER_API_KEY != '' && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=""
+          for _ in $(seq 1 30); do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow release.yml \
+              --commit "$GITHUB_SHA" --json databaseId --jq '.[0].databaseId // empty')"
+            [[ -n "$run_id" ]] && break
+            sleep 10
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "::error::No Release run found for $GITHUB_SHA."
+            exit 1
+          fi
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --interval 30 --exit-status
+
       - name: Render tape against the latest release
         if: env.OPENROUTER_API_KEY != ''
         env:
