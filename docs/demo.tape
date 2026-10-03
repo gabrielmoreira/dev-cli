@@ -363,11 +363,12 @@ Wait+Screen@30s /OpenRouter Free Models Router/
 Sleep 1s
 
 Set TypingSpeed 20ms
-Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Search QMD and cite the files. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE separated by spaces."
+Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Search QMD and cite the files. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE joined by hyphens."
 Sleep 500ms
 Enter
 # Keep provider latency out of the artifact while preserving the submitted prompt and final answer.
+# One hyphenated token cannot wrap across lines in the agent pane; spaced words did.
 Hide
-Wait+Screen@240s /INDEXED ANSWER COMPLETE/
+Wait+Screen@240s /INDEXED-ANSWER-COMPLETE/
 Show
 Sleep 10s
