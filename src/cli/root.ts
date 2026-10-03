@@ -18,34 +18,75 @@ import { canPrompt, getActiveConfig, getAmbient, type AmbientContext } from "./c
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
-const ROOT_AGENTS_CONTENT = `# dev CLI Root
+const ROOT_AGENTS_CONTENT = `# Working with dev
 
-These instructions apply only inside this dev root and its descendants. They are not global machine or user instructions.
+dev manages workspaces containing Git repository working copies and a
+shared brief in \`ws.md\`.
+These instructions apply to this dev root and its workspaces.
 
-This directory is managed by dev CLI. It contains task workspaces under \`ws/\` and canonical repository mirrors under \`mirrors/\`.
+Use the current workspace unless the user asks for a separate environment
+or independent repository or branch state must coexist in isolation.
+Keep related plan items and agent subtasks in the current workspace;
+they do not require new workspaces.
 
-## Start Here
+## Find your way
 
-- For manual use, run \`dev --help\` and \`dev <command> --help\`.
-- For LLM use, run \`dev --help --llms\` for the structured command contract.
-- Read \`ws.md\` before starting work in a workspace. Treat its Objective, Current Progress, Decisions, and Next Steps as the session brief.
+Default layout:
 
-## Main Workflows
+    <root>/
+      dev.yaml          # Root configuration
+      AGENTS.md         # Instructions shared by all workspaces
+      ws/<workspace>/
+        ws.md           # Workspace brief and repository declarations
+        <mount>/        # Repository working copy: edit source code here
+        .local/         # Workspace scratch files; never commit
+      mirrors/          # Reference copies for reading and indexing
+      .dev/             # Internal Git storage and metadata
 
-- \`dev current\`: show the active dev root.
-- \`dev ws list\`: list workspaces.
-- \`dev ws init <workspace> --desc "<objective>"\`: create a workspace.
-- \`dev ws add <repository>\`: add a repository to the current workspace.
-- \`dev ws status\`: compare declared and checked-out workspace state.
-- \`dev ws start [query]\`: start or focus OMP in HerdR for a workspace.
-- \`dev ws update\`: create missing mounts, fix revisions, and fast-forward clean ones to match \`ws.md\`.
+Read \`ws.md\` for the workspace's objective, progress, decisions, and next steps.
+Use \`dev current\` to locate the root and \`dev ws list\` to find workspaces.
 
-## Working Files
+A mount is a repository working copy at a chosen path inside a workspace.
+A workset is a saved template for creating workspaces.
+A label names a group of repositories.
 
-- Keep each workspace's \`ws.md\` current as work progresses. Update its Objective, Current Progress, Decisions, and Next Steps without changing the YAML frontmatter.
-- Use \`ws/<workspace>/.local/\` for workspace-local artifacts, scratch files, generated plans, and other material that must never be committed. Do not put workspace work in a root-level \`.local/\`.
-- Customize this \`AGENTS.md\` with root-specific guidance when needed. Running \`dev init\` again does not overwrite it.
-- Do not edit \`.dev/\` or \`mirrors/\` directly. Use dev CLI commands so metadata and worktrees stay consistent.
+## Choose the command
+
+- Create a workspace: \`dev ws init <repository-url>\`.
+- Reuse a template: \`dev ws init --workset <workset-name>\`.
+- Add a repository: \`dev ws add <repository>\`, using a URL, path, or name.
+- Check repository state: \`dev ws status\`.
+- Update workspace checkouts: \`dev ws update\`. Read each mount's result;
+  do not discard local work to force an update.
+- Search indexed documentation: \`dev qmd search "<search terms>"\`.
+  Read the relevant sources and cite them. Use code-search tools for
+  implementation details and current local changes.
+- Update the documentation index: \`dev qmd sync\`, when requested.
+- Open the current workspace's coding agent: \`dev ws start\`.
+  Use \`dev ws start <workspace-name>\` for another workspace.
+  This uses OMP, the agent, and HerdR, its terminal manager.
+
+Replace values in angle brackets with your own values.
+Use \`dev --help --llms\` for the full command contract for agents,
+or \`dev <command> --help\` for options.
+
+Most commands accept arguments and flags for direct execution.
+If you can control an interactive terminal, omit supported inputs to use
+guided prompts, selection lists, and, where available, fuzzy search or
+autocomplete. These help discover repositories, branches, worksets,
+and labels without knowing their exact names.
+Without an interactive terminal, supply required inputs explicitly.
+Use \`--json\` for structured output; it does not open prompts.
+
+## Preserve the workspace
+
+Keep the workspace notes in \`ws.md\` current; let dev manage its YAML header.
+Use dev commands to manage mounts, mirrors, and internal state.
+Do not edit \`.dev/\` or \`mirrors/\` directly.
+Run repository hooks only with the required trust or explicit consent.
+These instructions do not authorize actions the user did not request.
+
+You can customize this file. \`dev init\` does not overwrite an existing copy.
 `;
 
 type ExistingRootChoice = "update" | "create";

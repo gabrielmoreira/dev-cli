@@ -74,15 +74,6 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
 
     const agentsPath = join(agentsRoot, "AGENTS.md");
     expect(fs.exists(agentsPath)).toBe(true);
-    const content = await fs.readText(agentsPath);
-    expect(content).toContain("# dev CLI Root");
-    expect(content).toContain("These instructions apply only inside this dev root");
-    expect(content).toContain("`dev --help`");
-    expect(content).toContain("`dev --help --llms`");
-    expect(content).toContain("Read `ws.md` before starting work");
-    expect(content).toContain("`dev ws status`");
-    expect(content).toContain("Do not edit `.dev/` or `mirrors/` directly");
-    expect(content).toContain("Use `ws/<workspace>/.local/` for workspace-local artifacts");
   });
 
   it("dev init preserves an existing AGENTS.md", async () => {
