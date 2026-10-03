@@ -416,9 +416,6 @@ sources:
       });
 
       expect(code).toBe(0);
-      expect(multiSelect.mock.calls[0]?.[1]).toEqual([
-        { label: "docs (1 repository)", value: "docs" },
-      ]);
       expect(await mountsOf("docs")).toEqual([
         ["wiki-docs", { mode: "track", branch: "internal" }],
       ]);

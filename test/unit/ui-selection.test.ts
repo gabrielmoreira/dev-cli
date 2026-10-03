@@ -39,14 +39,32 @@ describe("CLI searchable selection", () => {
   test("select finds an option by a fuzzy, non-prefix query", async () => {
     const { ui } = await import("../../src/ui.ts");
     typed = "lgf";
-    expect(await ui.select("Branch", options)).toBe("feature/login-flow");
+    expect(
+      await ui.select({
+        message: "Branch",
+        hint: "Choose the branch you work on.",
+        options: options,
+      }),
+    ).toBe("feature/login-flow");
     typed = "bapi";
-    expect(await ui.select("Repository", options)).toBe("ado-contoso-billing-api");
+    expect(
+      await ui.select({
+        message: "Repository",
+        hint: "Choose the repository for this task.",
+        options: options,
+      }),
+    ).toBe("ado-contoso-billing-api");
   });
 
   test("multiSelect lists only the options the fuzzy query matches", async () => {
     const { ui } = await import("../../src/ui.ts");
     typed = "mn";
-    expect(await ui.multiSelect("Repositories", options)).toEqual(["main"]);
+    expect(
+      await ui.multiSelect({
+        message: "Repositories",
+        hint: "Choose the repositories for this task.",
+        options: options,
+      }),
+    ).toEqual(["main"]);
   });
 });

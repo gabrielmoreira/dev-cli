@@ -38,17 +38,26 @@ export async function resolveRepositoryInputs(
 
   const resolved = await resolveRepositorySource({ root: options.root });
   if (resolved.matches.length > 0) {
-    const selected = await ui.multiSelect(options.message, [
-      ...resolved.matches.map((record) => ({
-        label: `${record.name} — ${record.url}`,
-        value: record.url,
-      })),
-      { label: "Enter a repository URI or local path manually", value: MANUAL_SOURCE },
-    ]);
+    const selected = await ui.multiSelect({
+      message: options.message,
+      hint: options.required.command.startsWith("ws")
+        ? "Each one becomes a mount: its own branch inside this workspace."
+        : "Each selected repository becomes a member of this workspace recipe.",
+      options: [
+        ...resolved.matches.map((record) => ({
+          label: `${record.name} — ${record.url}`,
+          value: record.url,
+        })),
+        { label: "Enter a repository URI or local path manually", value: MANUAL_SOURCE },
+      ],
+    });
     const values = selected.filter((value) => value !== MANUAL_SOURCE);
     if (selected.includes(MANUAL_SOURCE)) {
       const manual = await resolveTextInput({
         message: "Repository URI or local path",
+        hint: options.required.command.startsWith("ws")
+          ? "This repository becomes a mount: your branch inside the workspace."
+          : "Add a Git URL or local repository to this saved workspace recipe.",
         required: options.required,
         ambient,
       });
@@ -59,6 +68,9 @@ export async function resolveRepositoryInputs(
 
   const manual = await resolveTextInput({
     message: "Repository URI or local path",
+    hint: options.required.command.startsWith("ws")
+      ? "This repository becomes a mount: your branch inside the workspace."
+      : "Add a Git URL or local repository to this saved workspace recipe.",
     required: options.required,
     ambient,
   });
@@ -127,18 +139,25 @@ export async function resolveRepositoryInput(
   if (!canPrompt(ambient)) throw new CliInputRequiredError(options.required);
 
   if (matches.length > 0) {
-    const selected = await ui.select(options.message, [
-      ...matches.map((record) => ({
-        label: `${record.name} — ${record.url}`,
-        value: record.url,
-      })),
-      { label: "Enter a URL or path manually", value: MANUAL_SOURCE },
-    ]);
+    const selected = await ui.select({
+      message: options.message,
+      hint: "Choose a Git repository; dev keeps its original location unchanged.",
+      options: [
+        ...matches.map((record) => ({
+          label: `${record.name} — ${record.url}`,
+          value: record.url,
+        })),
+        { label: "Enter a URL or path manually", value: MANUAL_SOURCE },
+      ],
+    });
     if (selected !== MANUAL_SOURCE) return { value: selected, source: "prompt" };
   }
 
   return await resolveTextInput({
     message: "Repository URI or local path",
+    hint: options.required.command.startsWith("ws")
+      ? "This repository becomes a mount: your branch inside the workspace."
+      : "Add a Git URL or local repository to this saved workspace recipe.",
     required: options.required,
     ambient,
   });

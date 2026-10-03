@@ -414,20 +414,25 @@ export const prListCommand = defineCommand({
  */
 async function actOnPullRequest(items: cache.PullRequestRecord[], root?: string): Promise<number> {
   try {
-    const index = await ui.select(
-      "Act on a pull request (Esc to exit)",
-      items.map((item, index) => ({
+    const index = await ui.select({
+      message: "Act on a pull request (Esc to exit)",
+      hint: "Choose a pull request to review, work on or inspect.",
+      options: items.map((item, index) => ({
         label: `#${item.id} ${draftTag(item)}${item.repository}: ${item.title} — ${item.author}`,
         value: String(index),
       })),
-    );
+    });
     const item = items[Number(index)]!;
-    const action = await ui.select(`#${item.id} ${item.title}`, [
-      { label: "Check out in a new workspace", value: "checkout" },
-      { label: "Check out for review (isolated local branch)", value: "review" },
-      { label: "Open in browser", value: "browser" },
-      { label: "Show details", value: "view" },
-    ]);
+    const action = await ui.select({
+      message: `#${item.id} ${item.title}`,
+      hint: "A workspace checks out code; browser and details only inspect it.",
+      options: [
+        { label: "Check out in a new workspace", value: "checkout" },
+        { label: "Check out for review (isolated local branch)", value: "review" },
+        { label: "Open in browser", value: "browser" },
+        { label: "Show details", value: "view" },
+      ],
+    });
     if (action === "browser") {
       const opened = await shell.openUrl(item.url);
       if (opened.exitCode !== 0) {
@@ -518,6 +523,7 @@ export const prCheckoutCommand = defineCommand({
             value: String(index),
           })),
         message: "Select pull request",
+        hint: "Choose which pull request this command acts on.",
         required: {
           command: "pr checkout",
           field: "reference",
@@ -539,6 +545,7 @@ export const prCheckoutCommand = defineCommand({
               value: String(index),
             })),
           message: "Select pull request",
+          hint: "Choose which pull request this command acts on.",
           required: {
             command: "pr checkout",
             field: "reference",
@@ -717,6 +724,7 @@ export const prViewCommand = defineCommand({
             value: String(index),
           })),
         message: "Select pull request",
+        hint: "Choose which pull request this command acts on.",
         required: {
           command: "pr view",
           field: "id",

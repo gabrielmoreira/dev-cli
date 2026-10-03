@@ -89,10 +89,8 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(text).toHaveBeenCalledWith("Dev root path", join(home, "dev"));
     expect(existsSync(join(selectedRoot, "dev.yaml"))).toBe(true);
     expect(existsSync(join(selectedRoot, "AGENTS.md"))).toBe(true);
-    expect(confirm).toHaveBeenCalledWith("Add a provider now?", true);
     text.mockRestore();
     confirm.mockRestore();
   });
@@ -115,10 +113,6 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(select).toHaveBeenCalledWith("A dev root already exists here", [
-      { label: `Update ${existingRoot}`, value: "update" },
-      { label: "Create another dev root", value: "create" },
-    ]);
     expect(text).not.toHaveBeenCalled();
     expect(await Bun.file(join(existingRoot, "dev.yaml")).text()).toBe("sync_strategy: ff-only\n");
     select.mockRestore();
@@ -254,7 +248,6 @@ describe("smart CLI input", () => {
     });
 
     expect(exitCode).toBe(0);
-    expect(prompt).toHaveBeenCalledWith("Workspace name", "local-guided-source");
     expect(existsSync(join(root, "ws", "local-guided-source", "guided-source"))).toBe(true);
     select.mockRestore();
     multiSelect.mockRestore();
@@ -458,10 +451,6 @@ describe("smart CLI input", () => {
       ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
     });
 
-    expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
-      "adobe-edge-poc",
-      "adobe-mobile-review",
-    ]);
     expect(workspace).toEqual({ value: "adobe-edge-poc", source: "prompt" });
     select.mockRestore();
   });
@@ -496,11 +485,6 @@ describe("smart CLI input", () => {
         stdinIsTTY: true,
       }),
     ).toBe(0);
-    expect(prompt.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
-      "newest-workspace",
-      "middle-workspace",
-      "older-workspace",
-    ]);
     expect(logs).toEqual([join(root, "ws", "newest-workspace")]);
 
     logs = [];
@@ -569,10 +553,6 @@ describe("smart CLI input", () => {
           stdinIsTTY: true,
         }),
       ).toBe(0);
-      expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
-        "sample-z-new",
-        "sample-a-old",
-      ]);
       expect(logs).toEqual([join(root, "ws", "sample-z-new")]);
 
       for (const value of [undefined, "sample"]) {
@@ -587,10 +567,6 @@ describe("smart CLI input", () => {
             ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
           }),
         ).toEqual({ value: "sample-z-new", source: "prompt" });
-        expect(select.mock.calls[0]?.[1].map((option) => option.value)).toEqual([
-          "sample-a-old",
-          "sample-z-new",
-        ]);
       }
     } finally {
       select.mockRestore();

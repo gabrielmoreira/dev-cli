@@ -41,7 +41,8 @@ export const providerAddCommand = defineCommand({
         { label: "Azure DevOps", value: "ado" },
         { label: "GitHub", value: "github" },
       ],
-      message: "Provider type",
+      message: "Where do your repositories live?",
+      hint: "You can add more later with dev provider add.",
       required: {
         command: "provider add",
         field: "type",
@@ -57,6 +58,7 @@ export const providerAddCommand = defineCommand({
       const organization = await resolveTextInput({
         value: args.org,
         message: "Azure DevOps organization",
+        hint: "Read its repositories and pull requests using your az session.",
         required: {
           command: "provider add",
           field: "organization",
@@ -75,6 +77,7 @@ export const providerAddCommand = defineCommand({
       const owner = await resolveTextInput({
         value: args.owner,
         message: "GitHub owner",
+        hint: "Read this user or organization using your gh session.",
         required: {
           command: "provider add",
           field: "owner",
@@ -187,6 +190,7 @@ export const providerRemoveCommand = defineCommand({
           value: item.id,
         })),
       message: "Select provider to remove",
+      hint: "Disconnect it from dev; repositories and workspaces stay.",
       required: {
         command: "provider remove",
         field: "id",
@@ -197,6 +201,7 @@ export const providerRemoveCommand = defineCommand({
     const confirmed = await resolveConfirmation({
       confirmed: args.force,
       message: `Remove provider '${provider.value}'?`,
+      hint: "Yes disconnects this provider; No keeps the connection.",
       required: {
         command: "provider remove",
         field: "confirmation",

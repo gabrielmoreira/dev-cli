@@ -300,6 +300,7 @@ export const mirrorTrackCommand = defineCommand({
     const branch = await resolveTextInput({
       value: args.branch || args.branchFlag,
       message: "Branch to track",
+      hint: "Keep a reference copy of this branch for reading and search.",
       required: {
         command: "mirror track",
         field: "branch",
@@ -368,6 +369,7 @@ export const mirrorUntrackCommand = defineCommand({
     const branch = await resolveTextInput({
       value: args.branch || args.branchFlag,
       message: "Branch to untrack",
+      hint: "Stop updating this reference branch; other mirrors stay.",
       required: {
         command: "mirror untrack",
         field: "branch",
@@ -378,6 +380,7 @@ export const mirrorUntrackCommand = defineCommand({
     const confirmed = await resolveConfirmation({
       confirmed: args.yes || args.force,
       message: `Untrack branch '${branch.value}'?`,
+      hint: "Yes removes this reference copy; No keeps it.",
       required: {
         command: "mirror untrack",
         field: "confirmation",
@@ -443,6 +446,7 @@ export const mirrorPickCommand = defineCommand({
               value: item.path,
             })),
           message: "Select mirror",
+          hint: "Print this reference copy path for reading, search and agents.",
           required: {
             command: "mirror pick",
             field: "mirror",

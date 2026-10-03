@@ -147,6 +147,7 @@ export const wiListCommand = defineCommand({
             value: provider.id,
           })),
         message: "Select Azure DevOps provider",
+        hint: "Read projects and work items through this connection.",
         required: {
           command: "wi list",
           field: "provider",
@@ -175,6 +176,7 @@ export const wiListCommand = defineCommand({
           await resolveChoiceInput({
             choices: async () => projects.map((name) => ({ label: name, value: name })),
             message: "Select Azure DevOps project",
+            hint: "Read work items from this project, not the whole organization.",
             required: {
               command: "wi list",
               field: "project",
@@ -287,6 +289,7 @@ export const wiViewCommand = defineCommand({
             value: String(index),
           })),
         message: "Select work item",
+        hint: "Choose the work item whose details you want to inspect.",
         required: {
           command: "wi view",
           field: "id",

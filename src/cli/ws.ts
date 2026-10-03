@@ -191,7 +191,11 @@ export const wsInitCommand = defineCommand({
           : []),
         ...(labelCounts.size > 0 ? [{ label: "Label", value: "label" }] : []),
       ];
-      const mode = await ui.select("How do you want to start?", choices);
+      const mode = await ui.select({
+        message: "How do you want to start?",
+        hint: "A workset reuses a saved recipe; a repository starts from one URL.",
+        options: choices,
+      });
       if (mode === "repositories") {
         const selected = await resolveRepositoryInputs({
           root: config.root,
@@ -214,13 +218,14 @@ export const wsInitCommand = defineCommand({
         }
         reviewPlan = true;
       } else if (mode === "workset") {
-        const worksetName = await ui.select(
-          "Select workset",
-          Object.entries(config.worksets).map(([name, workset]) => ({
+        const worksetName = await ui.select({
+          message: "Select workset",
+          hint: "Use this saved recipe to choose repositories and branches.",
+          options: Object.entries(config.worksets).map(([name, workset]) => ({
             label: `${name} (${workset.members.length})${workset.description ? ` — ${workset.description}` : ""}`,
             value: name,
           })),
-        );
+        });
         try {
           const resolved = await resolveWorksetMounts(config, worksetName, inventory);
           mounts = dedupeMounts(resolved.mounts, inventory);
@@ -231,13 +236,14 @@ export const wsInitCommand = defineCommand({
         suggestedName = worksetName;
         reviewPlan = true;
       } else if (mode === "label") {
-        const labels = await ui.multiSelect(
-          "Select labels",
-          [...labelCounts].map(([label, count]) => ({
+        const labels = await ui.multiSelect({
+          message: "Select labels",
+          hint: "Each label adds its repositories as mounts in this workspace.",
+          options: [...labelCounts].map(([label, count]) => ({
             label: `${label} (${count} ${count === 1 ? "repository" : "repositories"})`,
             value: label,
           })),
-        );
+        });
         mounts = dedupeMounts(
           labels.flatMap((label) => resolveLabelMounts(config, label, inventory)),
           inventory,
@@ -250,6 +256,7 @@ export const wsInitCommand = defineCommand({
     const name = await resolveTextInput({
       value: rawName ?? (!canPrompt(ambient) ? suggestedName : undefined),
       message: "Workspace name",
+      hint: "One task folder under ws/. Enter keeps the proposed name.",
       initial: suggestedName,
       required: {
         command: "ws init",
@@ -267,7 +274,13 @@ export const wsInitCommand = defineCommand({
     const description =
       args.desc ??
       (canPrompt(ambient) && !exists
-        ? (await ui.text("Workspace description (optional)", suggestedDescription))?.trim()
+        ? (
+            await ui.text({
+              message: "What is this task about?",
+              hint: "Saved in ws.md for you and your agents. Enter keeps the proposal.",
+              initial: suggestedDescription,
+            })
+          )?.trim()
         : suggestedDescription);
 
     if (reviewPlan && mounts.length > 0) {
@@ -461,36 +474,50 @@ async function reviewMountPlan(
   confirmed: boolean | undefined,
 ): Promise<PlannedMount[] | undefined> {
   ui.log(renderMountPlan("Selected repositories", mounts));
-  const selected = await ui.multiSelect("Select repositories to customize", [
-    { label: "Continue with defaults", value: "defaults" },
-    ...mounts.map((mount, index) => ({
-      label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
-      value: String(index),
-    })),
-  ]);
+  const selected = await ui.multiSelect({
+    message: "Select repositories to customize",
+    hint: "Change branch or folder; Continue with defaults keeps the plan.",
+    options: [
+      { label: "Continue with defaults", value: "defaults" },
+      ...mounts.map((mount, index) => ({
+        label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
+        value: String(index),
+      })),
+    ],
+  });
   for (const value of selected.filter((candidate) => candidate !== "defaults")) {
     const mount = mounts[Number(value)];
     if (!mount) continue;
     const extraHeader = await resolveExtraHeader(config, mount.source);
     const remote = await git.listRemoteBranches({ source: mount.source, extraHeader });
     if (remote.branches.length > 0) {
-      mount.branch = await ui.select(
-        `Branch for ${git.deriveDefaultMountPath(mount.source)}`,
-        remote.branches.map((branch) => ({
+      mount.branch = await ui.select({
+        message: `Branch for ${git.deriveDefaultMountPath(mount.source)}`,
+        hint: "The mount uses this branch; (default) is the remote default branch.",
+        options: remote.branches.map((branch) => ({
           label: branch === remote.defaultBranch ? `${branch} (default)` : branch,
           value: branch,
         })),
-      );
+      });
     }
     mount.path =
-      (await ui.text(
-        `Workspace path for ${git.deriveDefaultMountPath(mount.source)}`,
-        mount.path,
-      )) ?? mount.path;
+      (await ui.text({
+        message: `Workspace path for ${git.deriveDefaultMountPath(mount.source)}`,
+        hint: "Folder inside this workspace. Enter keeps the proposed path.",
+        initial: mount.path,
+      })) ?? mount.path;
   }
   validateMountPlan(mounts);
   ui.log(renderMountPlan("Workspace plan", mounts));
-  if (!confirmed && !(await ui.confirm("Create this workspace?", true))) return undefined;
+  if (
+    !confirmed &&
+    !(await ui.confirm({
+      message: "Create this workspace?",
+      hint: "Yes creates the shown task folder and mounts; No changes nothing.",
+      initial: true,
+    }))
+  )
+    return undefined;
   return mounts;
 }
 
@@ -610,13 +637,17 @@ export const wsAddCommand = defineCommand({
         }));
         ui.log(renderMountPlan("Selected mounts", plannedMounts));
 
-        const selected = await ui.multiSelect("Select mounts to customize", [
-          { label: "Continue with defaults", value: "defaults" },
-          ...plannedMounts.map((mount, index) => ({
-            label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
-            value: String(index),
-          })),
-        ]);
+        const selected = await ui.multiSelect({
+          message: "Select mounts to customize",
+          hint: "Change branch or folder; Continue with defaults keeps the plan.",
+          options: [
+            { label: "Continue with defaults", value: "defaults" },
+            ...plannedMounts.map((mount, index) => ({
+              label: `${git.deriveDefaultMountPath(mount.source)} (${mount.branch ?? "unknown default"} → ${mount.path})`,
+              value: String(index),
+            })),
+          ],
+        });
         const customizedMounts = selected
           .filter((value) => value !== "defaults")
           .map((value) => plannedMounts[Number(value)])
@@ -627,25 +658,28 @@ export const wsAddCommand = defineCommand({
           resolvedHeaders.set(mount.source, extraHeader);
           const remote = await git.listRemoteBranches({ source: mount.source, extraHeader });
           if (remote.branches.length > 0) {
-            mount.branch = await ui.select(
-              `Branch for ${git.deriveDefaultMountPath(mount.source)}`,
-              remote.branches.map((branch) => ({
+            mount.branch = await ui.select({
+              message: `Branch for ${git.deriveDefaultMountPath(mount.source)}`,
+              hint: "The mount uses this branch; (default) is the remote default branch.",
+              options: remote.branches.map((branch) => ({
                 label: branch === remote.defaultBranch ? `${branch} (default)` : branch,
                 value: branch,
               })),
-            );
+            });
           }
           mount.path =
-            (await ui.text(
-              `Mount path for ${git.deriveDefaultMountPath(mount.source)}`,
-              mount.path,
-            )) ?? mount.path;
+            (await ui.text({
+              message: `Mount path for ${git.deriveDefaultMountPath(mount.source)}`,
+              hint: "Folder for this repository branch. Enter keeps the proposed path.",
+              initial: mount.path,
+            })) ?? mount.path;
 
           while (
-            await ui.confirm(
-              `Add another branch from ${git.deriveDefaultMountPath(mount.source)}?`,
-              false,
-            )
+            await ui.confirm({
+              message: `Add another branch from ${git.deriveDefaultMountPath(mount.source)}?`,
+              hint: "Yes adds another mount; No keeps only the branches in the plan.",
+              initial: false,
+            })
           ) {
             const usedBranches = new Set(
               plannedMounts
@@ -662,19 +696,24 @@ export const wsAddCommand = defineCommand({
               ui.warn(`No additional branches are available for ${mount.source}.`);
               break;
             }
-            const branch = await ui.select(
-              `Additional branch for ${git.deriveDefaultMountPath(mount.source)}`,
-              availableBranches.map((candidate) => ({ label: candidate, value: candidate })),
-            );
+            const branch = await ui.select({
+              message: `Additional branch for ${git.deriveDefaultMountPath(mount.source)}`,
+              hint: "Adds a separate mount so you can work on another branch.",
+              options: availableBranches.map((candidate) => ({
+                label: candidate,
+                value: candidate,
+              })),
+            });
             const suggestedPath = duplicateMountPath(
               git.deriveDefaultMountPath(mount.source),
               branch,
             );
             const path =
-              (await ui.text(
-                `Mount path for ${git.deriveDefaultMountPath(mount.source)} (${branch})`,
-                suggestedPath,
-              )) ?? suggestedPath;
+              (await ui.text({
+                message: `Mount path for ${git.deriveDefaultMountPath(mount.source)} (${branch})`,
+                hint: "Folder for the additional branch. Enter keeps the proposed path.",
+                initial: suggestedPath,
+              })) ?? suggestedPath;
             const insertAt = plannedMounts.reduce(
               (last, candidate, index) =>
                 git.normalizeSourceKey(candidate.source) === git.normalizeSourceKey(mount.source)
@@ -708,7 +747,14 @@ export const wsAddCommand = defineCommand({
         }
 
         ui.log(renderMountPlan("Final mount plan", plannedMounts));
-        if (!(await ui.confirm("Create these mounts?", true))) return 0;
+        if (
+          !(await ui.confirm({
+            message: "Create these mounts?",
+            hint: "Yes adds the shown repository branches; No changes nothing.",
+            initial: true,
+          }))
+        )
+          return 0;
       }
 
       const results: ws.WorkspaceAddResult[] = [];
@@ -1010,6 +1056,7 @@ export const wsTrackCommand = defineCommand({
     const branch = await resolveTextInput({
       value: args.branch || args.branchFlag,
       message: "Branch to track",
+      hint: "The mount follows this branch on future workspace updates.",
       required: {
         command: "ws track",
         field: "branch",
@@ -1170,10 +1217,11 @@ export const wsUnlockCommand = defineCommand({
                   const branches = listed.stdout.split(/\r?\n/).filter(Boolean);
                   if (branches.length === 0) return undefined;
                   try {
-                    return await ui.select(
-                      "Branch to track",
-                      branches.map((value) => ({ label: value, value })),
-                    );
+                    return await ui.select({
+                      message: "Branch to track",
+                      hint: "The mount follows this branch on future workspace updates.",
+                      options: branches.map((value) => ({ label: value, value })),
+                    });
                   } catch (error) {
                     if (error instanceof CancelledError) return undefined;
                     throw error;
@@ -1237,6 +1285,7 @@ export const wsTagCommand = defineCommand({
     const tag = await resolveTextInput({
       value: args.tag || args.tagFlag,
       message: "Tag to pin",
+      hint: "Keep the mount at this tag; updates no longer follow a branch.",
       required: {
         command: "ws tag",
         field: "tag",
@@ -1312,6 +1361,7 @@ export const wsRemoveCommand = defineCommand({
     const confirmed = await resolveConfirmation({
       confirmed: args.yes || args.force,
       message: `Remove mount '${mount.value}' from workspace '${workspace.value}'?`,
+      hint: "Yes removes this checkout; No leaves the workspace unchanged.",
       required: {
         command: "ws remove",
         field: "confirmation",
@@ -1409,6 +1459,7 @@ export const wsDuplicateCommand = defineCommand({
     const target = await resolveTextInput({
       value: args.target,
       message: "New workspace name",
+      hint: "Create a separate task folder with the same repository plan.",
       required: {
         command: "ws duplicate",
         field: "target",
@@ -1536,15 +1587,16 @@ export const wsGoCommand = defineCommand({
           args.json,
         );
       }
-      const name = await ui.select(
-        "Select workspace",
-        workspaces.map((workspace) => ({
+      const name = await ui.select({
+        message: "Select workspace",
+        hint: "Choose the task folder this command acts on.",
+        options: workspaces.map((workspace) => ({
           label: workspace.description
             ? `${workspace.name} — ${workspace.description}`
             : workspace.name,
           value: workspace.name,
         })),
-      );
+      });
       selected = workspaces.find((workspace) => workspace.name === name);
     }
 
@@ -1744,10 +1796,14 @@ export const wsStartCommand = defineCommand({
               ...herdr.defaultDeps,
               interactions: {
                 chooseSession: async (sessions) =>
-                  await ui.select(
-                    "Which HerdR session?",
-                    sessions.map((session) => ({ label: session.name, value: session.name })),
-                  ),
+                  await ui.select({
+                    message: "Which HerdR session?",
+                    hint: "Choose the terminal session where dev starts or finds your agent.",
+                    options: sessions.map((session) => ({
+                      label: session.name,
+                      value: session.name,
+                    })),
+                  }),
               },
             }
           : undefined,

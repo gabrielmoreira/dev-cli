@@ -57,6 +57,7 @@ export interface ResolveTextInputOptions {
   defaultValue?: string;
   initial?: string;
   message: string;
+  hint: string;
   required: RequiredCliInputDetails;
   ambient?: AmbientContext;
 }
@@ -66,6 +67,7 @@ export interface ResolveChoiceInputOptions<T extends string> {
   inferred?: ResolvedCliInput<T>;
   choices: () => Promise<Array<{ label: string; value: T }>>;
   message: string;
+  hint: string;
   required: RequiredCliInputDetails;
   ambient?: AmbientContext;
 }
@@ -83,7 +85,7 @@ export async function resolveChoiceInput<T extends string>(
   }
   if (choices.length > 1 && canPrompt(options.ambient)) {
     return {
-      value: await ui.select(options.message, choices),
+      value: await ui.select({ message: options.message, hint: options.hint, options: choices }),
       source: "prompt",
     };
   }
@@ -97,13 +99,15 @@ export async function resolveChoiceInput<T extends string>(
 export interface ResolveConfirmationOptions {
   confirmed?: boolean;
   message: string;
+  hint: string;
   required: RequiredCliInputDetails;
   ambient?: AmbientContext;
 }
 
 export async function resolveConfirmation(options: ResolveConfirmationOptions): Promise<boolean> {
   if (options.confirmed) return true;
-  if (canPrompt(options.ambient)) return await ui.confirm(options.message);
+  if (canPrompt(options.ambient))
+    return await ui.confirm({ message: options.message, hint: options.hint });
   throw new CliInputRequiredError(options.required);
 }
 export async function resolveTextInput(
@@ -116,7 +120,11 @@ export async function resolveTextInput(
   if (defaultValue) return { value: defaultValue, source: "default" };
 
   if (canPrompt(options.ambient)) {
-    const response = await ui.text(options.message, options.initial);
+    const response = await ui.text({
+      message: options.message,
+      hint: options.hint,
+      initial: options.initial,
+    });
     const prompted = typeof response === "string" ? response.trim() : "";
     if (prompted) return { value: prompted, source: "prompt" };
   }

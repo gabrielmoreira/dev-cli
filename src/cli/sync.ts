@@ -192,6 +192,7 @@ export const syncDataCommand = defineCommand({
           value: provider.id,
         })),
       message: "Select Azure DevOps provider",
+      hint: "Read projects and work items through this connection.",
       required: {
         command: "sync data",
         field: "provider",
@@ -225,6 +226,7 @@ export const syncDataCommand = defineCommand({
           value: args.project,
           defaultValue: provider.project,
           message: "Azure DevOps project",
+          hint: "Read work items from this project using your az session.",
           required: {
             command: "sync data",
             field: "project",
@@ -238,6 +240,7 @@ export const syncDataCommand = defineCommand({
         await resolveChoiceInput({
           choices: async () => cachedProjects.map((value) => ({ label: value, value })),
           message: "Select Azure DevOps project",
+          hint: "Read work items from this project, not the whole organization.",
           required: {
             command: "sync data",
             field: "project",
@@ -250,6 +253,7 @@ export const syncDataCommand = defineCommand({
       project = (
         await resolveTextInput({
           message: "Azure DevOps project",
+          hint: "Read work items from this project using your az session.",
           required: {
             command: "sync data",
             field: "project",

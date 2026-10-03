@@ -69,16 +69,24 @@ async function resolveInitTarget(
   const current = getActiveConfig();
   let createAnother = false;
   if (current.rootSource === "file") {
-    const choice = await ui.select<ExistingRootChoice>("A dev root already exists here", [
-      { label: `Update ${current.root}`, value: "update" },
-      { label: "Create another dev root", value: "create" },
-    ]);
+    const choice = await ui.select<ExistingRootChoice>({
+      message: "A dev root already exists here",
+      hint: "Update keeps your workspaces; another root keeps work apart.",
+      options: [
+        { label: `Update ${current.root}`, value: "update" },
+        { label: "Create another dev root", value: "create" },
+      ],
+    });
     if (choice === "update") return current.root;
     createAnother = true;
   }
 
   const initial = createAnother ? nextDefaultRoot(homeDir) : resolve(homeDir, "dev");
-  const selected = await ui.text("Dev root path", initial);
+  const selected = await ui.text({
+    message: "Where should dev keep your work?",
+    hint: "Your dev root: workspaces, mirrors and settings live here. Enter keeps the shown path.",
+    initial,
+  });
   return resolve(ambient.cwd, selected?.trim() || initial);
 }
 
@@ -208,12 +216,26 @@ export const initCommand = defineCommand({
       },
     });
 
-    if (!guided || !(await ui.confirm("Add a provider now?", true))) return 0;
+    if (
+      !guided ||
+      !(await ui.confirm({
+        message: "Connect GitHub or Azure DevOps?",
+        hint: "dev then lists your repositories and pull requests. Skip to use URLs.",
+        initial: true,
+      }))
+    )
+      return 0;
 
     do {
       const providerResult = await runNestedCommand(providerAddCommand, ["--root", targetDir]);
       if (typeof providerResult === "number" && providerResult !== 0) return providerResult;
-    } while (await ui.confirm("Add another provider?", false));
+    } while (
+      await ui.confirm({
+        message: "Add another provider?",
+        hint: "For example a second Azure DevOps organization. No finishes setup.",
+        initial: false,
+      })
+    );
 
     const syncResult = await runNestedCommand(syncInventoryCommand, ["--root", targetDir]);
     return typeof syncResult === "number" ? syncResult : 0;
@@ -249,6 +271,7 @@ export const useCommand = defineCommand({
         { label: "Enter a root path manually", value: manualRoot },
       ],
       message: "Select dev root",
+      hint: "Use this root for its workspaces, mirrors and settings.",
       required: {
         command: "use",
         field: "root",
@@ -261,6 +284,7 @@ export const useCommand = defineCommand({
         ? (
             await resolveTextInput({
               message: "Dev root path",
+              hint: "Use this folder for its workspaces, mirrors and settings.",
               required: {
                 command: "use",
                 field: "root",
@@ -404,6 +428,7 @@ export const rootAddCommand = defineCommand({
     const pathInput = await resolveTextInput({
       value: args.path,
       message: "Existing dev root path",
+      hint: "Register a folder that already holds your dev work and settings.",
       required: {
         command: "root add",
         field: "path",
@@ -458,6 +483,7 @@ export const rootRemoveCommand = defineCommand({
           value: alias,
         })),
       message: "Select root to unregister",
+      hint: "Remove the saved root name; files on disk stay.",
       required: {
         command: "root remove",
         field: "root",

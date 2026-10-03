@@ -33,6 +33,7 @@ export const worksetCreateCommand = defineCommand({
       const name = await resolveTextInput({
         value: args.name,
         message: "Workset name",
+        hint: "Name a saved recipe. Start it with dev ws init --workset <name>.",
         required: {
           command: "workset create",
           field: "name",
@@ -45,7 +46,12 @@ export const worksetCreateCommand = defineCommand({
         args.description !== undefined
           ? args.description
           : canPrompt(ambient)
-            ? optionalText(await ui.text("Workset description"))
+            ? optionalText(
+                await ui.text({
+                  message: "Workset description",
+                  hint: "Describe the saved workspace recipe for you and your agents.",
+                }),
+              )
             : undefined;
       const source = await resolveRepositoryInput({
         value: args.source,
@@ -65,27 +71,48 @@ export const worksetCreateCommand = defineCommand({
           args.ref !== undefined
             ? args.ref
             : canPrompt(ambient)
-              ? optionalText(await ui.text("Ref (optional)"))
+              ? optionalText(
+                  await ui.text({
+                    message: "Ref (optional)",
+                    hint: "Use a branch, tag or commit; blank uses the remote default branch.",
+                  }),
+                )
               : undefined,
         path:
           args.path !== undefined
             ? args.path
             : canPrompt(ambient)
               ? optionalText(
-                  await ui.text("Workspace path", git.deriveDefaultMountPath(source.value)),
+                  await ui.text({
+                    message: "Workspace path",
+                    hint: "Folder inside a workspace. Enter keeps the shown folder.",
+                    initial: git.deriveDefaultMountPath(source.value),
+                  }),
                 )
               : undefined,
         reason:
           args.reason !== undefined
             ? args.reason
             : canPrompt(ambient)
-              ? optionalText(await ui.text("Reason (optional)"))
+              ? optionalText(
+                  await ui.text({
+                    message: "Reason (optional)",
+                    hint: "Explain why the task needs this member; blank leaves no note.",
+                  }),
+                )
               : undefined,
       };
       const draft = { description: optionalText(description), members: [member] };
       if (canPrompt(ambient) && !args.yes) {
         ui.log(renderWorkset(config, name.value, draft));
-        if (!(await ui.confirm("Create this workset?", true))) return 0;
+        if (
+          !(await ui.confirm({
+            message: "Create this workset?",
+            hint: "Yes saves this recipe; No leaves your worksets unchanged.",
+            initial: true,
+          }))
+        )
+          return 0;
       }
       const { definition, created } = await workset.createWorkset(config, name.value, draft);
       ui.result({
@@ -119,6 +146,7 @@ export const worksetRenameCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset to rename",
+        hint: "Rename a saved workspace recipe, not a task folder.",
         required: {
           command: "workset rename",
           field: "name",
@@ -130,6 +158,7 @@ export const worksetRenameCommand = defineCommand({
       const next = await resolveTextInput({
         value: args.newName,
         message: "New workset name",
+        hint: "Rename this saved recipe. Enter keeps the shown name.",
         required: {
           command: "workset rename",
           field: "new-name",
@@ -196,13 +225,17 @@ export const worksetManageCommand = defineCommand({
     let originalName: string | undefined;
 
     if (!name && Object.keys(config.worksets).length > 0) {
-      const selected = await ui.select("Select workset to manage", [
-        ...Object.keys(config.worksets).map((worksetName) => ({
-          label: worksetName,
-          value: worksetName,
-        })),
-        { label: "Create new workset", value: "\0create" },
-      ]);
+      const selected = await ui.select({
+        message: "Select workset to manage",
+        hint: "Edit a saved workspace recipe, or start a new one.",
+        options: [
+          ...Object.keys(config.worksets).map((worksetName) => ({
+            label: worksetName,
+            value: worksetName,
+          })),
+          { label: "Create new workset", value: "\0create" },
+        ],
+      });
       if (selected !== "\0create") {
         name = selected;
         originalName = selected;
@@ -214,6 +247,7 @@ export const worksetManageCommand = defineCommand({
       name = (
         await resolveTextInput({
           message: "Workset name",
+          hint: "Name a saved recipe. Start it with dev ws init --workset <name>.",
           required: {
             command: "workset manage",
             field: "name",
@@ -229,7 +263,12 @@ export const worksetManageCommand = defineCommand({
     const draft: WorksetDefinition = existing
       ? structuredClone(existing)
       : {
-          description: optionalText(await ui.text("Workset description")),
+          description: optionalText(
+            await ui.text({
+              message: "Workset description",
+              hint: "Describe the saved workspace recipe for you and your agents.",
+            }),
+          ),
           members: [],
         };
 
@@ -237,24 +276,28 @@ export const worksetManageCommand = defineCommand({
       const labelCounts = workset.declaredLabels(config);
       const hasRepository = draft.members.some((member) => member.source !== undefined);
       const hasLabel = draft.members.some((member) => member.label !== undefined);
-      const action = await ui.select("Manage workset", [
-        { label: "Rename workset", value: "rename" },
-        { label: "Edit description", value: "description" },
-        { label: "Add repository", value: "add" },
-        ...(labelCounts.size > 0 ? [{ label: "Add label", value: "add-label" }] : []),
-        ...(hasRepository ? [{ label: "Edit repository", value: "edit" }] : []),
-        ...(draft.members.length > 0
-          ? [
-              {
-                label: `Remove ${hasLabel ? "repository or label" : "repository"}`,
-                value: "remove",
-              },
-              { label: "Review changes", value: "review" },
-              { label: "Save and exit", value: "save" },
-            ]
-          : []),
-        { label: "Discard changes", value: "discard" },
-      ]);
+      const action = await ui.select({
+        message: "Manage workset",
+        hint: "Edit a draft recipe. Nothing changes until you save.",
+        options: [
+          { label: "Rename workset", value: "rename" },
+          { label: "Edit description", value: "description" },
+          { label: "Add repository", value: "add" },
+          ...(labelCounts.size > 0 ? [{ label: "Add label", value: "add-label" }] : []),
+          ...(hasRepository ? [{ label: "Edit repository", value: "edit" }] : []),
+          ...(draft.members.length > 0
+            ? [
+                {
+                  label: `Remove ${hasLabel ? "repository or label" : "repository"}`,
+                  value: "remove",
+                },
+                { label: "Review changes", value: "review" },
+                { label: "Save and exit", value: "save" },
+              ]
+            : []),
+          { label: "Discard changes", value: "discard" },
+        ],
+      });
 
       if (action === "discard") {
         ui.info("Discarded workset changes.");
@@ -264,6 +307,7 @@ export const worksetManageCommand = defineCommand({
         name = (
           await resolveTextInput({
             message: "New workset name",
+            hint: "Rename this saved recipe. Enter keeps the shown name.",
             initial: name,
             required: {
               command: "workset manage",
@@ -277,7 +321,13 @@ export const worksetManageCommand = defineCommand({
         continue;
       }
       if (action === "description") {
-        draft.description = optionalText(await ui.text("Workset description", draft.description));
+        draft.description = optionalText(
+          await ui.text({
+            message: "Workset description",
+            hint: "Purpose of the saved workspace recipe. Enter keeps the shown text.",
+            initial: draft.description,
+          }),
+        );
         continue;
       }
       if (action === "add") {
@@ -294,23 +344,46 @@ export const worksetManageCommand = defineCommand({
         });
         draft.members.push({
           source: source.value,
-          ref: optionalText(await ui.text("Ref (optional)")),
-          path: optionalText(
-            await ui.text("Workspace path", git.deriveDefaultMountPath(source.value)),
+          ref: optionalText(
+            await ui.text({
+              message: "Ref (optional)",
+              hint: "Use a branch, tag or commit; blank uses the remote default branch.",
+            }),
           ),
-          reason: optionalText(await ui.text("Reason (optional)")),
+          path: optionalText(
+            await ui.text({
+              message: "Workspace path",
+              hint: "Folder inside a workspace. Enter keeps the shown folder.",
+              initial: git.deriveDefaultMountPath(source.value),
+            }),
+          ),
+          reason: optionalText(
+            await ui.text({
+              message: "Reason (optional)",
+              hint: "Explain why the task needs this member; blank leaves no note.",
+            }),
+          ),
         });
         continue;
       }
       if (action === "add-label") {
-        const label = await ui.select(
-          "Select label to add",
-          [...labelCounts].map(([label, count]) => ({
+        const label = await ui.select({
+          message: "Select label to add",
+          hint: "The recipe includes repositories carrying this label.",
+          options: [...labelCounts].map(([label, count]) => ({
             label: `${label} (${count} ${count === 1 ? "repository" : "repositories"})`,
             value: label,
           })),
-        );
-        draft.members.push({ label, reason: optionalText(await ui.text("Reason (optional)")) });
+        });
+        draft.members.push({
+          label,
+          reason: optionalText(
+            await ui.text({
+              message: "Reason (optional)",
+              hint: "Explain why the task needs this member; blank leaves no note.",
+            }),
+          ),
+        });
         continue;
       }
       if (action === "review") {
@@ -319,46 +392,68 @@ export const worksetManageCommand = defineCommand({
       }
 
       if (action === "remove") {
-        const selected = await ui.select(
-          "Select member to remove",
-          draft.members.map((member, index) => ({
+        const selected = await ui.select({
+          message: "Select member to remove",
+          hint: "Remove it from the recipe, not from existing workspaces.",
+          options: draft.members.map((member, index) => ({
             label:
               member.source !== undefined ? repositoryChoice(member) : renderMember(config, member),
             value: String(index),
           })),
-        );
+        });
         draft.members.splice(Number(selected), 1);
         continue;
       }
 
       if (action === "edit") {
-        const selected = await ui.select(
-          "Select repository to edit",
-          draft.members.flatMap((member, index) =>
+        const selected = await ui.select({
+          message: "Select repository to edit",
+          hint: "Change the branch, folder or reason saved in this recipe.",
+          options: draft.members.flatMap((member, index) =>
             member.source !== undefined
               ? [{ label: repositoryChoice(member), value: String(index) }]
               : [],
           ),
-        );
+        });
         const index = Number(selected);
         const member = draft.members[index];
         if (member?.source === undefined) continue;
         draft.members[index] = {
           ...member,
-          ref: optionalText(await ui.text("Ref (optional)", member.ref)),
-          path: optionalText(
-            await ui.text(
-              "Workspace path",
-              member.path ?? git.deriveDefaultMountPath(member.source),
-            ),
+          ref: optionalText(
+            await ui.text({
+              message: "Ref (optional)",
+              hint: "Branch, tag or commit. Enter keeps the shown value, or remote default.",
+              initial: member.ref,
+            }),
           ),
-          reason: optionalText(await ui.text("Reason (optional)", member.reason)),
+          path: optionalText(
+            await ui.text({
+              message: "Workspace path",
+              hint: "Folder inside a workspace. Enter keeps the shown folder.",
+              initial: member.path ?? git.deriveDefaultMountPath(member.source),
+            }),
+          ),
+          reason: optionalText(
+            await ui.text({
+              message: "Reason (optional)",
+              hint: "Explain why the task needs it. Enter keeps the shown note.",
+              initial: member.reason,
+            }),
+          ),
         };
         continue;
       }
 
       ui.log(renderWorkset(config, name, draft));
-      if (!(await ui.confirm("Save this workset?", true))) continue;
+      if (
+        !(await ui.confirm({
+          message: "Save this workset?",
+          hint: "Yes saves the draft; No leaves the saved recipe unchanged.",
+          initial: true,
+        }))
+      )
+        continue;
       try {
         const definition = await workset.saveWorksetDraft(config, originalName, name, draft);
         ui.result({
@@ -399,6 +494,7 @@ export const worksetRepoAddCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset repo add",
           field: "workset",
@@ -425,26 +521,47 @@ export const worksetRepoAddCommand = defineCommand({
           args.ref !== undefined
             ? args.ref
             : canPrompt(ambient)
-              ? optionalText(await ui.text("Ref (optional)"))
+              ? optionalText(
+                  await ui.text({
+                    message: "Ref (optional)",
+                    hint: "Use a branch, tag or commit; blank uses the remote default branch.",
+                  }),
+                )
               : undefined,
         path:
           args.path !== undefined
             ? args.path
             : canPrompt(ambient)
               ? optionalText(
-                  await ui.text("Workspace path", git.deriveDefaultMountPath(source.value)),
+                  await ui.text({
+                    message: "Workspace path",
+                    hint: "Folder inside a workspace. Enter keeps the shown folder.",
+                    initial: git.deriveDefaultMountPath(source.value),
+                  }),
                 )
               : undefined,
         reason:
           args.reason !== undefined
             ? args.reason
             : canPrompt(ambient)
-              ? optionalText(await ui.text("Reason (optional)"))
+              ? optionalText(
+                  await ui.text({
+                    message: "Reason (optional)",
+                    hint: "Explain why the task needs this member; blank leaves no note.",
+                  }),
+                )
               : undefined,
       };
       if (canPrompt(ambient) && !args.yes) {
         ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
-        if (!(await ui.confirm("Add this repository?", true))) return 0;
+        if (
+          !(await ui.confirm({
+            message: "Add this repository?",
+            hint: "Yes adds it to the recipe; No leaves the recipe unchanged.",
+            initial: true,
+          }))
+        )
+          return 0;
       }
       const { definition, added } = await workset.addWorksetMember(
         config,
@@ -486,6 +603,7 @@ export const worksetRepoEditCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset repo edit",
           field: "workset",
@@ -510,6 +628,7 @@ export const worksetRepoEditCommand = defineCommand({
             value: member.path ?? member.source,
           })),
         message: "Select repository to edit",
+        hint: "Change the branch, folder or reason saved in this recipe.",
         required: {
           command: "workset repo edit",
           field: "repository",
@@ -525,19 +644,37 @@ export const worksetRepoEditCommand = defineCommand({
         args.ref !== undefined
           ? args.ref
           : canPrompt(ambient)
-            ? optionalText(await ui.text("Ref (optional)", currentMember?.ref))
+            ? optionalText(
+                await ui.text({
+                  message: "Ref (optional)",
+                  hint: "Branch, tag or commit. Enter keeps the shown value, or remote default.",
+                  initial: currentMember?.ref,
+                }),
+              )
             : undefined;
       const path =
         args.path !== undefined
           ? args.path
           : canPrompt(ambient)
-            ? optionalText(await ui.text("Workspace path", currentMember?.path))
+            ? optionalText(
+                await ui.text({
+                  message: "Workspace path",
+                  hint: "Folder inside a workspace. Enter keeps the shown folder.",
+                  initial: currentMember?.path,
+                }),
+              )
             : undefined;
       const reason =
         args.reason !== undefined
           ? args.reason
           : canPrompt(ambient)
-            ? optionalText(await ui.text("Reason (optional)", currentMember?.reason))
+            ? optionalText(
+                await ui.text({
+                  message: "Reason (optional)",
+                  hint: "Explain why the task needs it. Enter keeps the shown note.",
+                  initial: currentMember?.reason,
+                }),
+              )
             : undefined;
       const changes = {
         ...(ref !== undefined ? { ref } : {}),
@@ -545,7 +682,14 @@ export const worksetRepoEditCommand = defineCommand({
         ...(reason !== undefined ? { reason } : {}),
       };
       if (canPrompt(ambient) && !args.yes) {
-        if (!(await ui.confirm("Update this repository?", true))) return 0;
+        if (
+          !(await ui.confirm({
+            message: "Update this repository?",
+            hint: "Yes saves this member; No keeps its previous branch and folder.",
+            initial: true,
+          }))
+        )
+          return 0;
       }
       const definition = await workset.editWorksetMember(
         config,
@@ -583,6 +727,7 @@ export const worksetRepoRemoveCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset repo remove",
           field: "workset",
@@ -607,6 +752,7 @@ export const worksetRepoRemoveCommand = defineCommand({
               : [],
           ),
         message: "Select repository to remove",
+        hint: "Remove it from this recipe; existing workspace mounts stay.",
         required: {
           command: "workset repo remove",
           field: "repository",
@@ -618,6 +764,7 @@ export const worksetRepoRemoveCommand = defineCommand({
       const confirmed = await resolveConfirmation({
         confirmed: args.force,
         message: `Remove '${selectedMember.value}' from workset '${selectedWorkset.value}'?`,
+        hint: "Yes removes this recipe member; existing workspaces stay.",
         required: {
           command: "workset repo remove",
           field: "confirmation",
@@ -673,6 +820,7 @@ export const worksetLabelAddCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset label add",
           field: "workset",
@@ -689,6 +837,7 @@ export const worksetLabelAddCommand = defineCommand({
             value: label,
           })),
         message: "Select label to add",
+        hint: "The recipe includes repositories carrying this label.",
         required: {
           command: "workset label add",
           field: "label",
@@ -703,12 +852,24 @@ export const worksetLabelAddCommand = defineCommand({
           args.reason !== undefined
             ? args.reason
             : canPrompt(ambient)
-              ? optionalText(await ui.text("Reason (optional)"))
+              ? optionalText(
+                  await ui.text({
+                    message: "Reason (optional)",
+                    hint: "Explain why the task needs this member; blank leaves no note.",
+                  }),
+                )
               : undefined,
       };
       if (canPrompt(ambient) && !args.yes) {
         ui.log(renderWorkset(config, selectedWorkset.value, { members: [member] }));
-        if (!(await ui.confirm("Add this label?", true))) return 0;
+        if (
+          !(await ui.confirm({
+            message: "Add this label?",
+            hint: "Yes adds this group to the recipe; No leaves it unchanged.",
+            initial: true,
+          }))
+        )
+          return 0;
       }
       const { definition, added } = await workset.addWorksetMember(
         config,
@@ -747,6 +908,7 @@ export const worksetLabelRemoveCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset label remove",
           field: "workset",
@@ -769,6 +931,7 @@ export const worksetLabelRemoveCommand = defineCommand({
             member.label !== undefined ? [{ label: member.label, value: member.label }] : [],
           ),
         message: "Select label to remove",
+        hint: "Remove this group from the recipe; repository labels stay.",
         required: {
           command: "workset label remove",
           field: "label",
@@ -780,6 +943,7 @@ export const worksetLabelRemoveCommand = defineCommand({
       const confirmed = await resolveConfirmation({
         confirmed: args.force,
         message: `Remove label '${label.value}' from workset '${selectedWorkset.value}'?`,
+        hint: "Yes removes the group from this recipe; repository labels stay.",
         required: {
           command: "workset label remove",
           field: "confirmation",
@@ -862,6 +1026,7 @@ export const worksetShowCommand = defineCommand({
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
+        hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset show",
           field: "name",

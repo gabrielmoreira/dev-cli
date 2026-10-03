@@ -78,11 +78,11 @@ describe("prompts with captured stdout", () => {
   it("renders all four real prompt adapters outside the answer stream", async () => {
     const driver = `
       const { ui } = await import(${JSON.stringify(UI)});
-      const name = await ui.text("Name");
+      const name = await ui.text({ message: "Name", hint: "Name the fixture value." });
       const options = [{ label: "alpha", value: "alpha" }, { label: "beta", value: "beta" }];
-      const one = await ui.select("Choose one", options);
-      const many = await ui.multiSelect("Choose many", options);
-      const confirmed = await ui.confirm("Apply?", true);
+      const one = await ui.select({ message: "Choose one", hint: "Pick one fixture value.", options });
+      const many = await ui.multiSelect({ message: "Choose many", hint: "Pick the fixture values to keep.", options });
+      const confirmed = await ui.confirm({ message: "Apply?", hint: "Yes returns your selection; No declines it.", initial: true });
       ui.result({ data: { name, one, many, confirmed }, json: true });
     `;
     await capture(["-e", driver]);

@@ -100,6 +100,7 @@ export async function resolveWorkspaceInput(
       value: exact?.value,
       choices: async () => matches,
       message: "Select workspace",
+      hint: "Choose the task folder this command acts on.",
       required: {
         command: options.command,
         field: "workspace",
@@ -115,6 +116,7 @@ export async function resolveWorkspaceInput(
     inferred: detected ? { value: detected, source: "cwd" } : undefined,
     choices,
     message: "Select workspace",
+    hint: "Choose the task folder this command acts on.",
     required: {
       command: options.command,
       field: "workspace",
@@ -144,6 +146,7 @@ export async function resolveWorkspaceMountInput(
       }));
     },
     message: "Select mount",
+    hint: "One repository branch inside the workspace, where you edit.",
     required: {
       command: options.command,
       field: "mount",
@@ -169,10 +172,14 @@ export async function resolveWorkspaceMountScope(
   };
   if (!canPrompt(ambient)) throw new CliInputRequiredError(required);
 
-  const scope = await ui.select("Choose operation scope", [
-    { label: "One mount", value: "one" },
-    { label: "All mounts", value: "all" },
-  ]);
+  const scope = await ui.select({
+    message: "Choose operation scope",
+    hint: "One mount changes one repository; all applies to this workspace.",
+    options: [
+      { label: "One mount", value: "one" },
+      { label: "All mounts", value: "all" },
+    ],
+  });
   if (scope === "all") return undefined;
 
   return (

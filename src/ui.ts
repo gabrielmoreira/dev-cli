@@ -161,10 +161,18 @@ export const ui = {
 
   // Every prompt goes through Clack: mixing prompt libraries left two readers on
   // stdin, and on Windows ConPTY the second one failed with EPIPE.
-  async text(message: string, initial?: string): Promise<string | undefined> {
+  async text({
+    message,
+    hint,
+    initial,
+  }: {
+    message: string;
+    hint: string;
+    initial?: string;
+  }): Promise<string | undefined> {
     // stderr keeps the prompt visible when the shell wrapper captures stdout.
     const value = await clackText({
-      message,
+      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
       placeholder: initial,
       defaultValue: initial,
       output: process.stderr,
@@ -173,12 +181,17 @@ export const ui = {
     return value || initial;
   },
 
-  async select<T extends string>(
-    message: string,
-    options: { label: string; value: T }[],
-  ): Promise<T> {
+  async select<T extends string>({
+    message,
+    hint,
+    options,
+  }: {
+    message: string;
+    hint: string;
+    options: { label: string; value: T }[];
+  }): Promise<T> {
     const selection = await autocomplete<string>({
-      message,
+      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
       output: process.stderr,
       placeholder: "Type to search...",
       maxItems: 10,
@@ -193,12 +206,17 @@ export const ui = {
     return selection as T;
   },
 
-  async multiSelect<T extends string>(
-    message: string,
-    options: { label: string; value: T }[],
-  ): Promise<T[]> {
+  async multiSelect<T extends string>({
+    message,
+    hint,
+    options,
+  }: {
+    message: string;
+    hint: string;
+    options: { label: string; value: T }[];
+  }): Promise<T[]> {
     const selection = await autocompleteMultiselect<string>({
-      message,
+      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
       output: process.stderr,
       placeholder: "Type to search...",
       maxItems: 10,
@@ -214,8 +232,20 @@ export const ui = {
     return selection as T[];
   },
 
-  async confirm(message: string, initial = false): Promise<boolean> {
-    const value = await clackConfirm({ message, initialValue: initial, output: process.stderr });
+  async confirm({
+    message,
+    hint,
+    initial = false,
+  }: {
+    message: string;
+    hint: string;
+    initial?: boolean;
+  }): Promise<boolean> {
+    const value = await clackConfirm({
+      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
+      initialValue: initial,
+      output: process.stderr,
+    });
     if (isCancel(value)) throw new CancelledError();
     return value;
   },

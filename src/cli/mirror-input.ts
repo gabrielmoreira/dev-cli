@@ -27,6 +27,7 @@ export async function resolveMirrorSourceInput(
       return [...sources].map(([value, name]) => ({ label: name, value }));
     },
     message: "Select mirror source",
+    hint: "Choose the repository whose reference copies you manage.",
     required: {
       command: options.command,
       field: "source",

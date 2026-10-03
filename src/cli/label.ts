@@ -58,12 +58,24 @@ async function chooseLabel(config: RuntimeConfig, message: string): Promise<stri
   const choice =
     counts.size === 0
       ? NEW
-      : await ui.select(message, [
-          ...[...counts].map(([label, count]) => ({ label: `${label} (${count})`, value: label })),
-          { label: "New label…", value: NEW },
-        ]);
+      : await ui.select({
+          message,
+          hint: "A label names a group of repositories; choose the group to change.",
+          options: [
+            ...[...counts].map(([label, count]) => ({
+              label: `${label} (${count})`,
+              value: label,
+            })),
+            { label: "New label…", value: NEW },
+          ],
+        });
   if (choice !== NEW) return choice;
-  const typed = (await ui.text("Label name"))?.trim();
+  const typed = (
+    await ui.text({
+      message: "Label name",
+      hint: "Group repositories for tasks; index: labels also keep mirrors.",
+    })
+  )?.trim();
   if (!typed) throw new CancelledError();
   return typed;
 }
@@ -71,10 +83,14 @@ async function chooseLabel(config: RuntimeConfig, message: string): Promise<stri
 async function chooseExistingLabel(config: RuntimeConfig, message: string): Promise<string> {
   const known = labels.listLabels(config);
   if (known.length === 0) throw new Error("No repository carries a label yet.");
-  return await ui.select(
+  return await ui.select({
     message,
-    known.map((item) => ({ label: `${item.label} (${item.sources.length})`, value: item.label })),
-  );
+    hint: "A label names a group of repositories; choose the group to change.",
+    options: known.map((item) => ({
+      label: `${item.label} (${item.sources.length})`,
+      value: item.label,
+    })),
+  });
 }
 
 /** Repositories to pick from: the provider inventory plus what dev.yaml already declares. */
@@ -97,7 +113,11 @@ async function chooseRepositories(config: RuntimeConfig, label: string): Promise
   if (options.size === 0) {
     throw new Error("No repositories known yet. Run 'dev sync inventory', or pass a URL.");
   }
-  return await ui.multiSelect(`Select repositories for '${label}'`, [...options.values()]);
+  return await ui.multiSelect({
+    message: `Select repositories for '${label}'`,
+    hint: "Put this label on each selected repository.",
+    options: [...options.values()],
+  });
 }
 
 async function resolveUrl(config: RuntimeConfig, value: string): Promise<string> {
@@ -137,23 +157,28 @@ async function planTargets(options: {
   const declared = labels.parseDeclaredSources(options.config.sources).sources;
   const branches = new Map<string, string>();
   if (options.customize && !options.ref) {
-    const chosen = await ui.multiSelect("Select repositories to customize", [
-      { label: "Continue with defaults", value: "defaults" },
-      ...options.urls.map((url) => ({ label: git.deriveDefaultMountPath(url), value: url })),
-    ]);
+    const chosen = await ui.multiSelect({
+      message: "Select repositories to customize",
+      hint: "Change branch or folder; Continue with defaults keeps the plan.",
+      options: [
+        { label: "Continue with defaults", value: "defaults" },
+        ...options.urls.map((url) => ({ label: git.deriveDefaultMountPath(url), value: url })),
+      ],
+    });
     for (const url of chosen.filter((value) => value !== "defaults")) {
       const extraHeader = await resolveExtraHeader(options.config, url);
       const remote = await git.listRemoteBranches({ source: url, extraHeader });
       if (remote.branches.length === 0) continue;
       branches.set(
         url,
-        await ui.select(
-          `Branch for ${git.deriveDefaultMountPath(url)}`,
-          remote.branches.map((branch) => ({
+        await ui.select({
+          message: `Branch for ${git.deriveDefaultMountPath(url)}`,
+          hint: "This group uses the selected branch; (default) is the remote default.",
+          options: remote.branches.map((branch) => ({
             label: branch === remote.defaultBranch ? `${branch} (default)` : branch,
             value: branch,
           })),
-        ),
+        }),
       );
     }
   }
@@ -167,10 +192,14 @@ async function planTargets(options: {
           `${git.deriveDefaultMountPath(url)} is declared on several refs. Pass --ref <branch>.`,
         );
       }
-      const index = await ui.select(
-        `Which ref of ${git.deriveDefaultMountPath(url)}?`,
-        plan.ambiguous.map((source, i) => ({ label: describeSource(source), value: String(i) })),
-      );
+      const index = await ui.select({
+        message: `Which ref of ${git.deriveDefaultMountPath(url)}?`,
+        hint: "Choose which branch, tag or commit belongs to this group.",
+        options: plan.ambiguous.map((source, i) => ({
+          label: describeSource(source),
+          value: String(i),
+        })),
+      });
       plan = { selector: labels.selectorOf(plan.ambiguous[Number(index)]!), declared: true };
     }
     // Without new fields, a repository that already carries the label keeps its own.
@@ -268,6 +297,7 @@ export const labelAddCommand = defineCommand({
           value:
             args.label?.trim() || (interactive ? await chooseLabel(config, "Label") : undefined),
           message: "Label name",
+          hint: "Group repositories for tasks; index: labels also keep mirrors.",
           required: { command: "label add", field: "label", usage, description: "Label name" },
         })
       ).value;
@@ -300,7 +330,15 @@ export const labelAddCommand = defineCommand({
 
       const mirrors = labels.labelMirrors(labels.parseLabelDefs(config.labelDefs).defs, label);
       if (!args.json) ui.log(renderPlan(label, targets, mirrors));
-      if (guided && !args.yes && !(await ui.confirm("Apply this label?", true))) {
+      if (
+        guided &&
+        !args.yes &&
+        !(await ui.confirm({
+          message: "Apply this label?",
+          hint: "Yes saves the group; No leaves repository labels unchanged.",
+          initial: true,
+        }))
+      ) {
         return 0;
       }
 
@@ -342,10 +380,11 @@ export const labelAddCommand = defineCommand({
       const now =
         args.sync ||
         (guided &&
-          (await ui.confirm(
-            `Create ${missing.length} missing mirror${missing.length === 1 ? "" : "s"} now?`,
-            true,
-          )));
+          (await ui.confirm({
+            message: `Create ${missing.length} missing mirror${missing.length === 1 ? "" : "s"} now?`,
+            hint: "Yes creates reference copies for reading; No waits for a sync.",
+            initial: true,
+          })));
       if (now) return await createMirrors(config, args.json);
       if (!args.json) ui.info("↳ The next 'dev sync --all' or 'dev mirror sync' creates them.");
       return 0;
@@ -407,13 +446,14 @@ export const labelRmCommand = defineCommand({
           return reportError(`None of those repositories carries label '${label}'.`, args.json);
         }
       } else if (interactive) {
-        const picked = await ui.multiSelect(
-          `Take '${label}' off`,
-          carrying.map((source, index) => ({
+        const picked = await ui.multiSelect({
+          message: `Take '${label}' off`,
+          hint: "Remove the label only from your selection; copies on disk stay.",
+          options: carrying.map((source, index) => ({
             label: describeSource(source),
             value: String(index),
           })),
-        );
+        });
         chosen = picked.map((index) => carrying[Number(index)]!);
       } else {
         return reportError(
@@ -428,7 +468,16 @@ export const labelRmCommand = defineCommand({
         );
       }
       const guidedRm = interactive && (given.length === 0 || !args.label);
-      if (guidedRm && !args.yes && !(await ui.confirm("Remove this label?", true))) return 0;
+      if (
+        guidedRm &&
+        !args.yes &&
+        !(await ui.confirm({
+          message: "Remove this label?",
+          hint: "Yes removes it from the selected repositories; mirrors stay.",
+          initial: true,
+        }))
+      )
+        return 0;
 
       await labels.removeLabel(config, label, chosen);
       const base = createPluginBase(config.root);
@@ -492,7 +541,17 @@ export const labelRenameCommand = defineCommand({
       const from =
         args.from?.trim() ||
         (interactive ? await chooseExistingLabel(config, "Label to rename") : "");
-      const to = args.to?.trim() || (interactive ? (await ui.text("New name", from))?.trim() : "");
+      const to =
+        args.to?.trim() ||
+        (interactive
+          ? (
+              await ui.text({
+                message: "New name",
+                hint: "Rename this label everywhere. Enter keeps its current name.",
+                initial: from,
+              })
+            )?.trim()
+          : "");
       if (!from || !to) return reportError("Usage: dev label rename <from> <to>", args.json);
       if (from === to) {
         ui.result({
@@ -563,17 +622,21 @@ async function labelMenu(rawArgs: string[]): Promise<unknown> {
   const hasLabels = labels.listLabels(config).length > 0;
   let action: string;
   try {
-    action = await ui.select("What do you want to do? (Esc to exit)", [
-      { label: "Put a label on repositories", value: "add" },
-      ...(hasLabels
-        ? [
-            { label: "Edit a label's fields on repositories", value: "edit" },
-            { label: "Take a label off repositories", value: "rm" },
-            { label: "Rename a label", value: "rename" },
-            { label: "Delete a label from every repository", value: "delete" },
-          ]
-        : []),
-    ]);
+    action = await ui.select({
+      message: "What do you want to do? (Esc to exit)",
+      hint: "A label groups repositories; choose how to change that group.",
+      options: [
+        { label: "Put a label on repositories", value: "add" },
+        ...(hasLabels
+          ? [
+              { label: "Edit a label's fields on repositories", value: "edit" },
+              { label: "Take a label off repositories", value: "rm" },
+              { label: "Rename a label", value: "rename" },
+              { label: "Delete a label from every repository", value: "delete" },
+            ]
+          : []),
+      ],
+    });
   } catch (error) {
     if (error instanceof CancelledError) return 0;
     throw error;
@@ -589,15 +652,24 @@ async function labelMenu(rawArgs: string[]): Promise<unknown> {
     return await runNestedCommand(labelRmCommand, [label, "--all", ...rawArgs]);
 
   const carrying = labels.listLabels(config).find((item) => item.label === label)!.sources;
-  const picked = await ui.multiSelect(
-    `Edit '${label}' on`,
-    carrying.map((source, index) => ({ label: describeSource(source), value: String(index) })),
-  );
+  const picked = await ui.multiSelect({
+    message: `Edit '${label}' on`,
+    hint: "Change label fields only on these repositories.",
+    options: carrying.map((source, index) => ({
+      label: describeSource(source),
+      value: String(index),
+    })),
+  });
   const first = carrying[Number(picked[0])]!;
   const current = Object.entries(first.labels[label] ?? {})
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(",");
-  const fields = (await ui.text("Fields (key=value, comma-separated)", current)) ?? "";
+  const fields =
+    (await ui.text({
+      message: "Fields (key=value, comma-separated)",
+      hint: "For example team=payments. Enter keeps the shown fields.",
+      initial: current,
+    })) ?? "";
   let code = 0;
   for (const index of picked) {
     const source = carrying[Number(index)]!;
