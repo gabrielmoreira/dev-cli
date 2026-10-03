@@ -45,6 +45,8 @@ describe("first-run prompt context in a real terminal", () => {
     await terminal.waitExit({ timeout: 15000 });
     const screen = await terminal.text({ full: true });
     expect(screen).not.toContain("EPIPE");
+    // The hint stays inside the prompt's guide bar, answered or not.
+    expect(screen).toMatch(/[│|] {2}Your dev root: workspaces/);
     expect(await readFile(join(home, "dev", "dev.yaml"), "utf8")).not.toContain("github:");
   }, 30000);
 });

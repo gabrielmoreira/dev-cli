@@ -3,8 +3,15 @@ import {
   autocompleteMultiselect,
   confirm as clackConfirm,
   isCancel,
+  S_BAR,
   text as clackText,
 } from "@clack/prompts";
+
+/** Clack draws the guide bar before later message lines in confirm and
+ * multiselect, but not in text and single select; those two get it here. */
+function guidedHint(hint: string): string {
+  return `\x1b[90m${S_BAR}\x1b[39m  \x1b[2m${hint}\x1b[22m`;
+}
 
 /** The user pressed Ctrl+C or Esc at a prompt: not a failure, so it prints nothing. */
 export class CancelledError extends Error {
@@ -184,7 +191,7 @@ export const ui = {
   }): Promise<string | undefined> {
     // stderr keeps the prompt visible when the shell wrapper captures stdout.
     const value = await clackText({
-      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
+      message: `${message}\n${guidedHint(hint)}`,
       placeholder: initial,
       defaultValue: initial,
       output: process.stderr,
@@ -203,7 +210,7 @@ export const ui = {
     options: { label: string; value: T }[];
   }): Promise<T> {
     const selection = await autocomplete<string>({
-      message: `${message}\n\x1b[2m${hint}\x1b[22m`,
+      message: `${message}\n${guidedHint(hint)}`,
       output: process.stderr,
       placeholder: "Type to search...",
       maxItems: 10,
