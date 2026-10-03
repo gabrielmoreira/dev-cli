@@ -56,8 +56,32 @@ The decisions taken while executing `.local/plan-2026-10-02-dx/`, one section ea
 
 **Rejected alternative.** Captions, or typed `# ...` comment lines explaining each step. They explain the demo and leave the product as unclear as before, and a person who installs `dev` never sees them.
 
-## D18: The demo sets itself up and says what comes next
+## D18: The demo sets itself up and says what comes next (installation superseded by D20)
 
 **Decision.** The demo image carries nothing of `dev`: the tape installs the pinned release with `mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION`, appends `eval "$(dev shell-init zsh)"` to `~/.zshrc`, and only then runs `dev init`, so every step a new user takes is on screen. Each scene opens with one short typed `# ...` line saying what comes next; where a scene is near VHS's row budget, the comment trails the command on the same line. The image still seeds scenery (local remotes and an inventory file) because a real provider would need credentials inside a container that runs a model. The maintainer asked for this on 2026-10-03: a preconfigured container made the demo look like magic.
 
 **Rejected alternative.** Keeping D17. The CLI's hints explain each prompt, but a GIF viewer cannot pause, and the setup a user must do (install, shell integration) was invisible. Passing a GitHub token into the container to avoid anonymous API limits during the install was rejected too: the release job's token can write to the repository, and the container runs a model-driven agent.
+
+## D19: The demo goes from the simplest command to the most involved
+
+**Decision.** Each scene adds one idea to the last, so the value of a short command lands before anything needs explaining. `dev go` moved from after the workset scenes to right after the first workspace: it is one word, it is the payoff of the shell integration installed a minute earlier, and with one workspace it jumps without a prompt. The scratch workspace is entered with `dev go scratch`, and the later jump into `incident` keeps the picker, so `dev go` appears in three growing forms: direct, by name, picker. The maintainer asked for this order on 2026-10-03.
+
+**Rejected alternative.** Keeping `dev go` after the workset as the single jump scene. It showed the picker once, but a viewer met worksets before the one-word command that makes workspaces feel cheap, and the shell integration sat unused for most of the recording.
+
+## D20: Keep the demo's release pin in Mise configuration, not in the typed command
+
+**Decision.** Supersedes the installation part of D18. The image preinstalls the published tools and records their versions in `/demo/mise.toml`. That file is also the image's global Mise configuration, so the same tools remain available when the shell enters a workspace. The tape shows bare `mise install` as a repeatable install, followed by `dev --version`, rather than typing a tool identifier, a version, or an environment variable. `DEV_VERSION` remains a build input for selecting the exact published release. The maintainer asked for a preconfigured TOML and a short command on 2026-10-03; captions and on-screen shell integration from D18 remain unchanged.
+
+**Rejected alternative.** Typing `mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION`. It exposed the pinning machinery before showing the product's simplest commands and made the install scene slower. Keeping the tools preinstalled does not pre-create a workspace, workset, label, or index.
+
+## D21: A workspace runs its setup once, when it is created
+
+**Decision.** A workset may carry a setup command, each repository member may override it or set `setup: false`, and `dev ws init --setup` sets one for a workspace without a workset. The resolved command is stored per mount in `ws.md`. `dev ws init` runs it in each mount it created, after every mount is in place; a reused workspace, `dev go`, `dev ws start`, and `dev ws update` never run it. `dev ws setup` reruns it on request. A mount outside the trusted scopes runs only with `--consent`. A failed or skipped command is reported per mount and does not stop the rest; `dev ws init` still succeeds, while `dev ws setup` exits non-zero after trying every mount. The maintainer asked for simple setup at workspace creation, with failures that never interrupt remaining work, on 2026-10-04.
+
+**Rejected alternative.** Running setup when a repository or workspace is opened. It repeats slow work on every visit and turns navigation into a command that can fail. Widening `--consent` into a trust grant was rejected too: it permits the commands of this run and records nothing.
+
+## D22: The agent learns about the documentation index from the root instructions
+
+**Decision.** The `AGENTS.md` that `dev init` writes at the root describes `dev qmd search`, and coding agents inherit it from every workspace below the root, so a question about indexed documentation leads the agent to the index without naming the command. Workspaces carry no copy. Verified on 2026-10-04 with the pinned OMP: the root file appears in the session's system prompt, and a prompt that names no command made the agent run `dev qmd search` and cite the indexed skill.
+
+**Rejected alternative.** Putting the command in the demo prompt, or writing an `AGENTS.md` into each workspace. The first shows a workaround instead of the product; the second duplicates the root file and drifts from it.

@@ -37,15 +37,13 @@ Wait+Screen@10s /demo@devbox/
 Show
 Sleep 1s
 
-# Nothing of dev is in the image: install the pinned release and turn on shell integration.
-Type@25ms "# Install the dev release this demo shows"
+# The image preinstalls the published tools pinned in mise.toml; install is repeatable.
+Type@25ms "# Tools are pinned in mise.toml; install is repeatable"
 Enter
 Sleep 500ms
-Type "mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION"
+Type "mise install"
 Sleep 500ms
 Enter
-# mise prints "<config> tools: <tool>@<version>" once the install is done.
-Wait+Screen@180s /tools: github:gabrielmoreira/
 Type "dev --version"
 Enter
 Wait+Screen@20s /dev v\d/
@@ -98,8 +96,20 @@ Wait+Screen@20s /What is this task about/
 Sleep 1s
 Enter
 Wait+Screen@60s /Initialized workspace 'gh-gabrielmoreira-skills'/
+Sleep 6s
+
+# The shell integration pays off at once: with one workspace, dev go jumps straight in.
+Type "clear"
+Enter
+Type@25ms "# dev go jumps into it"
+Enter
+Sleep 500ms
+Type "dev go"
+Sleep 500ms
+Enter
+Wait+Screen@20s /dev\/ws\/gh-gabrielmoreira-skills/
 Sleep 1s
-Type "ls -A ws/gh-gabrielmoreira-skills"
+Type "ls -A"
 Sleep 500ms
 Enter
 Wait+Screen@20s /ws\.md/
@@ -126,7 +136,7 @@ Sleep 1s
 Enter
 Wait+Screen@20s /Initialized workspace 'scratch'/
 Sleep 6s
-Type "cd ws/scratch"
+Type "dev go scratch"
 Enter
 Type "clear"
 Enter
@@ -168,16 +178,21 @@ Type "cd ~/dev"
 Enter
 Type "clear"
 Enter
-Type@25ms "# Save a reusable recipe: a workset"
-Enter
-Sleep 500ms
-Type "dev workset manage incident"
+Type@25ms "dev workset manage incident  # a reusable recipe"
 Sleep 500ms
 Enter
 Wait+Screen@20s /Workset description/
 Type "Investigate checkout timeouts"
 Enter
 Wait+Screen@20s /Manage workset/
+Type "Edit setup command"
+Sleep 500ms
+Enter
+Wait+Screen@20s /Setup command/
+Type "mise install"
+Sleep 500ms
+Enter
+Sleep 1s
 Type "Add repository"
 Sleep 500ms
 Enter
@@ -232,18 +247,16 @@ Enter
 Type "dev workset show incident"
 Sleep 500ms
 Enter
+Wait+Screen@20s /setup: mise install/
 Wait+Screen@20s /Affected service/
 Wait+Screen@20s /Debugging skills/
 Sleep 6s
 
-# A fresh workspace from the workset, through the command the saved workset suggested.
+# A fresh task workspace from the workset, named on the command line; --consent runs its setup.
 Type "clear"
 Enter
-Type "dev ws init --workset incident  # from the recipe"
+Type "dev ws init incident --workset incident --consent"
 Sleep 500ms
-Enter
-Wait+Screen@20s /Workspace name/
-Sleep 1s
 Enter
 Wait+Screen@20s /What is this task about/
 Sleep 1s
@@ -253,16 +266,18 @@ Sleep 1s
 Tab
 Sleep 1s
 Enter
+Wait+Screen@20s /Workspace plan/
+Sleep 1s
 Wait+Screen@20s /Create this workspace/
 Sleep 1s
 Type "y"
-Wait+Screen@90s /Initialized workspace 'incident'/
+Wait+Screen@120s /Initialized workspace 'incident'/
 Sleep 6s
 
-# Shell integration turns workspace selection into a real directory jump.
+# With several workspaces, dev go opens a picker.
 Type "clear"
 Enter
-Type@25ms "# dev go jumps into a workspace"
+Type@25ms "# Pick a workspace to jump into"
 Enter
 Sleep 500ms
 Type "dev go"
@@ -280,23 +295,6 @@ Sleep 500ms
 Enter
 Wait+Screen@20s /ws\.md/
 Sleep 6s
-
-# Start OMP early so indexing never delays the product handoff.
-Type "clear"
-Enter
-Type@25ms "# Start the workspace's agent session"
-Enter
-Sleep 500ms
-Type "dev ws start"
-Sleep 500ms
-Enter
-Wait+Screen@60s /OpenRouter Free Models Router/
-Sleep 3s
-Ctrl+B
-Sleep 500ms
-Type "q"
-Wait+Screen@20s /demo@devbox dev\/ws\/incident/
-Sleep 1s
 
 # Knowledge setup: one index label keeps the OMP docs and the skill catalog mirrored.
 Type "clear"
@@ -340,26 +338,26 @@ Enter
 Type@25ms "# Search the index yourself"
 Enter
 Sleep 500ms
-Type "dev qmd x search debugging-by-evidence"
+Type "dev qmd search debug"
 Sleep 500ms
 Enter
 Wait+Screen@30s /Title:/
 Sleep 6s
 
-# Return to the already-running OMP agent with the new QMD index.
+# The workspace's agent session searches the same index.
 Type "clear"
 Enter
-Type@25ms "# Ask the agent; it searches the same index"
+Type@25ms "# Ask the agent; it searches the indexed repositories"
 Enter
 Sleep 500ms
 Type "dev ws start"
 Sleep 500ms
 Enter
-Wait+Screen@30s /OpenRouter Free Models Router/
-Sleep 1s
+Wait+Screen@60s /OpenRouter Free Models Router/
+Sleep 2s
 
 Set TypingSpeed 20ms
-Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Search QMD and cite the files. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE joined by hyphens."
+Type "Which indexed skill fits an intermittent checkout timeout with no known cause? Cite the files you used. Finish with the uppercase words INDEXED, ANSWER, and COMPLETE joined by hyphens."
 Sleep 500ms
 Enter
 # Keep provider latency out of the artifact while preserving the submitted prompt and final answer.

@@ -2,7 +2,7 @@ FROM public.ecr.aws/debian/debian:trixie-slim@sha256:2cdc43a83d3b7666a63bd7a9028
 
 ARG MISE_VERSION=2026.10.0
 ARG NODE_VERSION=26.10.0
-ARG DEV_VERSION=4.0.5
+ARG DEV_VERSION=5.0.1
 ARG QMD_VERSION=2.8.3
 ARG SKILLS_REVISION=d5cdb657ea95ab27c6233e959c08af5eb3806092
 
@@ -29,11 +29,11 @@ ENV HOME=/home/demo
 ENV PATH=/home/demo/.local/bin:/home/demo/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin
 ENV SHELL=/bin/zsh
 ENV MISE_DISABLE_UPDATE_WARNING=true
+# Keep one Mise configuration active both here and inside the created workspaces.
+ENV MISE_GLOBAL_CONFIG_FILE=/demo/mise.toml
 ENV SSL_CERT_FILE=/home/demo/.cache/certs/ca-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/home/demo/.cache/certs/ca-bundle.pem
 ENV GIT_SSL_CAINFO=/home/demo/.cache/certs/ca-bundle.pem
-# The tape installs this exact release on screen; nothing of dev is preinstalled.
-ENV DEV_VERSION=${DEV_VERSION}
 
 RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     --mount=type=secret,id=npm_registry,required=false,uid=1000,gid=1000,mode=0444 \
@@ -52,6 +52,7 @@ RUN --mount=type=secret,id=extra_ca,required=false,uid=1000,gid=1000,mode=0444 \
     mise use --global "npm:@tobilu/qmd@${QMD_VERSION}"; \
     mise use --global "github:ogulcancelik/herdr@${HERDR_VERSION}"; \
     mise use --global "github:can1357/oh-my-pi@${OMP_VERSION}"; \
+    mise use --global "github:gabrielmoreira/dev-cli@${DEV_VERSION}"; \
     mkdir -p "$HOME/.cache/omp-docs"; \
     curl --fail --silent --show-error --location \
       "https://raw.githubusercontent.com/can1357/oh-my-pi/v${OMP_VERSION}/docs/models.md" \

@@ -22,8 +22,19 @@ seed_repository() {
   git init --quiet --bare --initial-branch=main "$remote"
   git init --quiet --initial-branch=main "$seed"
   printf '# %s\n\n%s\n' "$title" "$body" > "$seed/README.md"
-  git -C "$seed" add README.md
-  git -C "$seed" commit --quiet --message "docs: add $name guide"
+  # Scenery for the workset's setup step: this service pins a toolchain, so `mise install`
+  # has real work to do. The version is read from the image's global config so the two agree.
+  if [[ "$name" == "checkout-api" ]]; then
+    local node_pin
+    node_pin="$(grep -m1 '^node *=' /demo/mise.toml | cut -d'"' -f2 || true)"
+    if [[ -z "$node_pin" ]]; then
+      printf 'No node pin in /demo/mise.toml; cannot seed the checkout toolchain.\n' >&2
+      exit 1
+    fi
+    printf '[tools]\nnode = "%s"\n' "$node_pin" > "$seed/mise.toml"
+  fi
+  git -C "$seed" add --all
+  git -C "$seed" commit --quiet --message "chore: seed $name"
   git -C "$seed" remote add origin "$remote"
   git -C "$seed" push --quiet --set-upstream origin main
 }
@@ -37,7 +48,7 @@ seed_omp_docs() {
   mkdir -p "$seed/docs"
   cp "$HOME/.cache/omp-docs/models.md" "$seed/docs/models.md"
   cp "$HOME/.cache/omp-docs/providers.md" "$seed/docs/providers.md"
-  printf '# OMP Documentation\n\nPinned model and provider documentation for OMP 18.2.6.\n' > "$seed/README.md"
+  printf '# OMP Documentation\n\nModel and provider documentation for the pinned OMP release.\n' > "$seed/README.md"
   git -C "$seed" add README.md docs
   git -C "$seed" commit --quiet --message "docs: add pinned OMP model guides"
   git -C "$seed" remote add origin "$remote"
@@ -67,7 +78,7 @@ seed_skills
 
 cat > "$HOME/dev/.dev/cache/inventory/demo/repos.jsonl" <<'JSONL'
 {"id":"checkout-api","name":"checkout-api","url":"/demo/remotes/checkout-api.git","default_branch":"main","description":"Checkout service adopting OMP","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
-{"id":"omp-docs","name":"omp-docs","url":"/demo/remotes/omp-docs.git","default_branch":"main","description":"Pinned OMP 18.2.6 model and provider docs","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
+{"id":"omp-docs","name":"omp-docs","url":"/demo/remotes/omp-docs.git","default_branch":"main","description":"Pinned OMP model and provider docs","last_changed":"2026-09-19T00:00:00Z","syncedAt":"2026-09-19T00:00:00Z"}
 {"id":"sample-skills","name":"sample-skills","url":"/demo/remotes/skills.git","default_branch":"main","description":"Pinned evidence-driven debugging skill","last_changed":"2026-09-18T18:27:19Z","syncedAt":"2026-09-19T00:00:00Z"}
 JSONL
 
