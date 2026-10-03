@@ -43,20 +43,6 @@ describe("dev navigation, shell-init, and help CLI E2E (Phase 17)", () => {
     }).catch(() => {});
   });
 
-  it("dev --help outputs human-friendly ANSI help", async () => {
-    const proc = Bun.spawn(["bun", "run", cliPath, "--help"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const exitCode = await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
-
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Developer CLI & Workspace Engine (dev v0.0.0-development)");
-    expect(stdout).toContain("COMMANDS");
-    expect(stdout).toContain("shell-init");
-  });
-
   it("dev --help --llms outputs structured JSON orientation schema", async () => {
     const proc = Bun.spawn(["bun", "run", cliPath, "--help", "--llms"], {
       stdout: "pipe",

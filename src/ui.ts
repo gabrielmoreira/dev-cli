@@ -126,7 +126,11 @@ export const ui = {
 
   error(...args: unknown[]): void {
     errorReported = true;
-    console.error(...args);
+    if (isJsonMode) {
+      process.stderr.write(`${args.map(String).join(" ")}\n`);
+    } else {
+      console.error(...args);
+    }
   },
 
   json(data: unknown): void {

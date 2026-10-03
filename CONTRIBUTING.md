@@ -63,6 +63,8 @@ bun run src/cli.ts ws list --root /tmp/test-dev
 bun run src/cli.ts --help --llms
 ```
 
+Human help is plain when stdout is redirected. Use `bun run src/cli.ts help ws add` for a command path; an unknown segment exits 2 with `UNKNOWN_COMMAND` and a suggested help command.
+
 To install the current checkout globally for manual testing:
 
 ```bash

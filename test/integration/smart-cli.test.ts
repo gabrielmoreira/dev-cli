@@ -15,6 +15,7 @@ describe("smart CLI input", () => {
   let root: string;
   let originalLog: typeof console.log;
   let originalError: typeof console.error;
+  let originalWrite: typeof process.stderr.write;
   let errors: string[];
   let logs: string[];
 
@@ -22,15 +23,21 @@ describe("smart CLI input", () => {
     root = await mkdtemp(join(tmpdir(), "dev-cli-smart-input-"));
     originalLog = console.log;
     originalError = console.error;
+    originalWrite = process.stderr.write;
     errors = [];
     logs = [];
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      errors.push(String(chunk));
+      return true;
+    };
   });
 
   afterEach(async () => {
     console.log = originalLog;
     console.error = originalError;
+    process.stderr.write = originalWrite;
     await rm(root, { recursive: true, force: true });
   });
 

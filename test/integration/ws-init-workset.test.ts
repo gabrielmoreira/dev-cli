@@ -38,6 +38,7 @@ describe("workspace initialization plans", () => {
   let wikiRemote: string;
   let originalLog: typeof console.log;
   let originalError: typeof console.error;
+  let originalWrite: typeof process.stderr.write;
   let logs: string[];
 
   beforeEach(async () => {
@@ -46,9 +47,14 @@ describe("workspace initialization plans", () => {
     wikiRemote = await createRemote(root, "wiki-docs", ["master", "internal"]);
     originalLog = console.log;
     originalError = console.error;
+    originalWrite = process.stderr.write;
     logs = [];
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
     console.error = (...args: unknown[]) => logs.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      logs.push(String(chunk));
+      return true;
+    };
     await Bun.write(
       join(root, "dev.yaml"),
       `version: 1
@@ -74,6 +80,7 @@ worksets:
   afterEach(async () => {
     console.log = originalLog;
     console.error = originalError;
+    process.stderr.write = originalWrite;
     await rm(root, { recursive: true, force: true });
   });
 

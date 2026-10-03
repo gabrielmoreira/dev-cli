@@ -26,6 +26,18 @@ describe("subcommand help (UX)", () => {
     expect(await suggestCommand(["zq"])).toBeUndefined();
   });
 
+  it("keeps strict help paths distinct from leaf command operands", async () => {
+    const path = ["ws", "add", "repository"];
+    let failure: unknown;
+    try {
+      await formatCommandHelp(path);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toMatchObject({ code: "UNKNOWN_COMMAND", details: { command: "repository" } });
+    expect(await formatCommandHelp(path, true)).toContain("USAGE dev ws add");
+  });
+
   it("rejects an option no command on the path declares, and suggests the near one", async () => {
     expect(await findUnknownOption(["sync", "--dryrun"])).toEqual({
       option: "--dryrun",

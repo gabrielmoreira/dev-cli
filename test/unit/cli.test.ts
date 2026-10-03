@@ -184,6 +184,7 @@ describe("CLI entrypoint (Phase 0)", () => {
     const errors: string[] = [];
     const originalLog = console.log;
     const originalError = console.error;
+    const originalWrite = process.stderr.write;
     // `dev init` registers the root in $HOME/.dev.toml, never the developer's registry.
     const originalHome = process.env.HOME;
     const originalProfile = process.env.USERPROFILE;
@@ -191,6 +192,10 @@ describe("CLI entrypoint (Phase 0)", () => {
     process.env.USERPROFILE = root;
     console.log = () => {};
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      errors.push(String(chunk));
+      return true;
+    };
     try {
       const ambient = { cwd: root, env: {}, isTTY: false };
       expect(await runCli({ ...ambient, argv: ["init", "--root", root, "--json"] })).toBe(0);
@@ -203,6 +208,7 @@ describe("CLI entrypoint (Phase 0)", () => {
     } finally {
       console.log = originalLog;
       console.error = originalError;
+      process.stderr.write = originalWrite;
       if (originalHome === undefined) delete process.env.HOME;
       else process.env.HOME = originalHome;
       if (originalProfile === undefined) delete process.env.USERPROFILE;

@@ -57,6 +57,7 @@ describe("prompts with captured stdout", () => {
       const exitCode = await child.exited;
       await Bun.write(${JSON.stringify(target)}, JSON.stringify({ stdout, exitCode }));
       console.log("CAPTURE_DONE");
+      await Bun.stdin.stream().getReader().read();
       process.exit(exitCode);
     `;
     await terminal.run(process.execPath, ["-e", driver], {
@@ -69,6 +70,7 @@ describe("prompts with captured stdout", () => {
 
   async function captured(): Promise<{ stdout: string; exitCode: number }> {
     await terminal.getByText("CAPTURE_DONE").expect();
+    await terminal.press("Enter");
     await terminal.waitExit({ timeout: 15_000 });
     return JSON.parse(await readFile(join(root, "captured.json"), "utf8"));
   }

@@ -11,6 +11,7 @@ describe("contextual sync filters", () => {
   const errors: string[] = [];
   const logs: string[] = [];
   const originalError = console.error;
+  const originalWrite = process.stderr.write;
   const originalLog = console.log;
 
   beforeEach(async () => {
@@ -20,11 +21,16 @@ describe("contextual sync filters", () => {
     errors.length = 0;
     logs.length = 0;
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      errors.push(String(chunk));
+      return true;
+    };
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
   });
 
   afterEach(async () => {
     console.error = originalError;
+    process.stderr.write = originalWrite;
     console.log = originalLog;
     await rm(root, { recursive: true, force: true });
   });

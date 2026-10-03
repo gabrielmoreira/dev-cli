@@ -30,15 +30,21 @@ describe("workset management", () => {
   let root: string;
   let originalLog: typeof console.log;
   let originalError: typeof console.error;
+  let originalWrite: typeof process.stderr.write;
   let logs: string[];
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "dev-cli-workset-management-"));
     originalLog = console.log;
     originalError = console.error;
+    originalWrite = process.stderr.write;
     logs = [];
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
     console.error = (...args: unknown[]) => logs.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      logs.push(String(chunk));
+      return true;
+    };
     await fs.writeText(
       join(root, "dev.yaml"),
       `# Root Configuration
@@ -53,6 +59,7 @@ plugins:
   afterEach(async () => {
     console.log = originalLog;
     console.error = originalError;
+    process.stderr.write = originalWrite;
     await rm(root, { recursive: true, force: true });
   });
 

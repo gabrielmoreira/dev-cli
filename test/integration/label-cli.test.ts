@@ -28,6 +28,7 @@ describe("dev label CLI", () => {
   let root: string;
   let originalLog: typeof console.log;
   let originalError: typeof console.error;
+  let originalWrite: typeof process.stderr.write;
   let logs: string[];
   let errors: string[];
 
@@ -36,15 +37,21 @@ describe("dev label CLI", () => {
     await Bun.write(join(root, "dev.yaml"), configText());
     originalLog = console.log;
     originalError = console.error;
+    originalWrite = process.stderr.write;
     logs = [];
     errors = [];
     console.log = (...args: unknown[]) => logs.push(args.join(" "));
     console.error = (...args: unknown[]) => errors.push(args.join(" "));
+    process.stderr.write = (chunk) => {
+      errors.push(String(chunk));
+      return true;
+    };
   });
 
   afterEach(async () => {
     console.log = originalLog;
     console.error = originalError;
+    process.stderr.write = originalWrite;
     await rm(root, { recursive: true, force: true });
   });
 

@@ -9,7 +9,7 @@ import { doctorCommand, hardwareCommand } from "./doctor.ts";
 import { shellInitCommand } from "./shell.ts";
 import { initCommand, useCommand, currentCommand, rootCommand, rootsCommand } from "./root.ts";
 import { providerCommand } from "./provider.ts";
-import { type AmbientContext, setAmbient } from "./context.ts";
+import { type AmbientContext, getAmbient, setAmbient } from "./context.ts";
 import { detectWorkspaceFromCwd, WorkspaceError } from "../ws.ts";
 import { ui } from "../ui.ts";
 import {
@@ -71,7 +71,8 @@ async function resolveDefinition<T>(value: ResolvableValue<T>): Promise<T> {
 
 async function renderCommandUsage(command: unknown, parent?: unknown): Promise<string> {
   // Citty's generic requires parent and child to share ArgsDef; runtime rendering only reads definitions.
-  return await renderUsage(command as unknown as CommandDef, parent as unknown as CommandDef);
+  const text = await renderUsage(command as unknown as CommandDef, parent as unknown as CommandDef);
+  return getAmbient().isTTY ? text : Bun.stripANSI(text);
 }
 
 async function describeCommand(
@@ -145,16 +146,47 @@ async function subCommandsOf(
   return await resolveDefinition(command.subCommands ?? {});
 }
 
-/**
- * Help for the deepest command the words name: `["ws", "add"]` renders
- * `dev ws add`; words past the last known command are ignored.
- */
-export async function formatCommandHelp(path: string[]): Promise<string> {
+/** Strict command-path help; suffix --help may also contain a leaf's arguments. */
+export async function formatCommandHelp(path: string[], allowArguments = false): Promise<string> {
   let command = mainCommand as unknown as InspectableCommand;
   const names: string[] = [];
-  for (const word of path) {
-    const next = (await subCommandsOf(command))[word];
-    if (!next) break;
+  const knownArgs: Record<string, ArgDef> = {};
+  let optionsEnded = false;
+  for (let index = 0; index < path.length; index++) {
+    const word = path[index]!;
+    Object.assign(knownArgs, await resolveDefinition(command.args ?? {}));
+    if (word === "--") {
+      if (allowArguments) break;
+      optionsEnded = true;
+      continue;
+    }
+    if (!optionsEnded && word.startsWith("-")) {
+      const key = optionKey(word.replace(/^-+/, "").split("=")[0]!);
+      const definition = Object.entries(knownArgs).find(([name, arg]) => {
+        if (optionKey(name) === key) return true;
+        const alias = "alias" in arg ? arg.alias : undefined;
+        const aliases = typeof alias === "string" ? [alias] : (alias ?? []);
+        return aliases.some((name) => optionKey(name) === key);
+      })?.[1];
+      if (
+        definition &&
+        (definition.type === "string" || definition.type === "enum") &&
+        !word.includes("=")
+      )
+        index++;
+      continue;
+    }
+    const siblings = await subCommandsOf(command);
+    const next = siblings[word];
+    if (!next) {
+      if (allowArguments && Object.keys(siblings).length === 0) break;
+      const parentPath = ["dev", ...names].join(" ");
+      const suggestion = await suggestCommand([...names, word]);
+      throw new WorkspaceError("UNKNOWN_COMMAND", `Unknown command: '${word}'`, {
+        command: word,
+        usage: `${suggestion ?? parentPath} --help`,
+      });
+    }
     command = await resolveDefinition(next);
     names.push(word);
   }
@@ -427,28 +459,31 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
 
   const argv = currentAmbient.argv;
 
-  // Handle help, version, and llms early
-  if (argv.length === 0) {
-    ui.log(await formatHelp(false));
-    return 0;
-  }
-
-  // `dev help ws add` is `dev ws add --help`.
-  if (argv[0] === "help") {
-    ui.log(await formatCommandHelp(normalizeCliArgs(argv.slice(1))));
-    return 0;
-  }
-
-  if (argv.includes("--help") || argv.includes("-h")) {
-    if (argv.includes("--llms")) {
-      ui.log(await formatHelp(true));
-    } else {
-      const words = normalizeCliArgs(
-        argv.filter((argument) => argument !== "--help" && argument !== "-h"),
-      ).filter((argument) => !argument.startsWith("-"));
-      ui.log(await formatCommandHelp(words));
+  // Help errors use the same coded presentation as command errors.
+  try {
+    if (argv.length === 0) {
+      ui.log(await formatHelp(false));
+      return 0;
     }
-    return 0;
+
+    if (argv[0] === "help") {
+      ui.log(await formatCommandHelp(normalizeCliArgs(argv.slice(1))));
+      return 0;
+    }
+
+    if (argv.includes("--help") || argv.includes("-h")) {
+      if (argv.includes("--llms")) {
+        ui.log(await formatHelp(true));
+      } else {
+        const words = normalizeCliArgs(
+          argv.filter((argument) => argument !== "--help" && argument !== "-h"),
+        );
+        ui.log(await formatCommandHelp(words, true));
+      }
+      return 0;
+    }
+  } catch (error) {
+    return reportError(error, ui.isJson());
   }
 
   if (argv.includes("--llms")) {
