@@ -1087,7 +1087,7 @@ Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- 
 
 | Argument         | Type       | Description                 |
 | ---------------- | ---------- | --------------------------- |
-| `query`          | positional | Search query (required)     |
+| `query`          | positional | Search query                |
 | `--root <value>` | string     | Explicit dev root directory |
 | `--json`         | boolean    | Ask qmd for JSON results    |
 

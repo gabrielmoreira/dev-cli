@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { getActiveConfig } from "./context.ts";
-import { CliInputRequiredError } from "./input.ts";
+import { CliInputRequiredError, resolveTextInput } from "./input.ts";
 import { createPluginBase } from "../plugins/index.ts";
 import {
   createQmdPlugin,
@@ -116,31 +116,36 @@ export const qmdSearchCommand = defineCommand({
       "Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- -n 5)",
   },
   args: {
-    // Required, but checked in run so the error names this command's usage.
-    query: { type: "positional", description: "Search query (required)", required: false },
+    query: { type: "positional", description: "Search query", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Ask qmd for JSON results" },
   },
   async run({ args, rawArgs }) {
-    const boundary = rawArgs.indexOf("--");
-    const extras = boundary === -1 ? [] : rawArgs.slice(boundary + 1);
-    // citty lists the words after `--` as positionals too, at the end.
-    const query = args._.slice(0, args._.length - extras.length);
-    if (query.length === 0) {
-      return reportError(
-        new CliInputRequiredError({
-          command: "qmd search",
-          field: "query",
-          usage: "dev qmd search <query>",
-          description: "Search query",
-        }),
-        ui.isJson(),
+    try {
+      const boundary = rawArgs.indexOf("--");
+      const extras = boundary === -1 ? [] : rawArgs.slice(boundary + 1);
+      // citty lists the words after `--` as positionals too, at the end.
+      const query = args._.slice(0, args._.length - extras.length);
+      if (query.length === 0) {
+        const resolved = await resolveTextInput({
+          message: "What do you want to search for?",
+          hint: "Search your indexed repository documents.",
+          required: {
+            command: "qmd search",
+            field: "query",
+            usage: "dev qmd search <query>",
+            description: "Search query",
+          },
+        });
+        query.push(resolved.value);
+      }
+      return await runQmd(
+        ["search", ...query, ...(ui.isJson() ? ["--json"] : []), ...extras],
+        args.root,
       );
+    } catch (error) {
+      return reportError(error, ui.isJson());
     }
-    return await runQmd(
-      ["search", ...query, ...(ui.isJson() ? ["--json"] : []), ...extras],
-      args.root,
-    );
   },
 });
 

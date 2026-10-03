@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, it } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { TuiTest } from "@microsoft/tui-test";
 import * as git from "../../src/git.ts";
 
 // `dev qmd sync` is dev's own command: one JSON answer, coded failures.
@@ -123,6 +124,67 @@ async function calls(file: string): Promise<string[][]> {
     .filter(Boolean)
     .map((line) => JSON.parse(line) as string[]);
 }
+
+it("qmd search resolves an omitted query in a real terminal", async () => {
+  const f = await fixture("search-prompt");
+  const terminal = TuiTest.ephemeral("dev-qmd-search");
+  try {
+    await terminal.run(
+      process.execPath,
+      [cliPath, "qmd", "search", "--root", f.root, "--", "-n", "5"],
+      {
+        cols: 120,
+        rows: 40,
+        cwd: f.root,
+        env: {
+          ...process.env,
+          HOME: home,
+          USERPROFILE: home,
+          DEV_ROOT: "",
+          DEV_CWD: "",
+          QMD_PLAN_CALLS: f.calls,
+          CI: "",
+          GITHUB_ACTIONS: "",
+          AI_AGENT: "",
+          AGENT: "",
+          CLAUDECODE: "",
+          CLAUDE_CODE: "",
+          CURSOR_AGENT: "",
+          GEMINI_CLI: "",
+          CODEX_SANDBOX: "",
+        },
+      },
+    );
+    await terminal.getByText("What do you want to search for?").expect({ timeout: 5_000 });
+    await terminal.getByText("Search your indexed repository documents.").expect();
+    await terminal.submit("sample query");
+    await terminal.waitExit({ timeout: 15_000 });
+    expect(await calls(f.calls)).toEqual([["search", "sample query", "-n", "5"]]);
+  } finally {
+    await terminal.closeQuiet();
+  }
+}, 30_000);
+
+it.each([{ words: [] }, { words: ["--", "-n", "5"] }])(
+  "qmd search without a query keeps its structured usage ($words)",
+  async ({ words }) => {
+    const f = await fixture(`search-missing-${words.length}`);
+    const json = await dev(["--json", "qmd", "search", ...words], f);
+    expect(json.code).toBe(2);
+    expect(json.stdout).toBe("");
+    expect(JSON.parse(json.stderr).error).toMatchObject({
+      code: "INTERACTION_REQUIRED",
+      field: "query",
+      usage: "dev qmd search <query>",
+    });
+    const human = await dev(["qmd", "search", ...words], f);
+    expect(human.code).toBe(2);
+    expect(human.stdout).toBe("");
+    expect(human.stderr).toContain("↳ dev qmd search <query>");
+    expect(human.stderr).not.toContain("Missing required positional argument");
+    expect(await calls(f.calls)).toEqual([]);
+  },
+);
 
 it("qmd sync --json answers with one structured result", async () => {
   const f = await fixture("sync-success", true);
