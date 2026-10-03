@@ -147,7 +147,7 @@ export const qmdSearchCommand = defineCommand({
 export const qmdCommand = defineCommand({
   meta: {
     name: "qmd",
-    description: "QMD plugin: collections from labeled sources (scoped registry)",
+    description: "Index labeled repositories with QMD and search them",
   },
   args: qmdSyncCommand.args,
   subCommands: {

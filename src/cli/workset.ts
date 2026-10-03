@@ -47,7 +47,7 @@ export const worksetCreateCommand = defineCommand({
     name: { type: "positional", description: "Workset name", required: false },
     source: {
       type: "positional",
-      description: "Initial repository URL, path, or inventory name",
+      description: "First repository: URL, path, or the name of a repository dev already knows",
       required: false,
     },
     description: { type: "string", description: "Workset description" },
@@ -516,7 +516,7 @@ export const worksetRepoAddCommand = defineCommand({
     workset: { type: "positional", description: "Workset name", required: false },
     source: {
       type: "positional",
-      description: "Repository URL, path, or inventory name",
+      description: "Repository URL, path, or the name of a repository dev already knows",
       required: false,
     },
     ref: { type: "string", description: "Branch, tag, or revision" },

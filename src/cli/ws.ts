@@ -580,7 +580,7 @@ export const wsAddCommand = defineCommand({
   args: {
     source: {
       type: "positional",
-      description: "Repository URL, path, or inventory name",
+      description: "Repository URL, path, or the name of a repository dev already knows",
       required: false,
     },
     ws: { type: "string", description: "Target workspace name" },
@@ -862,7 +862,7 @@ export const wsAddCommand = defineCommand({
 export const wsStatusCommand = defineCommand({
   meta: {
     name: "status",
-    description: "Inspect Desired vs Observed workspace status",
+    description: "Compare each mount with the plan in ws.md",
   },
   args: {
     target: { type: "positional", description: "Workspace name", required: false },
@@ -957,8 +957,7 @@ export const workspaceSyncOptions = {
   },
   "dry-run": {
     type: "boolean",
-    description:
-      "Fetches and shows the plan without changing worktrees, the manifest, or admin repositories",
+    description: "Fetch, then show the plan without changing your mounts or ws.md",
   },
   consent: { type: "boolean", description: "Grant explicit consent to run lifecycle hooks" },
   force: { type: "boolean", description: "Alias for --consent" },
@@ -1472,7 +1471,7 @@ export const wsRemoveCommand = defineCommand({
 export const wsListCommand = defineCommand({
   meta: {
     name: "list",
-    description: "List all workspaces in $DEV_ROOT/ws/",
+    description: "List your workspaces",
   },
   args: {
     root: { type: "string", description: "Explicit dev root directory" },

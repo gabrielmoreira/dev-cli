@@ -78,11 +78,11 @@ function formatDataResult(result: sync.SyncDataResult): string {
 export const syncInventoryCommand = defineCommand({
   meta: {
     name: "inventory",
-    description: "Synchronize repository inventory from all configured providers",
+    description: "Refresh the list of repositories from your providers",
   },
   args: {
     provider: { type: "string", description: "Limit sync to a specific provider id" },
-    project: { type: "string", description: "Scope ADO inventory sync to a specific project" },
+    project: { type: "string", description: "Refresh only this Azure DevOps project" },
     offline: {
       type: "boolean",
       description: "Read strictly from local cache without network access",
@@ -174,7 +174,7 @@ export const syncInventoryCommand = defineCommand({
 export const syncDataCommand = defineCommand({
   meta: {
     name: "data",
-    description: "Synchronize inventory, work items, and pull requests in one operation",
+    description: "Refresh repository lists, work items and pull requests in one run",
   },
   args: {
     provider: { type: "string", description: "Limit sync to a specific provider id" },
@@ -182,7 +182,7 @@ export const syncDataCommand = defineCommand({
     repos: { type: "string", description: "Comma-separated list of repos for PR synchronization" },
     canonical: {
       type: "boolean",
-      description: "Also synchronize canonical reference repositories",
+      description: "Also update your mirrors",
     },
     offline: { type: "boolean", description: "Read from cache without network access" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -389,7 +389,7 @@ export const syncCommand = defineCommand({
   meta: {
     name: "sync",
     description:
-      "Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project",
+      "In a workspace, update it; elsewhere, refresh repository lists, pull requests and work items from your providers",
   },
   args: {
     all: {

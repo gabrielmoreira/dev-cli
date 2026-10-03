@@ -94,8 +94,7 @@ async function resolveInitTarget(
 export const initCommand = defineCommand({
   meta: {
     name: "init",
-    description:
-      "Initialize or update a dev root; without arguments, guide providers and inventory",
+    description: "Create or update a dev root; with no arguments, walk you through providers",
   },
   args: {
     path: {
@@ -332,7 +331,7 @@ export const useCommand = defineCommand({
 export const currentCommand = defineCommand({
   meta: {
     name: "current",
-    description: "Display currently resolved dev root path and discovery source",
+    description: "Show which dev root is active and why",
   },
   args: {
     root: { type: "string", description: "Explicit dev root directory" },

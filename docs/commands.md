@@ -121,34 +121,34 @@ Developer CLI & Workspace Engine
 | `--non-interactive` | boolean | Never prompt; a missing value is an error naming the flag. Default under CI or a coding agent |
 | `--ws <value>`      | string  | Target workspace name                                                                         |
 
-| Subcommand       | Description                                                                                                                              |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev init`       | Initialize or update a dev root; without arguments, guide providers and inventory                                                        |
-| `dev ls`         | List all workspaces in $DEV_ROOT/ws/                                                                                                     |
-| `dev status`     | Inspect Desired vs Observed workspace status                                                                                             |
-| `dev update`     | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones                                                    |
-| `dev use`        | Switch active dev root environment or update global default                                                                              |
-| `dev go`         | Select a workspace and print its path for shell navigation                                                                               |
-| `dev start`      | Start or focus OMP in HerdR for a dev workspace                                                                                          |
-| `dev current`    | Display currently resolved dev root path and discovery source                                                                            |
-| `dev roots`      | List registered dev root environments from ~/.dev.toml                                                                                   |
-| `dev root`       | Register, select, and unregister dev roots                                                                                               |
-| `dev provider`   | Manage explicit remote providers in dev.yaml                                                                                             |
-| `dev ws`         | Manage task-oriented multi-repo workspaces                                                                                               |
-| `dev mirror`     | Manage canonical reference repositories                                                                                                  |
-| `dev sync`       | Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project |
-| `dev pr`         | Inspect and cache pull requests                                                                                                          |
-| `dev wi`         | Inspect and cache work items                                                                                                             |
-| `dev label`      | Group repositories under labels: see, add, edit, rename, and remove them. Some labels keep their repositories mirrored                   |
-| `dev doctor`     | Inspect runtime environment, dependencies, and git configuration                                                                         |
-| `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                                                                              |
-| `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell                                                                      |
-| `dev qmd`        | QMD plugin: collections from labeled sources (scoped registry)                                                                           |
-| `dev workset`    | Manage reusable repository worksets                                                                                                      |
+| Subcommand       | Description                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `dev init`       | Create or update a dev root; with no arguments, walk you through providers                                             |
+| `dev ls`         | List your workspaces                                                                                                   |
+| `dev status`     | Compare each mount with the plan in ws.md                                                                              |
+| `dev update`     | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones                                  |
+| `dev use`        | Switch active dev root environment or update global default                                                            |
+| `dev go`         | Select a workspace and print its path for shell navigation                                                             |
+| `dev start`      | Start or focus OMP in HerdR for a dev workspace                                                                        |
+| `dev current`    | Show which dev root is active and why                                                                                  |
+| `dev roots`      | List registered dev root environments from ~/.dev.toml                                                                 |
+| `dev root`       | Register, select, and unregister dev roots                                                                             |
+| `dev provider`   | Manage explicit remote providers in dev.yaml                                                                           |
+| `dev ws`         | Manage task-oriented multi-repo workspaces                                                                             |
+| `dev mirror`     | Keep reference copies of repositories for reading and search                                                           |
+| `dev sync`       | In a workspace, update it; elsewhere, refresh repository lists, pull requests and work items from your providers       |
+| `dev pr`         | Inspect and cache pull requests                                                                                        |
+| `dev wi`         | Inspect and cache work items                                                                                           |
+| `dev label`      | Group repositories under labels: see, add, edit, rename, and remove them. Some labels keep their repositories mirrored |
+| `dev doctor`     | Inspect runtime environment, dependencies, and git configuration                                                       |
+| `dev hardware`   | Inspect hardware capabilities and recommend local LLM tiers                                                            |
+| `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell                                                    |
+| `dev qmd`        | Index labeled repositories with QMD and search them                                                                    |
+| `dev workset`    | Manage reusable repository worksets                                                                                    |
 
 ## `dev init`
 
-Initialize or update a dev root; without arguments, guide providers and inventory
+Create or update a dev root; with no arguments, walk you through providers
 
 **Usage:** `dev init [path] [--alias <value>] [--adoOrg <value>] [--githubOwner <value>] [--force] [--json]`
 
@@ -163,7 +163,7 @@ Initialize or update a dev root; without arguments, guide providers and inventor
 
 ## `dev ls`
 
-List all workspaces in $DEV_ROOT/ws/
+List your workspaces
 
 **Usage:** `dev ls [--root <value>] [--json]`
 
@@ -174,7 +174,7 @@ List all workspaces in $DEV_ROOT/ws/
 
 ## `dev status`
 
-Inspect Desired vs Observed workspace status
+Compare each mount with the plan in ws.md
 
 **Usage:** `dev status [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
 
@@ -200,7 +200,7 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 | `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
 | `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
-| `--dry-run`      | boolean    | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories    |
+| `--dry-run`      | boolean    | Fetch, then show the plan without changing your mounts or ws.md                               |
 | `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                                                 |
 | `--force`        | boolean    | Alias for --consent                                                                           |
 | `--offline`      | boolean    | Read strictly from local mirror without network                                               |
@@ -246,7 +246,7 @@ Start or focus OMP in HerdR for a dev workspace
 
 ## `dev current`
 
-Display currently resolved dev root path and discovery source
+Show which dev root is active and why
 
 **Usage:** `dev current [--root <value>] [--json]`
 
@@ -392,14 +392,14 @@ Manage task-oriented multi-repo workspaces
 | ------------------ | ------------------------------------------------------------------------------------- |
 | `dev ws init`      | Initialize a new workspace with ws.md and .local/                                     |
 | `dev ws add`       | Mount a repository into the workspace                                                 |
-| `dev ws status`    | Inspect Desired vs Observed workspace status                                          |
+| `dev ws status`    | Compare each mount with the plan in ws.md                                             |
 | `dev ws update`    | Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones |
 | `dev ws track`     | Switch mount to track a branch tip                                                    |
 | `dev ws lock`      | Freeze mount to current disk or specified commit                                      |
 | `dev ws unlock`    | Unlock mount back to tracking a branch                                                |
 | `dev ws tag`       | Pin mount to an immutable tag                                                         |
 | `dev ws remove`    | Remove mount worktree and prune from ws.md                                            |
-| `dev ws list`      | List all workspaces in $DEV_ROOT/ws/                                                  |
+| `dev ws list`      | List your workspaces                                                                  |
 | `dev ws duplicate` | Duplicate a workspace with independent worktrees                                      |
 | `dev ws path`      | Print absolute path of target or current workspace                                    |
 | `dev ws jump`      | Print jump target path for shell cd integration                                       |
@@ -428,28 +428,28 @@ Mount a repository into the workspace
 
 **Usage:** `dev ws add [source] [--ws <value>] [--path <value>] [--as <value>] [--branch <value>] [--tag <value>] [--commit <value>] [--readonly] [--consent] [--force] [--preHook <value>] [--postHook <value>] [--preCheckout <value>] [--postCheckout <value>] [--root <value>] [--json]`
 
-| Argument                 | Type       | Description                                    |
-| ------------------------ | ---------- | ---------------------------------------------- |
-| `source`                 | positional | Repository URL, path, or inventory name        |
-| `--ws <value>`           | string     | Target workspace name                          |
-| `--path <value>`         | string     | Mount folder name inside workspace             |
-| `--as <value>`           | string     | Alias for --path                               |
-| `--branch <value>`       | string     | Branch to track                                |
-| `--tag <value>`          | string     | Tag to pin                                     |
-| `--commit <value>`       | string     | Commit SHA to lock                             |
-| `--readonly`             | boolean    | Mount as read-only worktree                    |
-| `--consent`              | boolean    | Grant explicit consent to run repository hooks |
-| `--force`                | boolean    | Alias for --consent                            |
-| `--preHook <value>`      | string     | Hook command before checkout                   |
-| `--postHook <value>`     | string     | Hook command after checkout                    |
-| `--preCheckout <value>`  | string     | Hook command before checkout                   |
-| `--postCheckout <value>` | string     | Hook command after checkout                    |
-| `--root <value>`         | string     | Explicit dev root directory                    |
-| `--json`                 | boolean    | Output in structured JSON format               |
+| Argument                 | Type       | Description                                                         |
+| ------------------------ | ---------- | ------------------------------------------------------------------- |
+| `source`                 | positional | Repository URL, path, or the name of a repository dev already knows |
+| `--ws <value>`           | string     | Target workspace name                                               |
+| `--path <value>`         | string     | Mount folder name inside workspace                                  |
+| `--as <value>`           | string     | Alias for --path                                                    |
+| `--branch <value>`       | string     | Branch to track                                                     |
+| `--tag <value>`          | string     | Tag to pin                                                          |
+| `--commit <value>`       | string     | Commit SHA to lock                                                  |
+| `--readonly`             | boolean    | Mount as read-only worktree                                         |
+| `--consent`              | boolean    | Grant explicit consent to run repository hooks                      |
+| `--force`                | boolean    | Alias for --consent                                                 |
+| `--preHook <value>`      | string     | Hook command before checkout                                        |
+| `--postHook <value>`     | string     | Hook command after checkout                                         |
+| `--preCheckout <value>`  | string     | Hook command before checkout                                        |
+| `--postCheckout <value>` | string     | Hook command after checkout                                         |
+| `--root <value>`         | string     | Explicit dev root directory                                         |
+| `--json`                 | boolean    | Output in structured JSON format                                    |
 
 ## `dev ws status`
 
-Inspect Desired vs Observed workspace status
+Compare each mount with the plan in ws.md
 
 **Usage:** `dev ws status [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
 
@@ -475,7 +475,7 @@ Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean
 | `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
 | `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
-| `--dry-run`      | boolean    | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories    |
+| `--dry-run`      | boolean    | Fetch, then show the plan without changing your mounts or ws.md                               |
 | `--consent`      | boolean    | Grant explicit consent to run lifecycle hooks                                                 |
 | `--force`        | boolean    | Alias for --consent                                                                           |
 | `--offline`      | boolean    | Read strictly from local mirror without network                                               |
@@ -561,7 +561,7 @@ Remove mount worktree and prune from ws.md
 
 ## `dev ws list`
 
-List all workspaces in $DEV_ROOT/ws/
+List your workspaces
 
 **Usage:** `dev ws list [--root <value>] [--json]`
 
@@ -636,7 +636,7 @@ Start or focus OMP in HerdR for a dev workspace
 
 ## `dev mirror`
 
-Manage canonical reference repositories
+Keep reference copies of repositories for reading and search
 
 **Usage:** `dev mirror [--label <value>] [--root <value>] [--json] <command>`
 
@@ -646,28 +646,28 @@ Manage canonical reference repositories
 | `--root <value>`  | string  | Explicit dev root directory                        |
 | `--json`          | boolean | Output in structured JSON format                   |
 
-| Subcommand           | Description                                                 |
-| -------------------- | ----------------------------------------------------------- |
-| `dev mirror add`     | Clone and set up a canonical local mirror                   |
-| `dev mirror list`    | List all mirrors in /mirrors (optionally filtered by label) |
-| `dev mirror sync`    | Preserve local edits, then synchronize one or all mirrors   |
-| `dev mirror track`   | Set up a sibling worktree tracking an additional branch     |
-| `dev mirror untrack` | Remove a sibling worktree for a secondary branch            |
-| `dev mirror pick`    | Interactive picker for mirrors and branches                 |
+| Subcommand           | Description                                                  |
+| -------------------- | ------------------------------------------------------------ |
+| `dev mirror add`     | Copy a repository as a mirror for reading, search and agents |
+| `dev mirror list`    | List all mirrors in /mirrors (optionally filtered by label)  |
+| `dev mirror sync`    | Preserve local edits, then synchronize one or all mirrors    |
+| `dev mirror track`   | Set up a sibling worktree tracking an additional branch      |
+| `dev mirror untrack` | Remove a sibling worktree for a secondary branch             |
+| `dev mirror pick`    | Interactive picker for mirrors and branches                  |
 
 ## `dev mirror add`
 
-Clone and set up a canonical local mirror
+Copy a repository as a mirror for reading, search and agents
 
 **Usage:** `dev mirror add [source] [--branch <value>] [--name <value>] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                             |
-| ------------------ | ---------- | --------------------------------------- |
-| `source`           | positional | Repository URL, path, or inventory name |
-| `--branch <value>` | string     | Default branch to track                 |
-| `--name <value>`   | string     | Custom alias name                       |
-| `--root <value>`   | string     | Explicit dev root directory             |
-| `--json`           | boolean    | Output in structured JSON format        |
+| Argument           | Type       | Description                                                         |
+| ------------------ | ---------- | ------------------------------------------------------------------- |
+| `source`           | positional | Repository URL, path, or the name of a repository dev already knows |
+| `--branch <value>` | string     | Default branch to track                                             |
+| `--name <value>`   | string     | Custom alias name                                                   |
+| `--root <value>`   | string     | Explicit dev root directory                                         |
+| `--json`           | boolean    | Output in structured JSON format                                    |
 
 ## `dev mirror list`
 
@@ -741,7 +741,7 @@ Interactive picker for mirrors and branches
 
 ## `dev sync`
 
-Sync the current workspace; outside one, sync provider inventory plus work items and pull requests of each provider's configured project
+In a workspace, update it; elsewhere, refresh repository lists, pull requests and work items from your providers
 
 **Usage:** `dev sync [--all] [--provider <value>] [--project <value>] [--offline] [--root <value>] [--json] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] <command>`
 
@@ -757,32 +757,32 @@ Sync the current workspace; outside one, sync provider inventory plus work items
 | `--refresh`          | boolean | Fetch remotes before fast-forwarding (default, unless --offline)                                                                  |
 | `--autostash`        | boolean | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup)                                     |
 | `--rebase`           | boolean | Rebase diverged mounts onto the remote branch (aborts on conflict)                                                                |
-| `--dry-run`          | boolean | Fetches and shows the plan without changing worktrees, the manifest, or admin repositories                                        |
+| `--dry-run`          | boolean | Fetch, then show the plan without changing your mounts or ws.md                                                                   |
 | `--consent`          | boolean | Grant explicit consent to run lifecycle hooks                                                                                     |
 | `--force`            | boolean | Alias for --consent                                                                                                               |
 
-| Subcommand           | Description                                                           |
-| -------------------- | --------------------------------------------------------------------- |
-| `dev sync inventory` | Synchronize repository inventory from all configured providers        |
-| `dev sync data`      | Synchronize inventory, work items, and pull requests in one operation |
+| Subcommand           | Description                                                       |
+| -------------------- | ----------------------------------------------------------------- |
+| `dev sync inventory` | Refresh the list of repositories from your providers              |
+| `dev sync data`      | Refresh repository lists, work items and pull requests in one run |
 
 ## `dev sync inventory`
 
-Synchronize repository inventory from all configured providers
+Refresh the list of repositories from your providers
 
 **Usage:** `dev sync inventory [--provider <value>] [--project <value>] [--offline] [--root <value>] [--json]`
 
 | Argument             | Type    | Description                                           |
 | -------------------- | ------- | ----------------------------------------------------- |
 | `--provider <value>` | string  | Limit sync to a specific provider id                  |
-| `--project <value>`  | string  | Scope ADO inventory sync to a specific project        |
+| `--project <value>`  | string  | Refresh only this Azure DevOps project                |
 | `--offline`          | boolean | Read strictly from local cache without network access |
 | `--root <value>`     | string  | Explicit dev root directory                           |
 | `--json`             | boolean | Output in structured JSON format                      |
 
 ## `dev sync data`
 
-Synchronize inventory, work items, and pull requests in one operation
+Refresh repository lists, work items and pull requests in one run
 
 **Usage:** `dev sync data [--provider <value>] [--project <value>] [--repos <value>] [--canonical] [--offline] [--root <value>] [--json]`
 
@@ -791,7 +791,7 @@ Synchronize inventory, work items, and pull requests in one operation
 | `--provider <value>` | string  | Limit sync to a specific provider id                 |
 | `--project <value>`  | string  | Filter by Azure DevOps project                       |
 | `--repos <value>`    | string  | Comma-separated list of repos for PR synchronization |
-| `--canonical`        | boolean | Also synchronize canonical reference repositories    |
+| `--canonical`        | boolean | Also update your mirrors                             |
 | `--offline`          | boolean | Read from cache without network access               |
 | `--root <value>`     | string  | Explicit dev root directory                          |
 | `--json`             | boolean | Output in structured JSON format                     |
@@ -806,7 +806,7 @@ Inspect and cache pull requests
 | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
 | `repoPositional`      | positional | Target repository name                                                                               |
 | `--repo <value>`      | string     | Target repository name                                                                               |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                       |
+| `-i`, `--interactive` | boolean    | Pick one repository from those dev knows                                                             |
 | `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
 | `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
 | `--all`               | boolean    | Show all pull requests instead of only mine                                                          |
@@ -835,7 +835,7 @@ List open pull requests across all configured providers
 | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
 | `repoPositional`      | positional | Target repository name                                                                               |
 | `--repo <value>`      | string     | Target repository name                                                                               |
-| `-i`, `--interactive` | boolean    | Select one repository from the local inventory                                                       |
+| `-i`, `--interactive` | boolean    | Pick one repository from those dev knows                                                             |
 | `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
 | `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
 | `--all`               | boolean    | Show all pull requests instead of only mine                                                          |
@@ -1049,7 +1049,7 @@ Generate shell wrapper functions for bash, zsh, fish, or powershell
 
 ## `dev qmd`
 
-QMD plugin: collections from labeled sources (scoped registry)
+Index labeled repositories with QMD and search them
 
 **Usage:** `dev qmd [label] [--no-embed] [--root <value>] [--json] <command>`
 
@@ -1139,17 +1139,17 @@ Create a reusable repository workset
 
 **Usage:** `dev workset create [name] [source] [--description <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
 
-| Argument                | Type       | Description                                     |
-| ----------------------- | ---------- | ----------------------------------------------- |
-| `name`                  | positional | Workset name                                    |
-| `source`                | positional | Initial repository URL, path, or inventory name |
-| `--description <value>` | string     | Workset description                             |
-| `--ref <value>`         | string     | Branch, tag, or revision                        |
-| `--path <value>`        | string     | Workspace mount path                            |
-| `--reason <value>`      | string     | Reason this repository belongs in the workset   |
-| `--yes`                 | boolean    | Create without interactive confirmation         |
-| `--root <value>`        | string     | Explicit dev root directory                     |
-| `--json`                | boolean    | Output in structured JSON format                |
+| Argument                | Type       | Description                                                                |
+| ----------------------- | ---------- | -------------------------------------------------------------------------- |
+| `name`                  | positional | Workset name                                                               |
+| `source`                | positional | First repository: URL, path, or the name of a repository dev already knows |
+| `--description <value>` | string     | Workset description                                                        |
+| `--ref <value>`         | string     | Branch, tag, or revision                                                   |
+| `--path <value>`        | string     | Workspace mount path                                                       |
+| `--reason <value>`      | string     | Reason this repository belongs in the workset                              |
+| `--yes`                 | boolean    | Create without interactive confirmation                                    |
+| `--root <value>`        | string     | Explicit dev root directory                                                |
+| `--json`                | boolean    | Output in structured JSON format                                           |
 
 ## `dev workset rename`
 
@@ -1194,16 +1194,16 @@ Add a repository to a workset
 
 **Usage:** `dev workset repo add [workset] [source] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                                   |
-| ------------------ | ---------- | --------------------------------------------- |
-| `workset`          | positional | Workset name                                  |
-| `source`           | positional | Repository URL, path, or inventory name       |
-| `--ref <value>`    | string     | Branch, tag, or revision                      |
-| `--path <value>`   | string     | Workspace mount path                          |
-| `--reason <value>` | string     | Reason this repository belongs in the workset |
-| `--yes`            | boolean    | Add without interactive confirmation          |
-| `--root <value>`   | string     | Explicit dev root directory                   |
-| `--json`           | boolean    | Output in structured JSON format              |
+| Argument           | Type       | Description                                                         |
+| ------------------ | ---------- | ------------------------------------------------------------------- |
+| `workset`          | positional | Workset name                                                        |
+| `source`           | positional | Repository URL, path, or the name of a repository dev already knows |
+| `--ref <value>`    | string     | Branch, tag, or revision                                            |
+| `--path <value>`   | string     | Workspace mount path                                                |
+| `--reason <value>` | string     | Reason this repository belongs in the workset                       |
+| `--yes`            | boolean    | Add without interactive confirmation                                |
+| `--root <value>`   | string     | Explicit dev root directory                                         |
+| `--json`           | boolean    | Output in structured JSON format                                    |
 
 ## `dev workset repo edit`
 

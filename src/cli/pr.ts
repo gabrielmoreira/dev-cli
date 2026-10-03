@@ -44,7 +44,7 @@ export const prListCommand = defineCommand({
     interactive: {
       type: "boolean",
       alias: "i",
-      description: "Select one repository from the local inventory",
+      description: "Pick one repository from those dev knows",
     },
     label: { type: "string", description: "Limit to repositories carrying a dev-cli label" },
     mine: {

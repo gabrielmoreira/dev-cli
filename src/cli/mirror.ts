@@ -42,12 +42,12 @@ function reportMirrorError(
 export const mirrorAddCommand = defineCommand({
   meta: {
     name: "add",
-    description: "Clone and set up a canonical local mirror",
+    description: "Copy a repository as a mirror for reading, search and agents",
   },
   args: {
     source: {
       type: "positional",
-      description: "Repository URL, path, or inventory name",
+      description: "Repository URL, path, or the name of a repository dev already knows",
       required: false,
     },
     branch: { type: "string", description: "Default branch to track" },
@@ -548,7 +548,7 @@ export const mirrorPickCommand = defineCommand({
 export const mirrorCommand = defineCommand({
   meta: {
     name: "mirror",
-    description: "Manage canonical reference repositories",
+    description: "Keep reference copies of repositories for reading and search",
   },
   args: mirrorListCommand.args,
   subCommands: {
