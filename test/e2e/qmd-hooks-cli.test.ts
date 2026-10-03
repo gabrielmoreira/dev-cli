@@ -257,7 +257,7 @@ hooks:
         ].join("\n"),
       );
 
-      const mcpProc = Bun.spawn(["bun", "run", cliPath, "qmd", "x", "--root", rootDir, "mcp"], {
+      const mcpProc = Bun.spawn(["bun", "run", cliPath, "--root", rootDir, "qmd", "x", "mcp"], {
         env: {
           ...process.env,
           PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,

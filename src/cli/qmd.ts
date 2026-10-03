@@ -1,9 +1,15 @@
 import { defineCommand } from "citty";
 import { getActiveConfig } from "./context.ts";
+import { CliInputRequiredError } from "./input.ts";
 import { createPluginBase } from "../plugins/index.ts";
-import { createQmdPlugin, DEFAULT_QMD_LABEL_PREFIX } from "../plugins/qmd.ts";
+import {
+  createQmdPlugin,
+  DEFAULT_QMD_LABEL_PREFIX,
+  parseQmdConfig,
+  syncCollections,
+} from "../plugins/qmd.ts";
 import { ui } from "../ui.ts";
-import { reportExitCode } from "./errors.ts";
+import { reportError, reportExitCode } from "./errors.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
 export const qmdSyncCommand = defineCommand({
@@ -22,71 +28,105 @@ export const qmdSyncCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const config = getActiveConfig(args.root);
-    const plugin = createQmdPlugin(createPluginBase(config.root, config));
-    const code =
-      (await plugin.run({
-        subcommand: "sync",
-        label: args.label,
-        noEmbed: args.embed === false,
-      })) ?? 0;
-    if (code === 0) {
-      ui.result({ data: { exitCode: code }, json: args.json, text: () => "qmd sync complete" });
+    try {
+      const config = getActiveConfig(args.root);
+      const result = await syncCollections(
+        createPluginBase(config.root, config),
+        parseQmdConfig(config.plugins),
+        { label: args.label, noEmbed: args.embed === false },
+      );
+      if (!args.json) for (const warning of result.warnings) ui.warn(`⚠ ${warning}`);
+      ui.result({
+        data: result,
+        json: args.json,
+        text: () =>
+          result.labels.length === 0
+            ? `No ${DEFAULT_QMD_LABEL_PREFIX}* labels in dev.yaml, so there is nothing to index.\n↳ dev label add ${DEFAULT_QMD_LABEL_PREFIX}docs <repository>`
+            : [
+                ...result.labels.map(
+                  ({ label, collections }) =>
+                    `qmd sync '${label}': ${collections} collection(s) reconciled`,
+                ),
+                "qmd sync complete",
+              ].join("\n"),
+      });
+      return 0;
+    } catch (error) {
+      return reportError(error, args.json);
     }
-    return reportExitCode(code);
   },
 });
 
-/** Collects everything the user typed after `marker`, minus the CLI's own
- * `--root`, so it reaches qmd verbatim. */
-function passthroughAfter(rawArgs: string[], marker: string): string[] {
-  const passthrough: string[] = [];
-  const start = rawArgs.indexOf(marker);
-  for (let index = start + 1; index < rawArgs.length; index++) {
-    const argument = rawArgs[index]!;
-    if (argument === "--root") {
-      index++;
-      continue;
-    }
-    if (argument.startsWith("--root=")) continue;
-    passthrough.push(argument);
-  }
-  return passthrough;
-}
-
-async function runPassthrough(root: string | undefined, passthrough: string[]): Promise<number> {
+/** Runs qmd with these arguments, keeping its output and exit status as they are. */
+async function runQmd(passthrough: string[], root?: string): Promise<number> {
   const config = getActiveConfig(root);
   const plugin = createQmdPlugin(createPluginBase(config.root, config));
   const code = await plugin.run({ subcommand: "x", passthrough });
-  if (typeof code === "number" && code !== 0) ui.error(`qmd exited with code ${code}`);
-  return typeof code === "number" ? code : 0;
+  return reportExitCode(typeof code === "number" ? code : 0);
 }
 
 export const qmdXCommand = defineCommand({
   meta: {
     name: "x",
-    description: "Raw qmd passthrough with the scoped registry env",
+    description:
+      "Run qmd with every word after x, unchanged; dev options go before x (dev --root <path> qmd x ...)",
   },
   args: {
-    args: { type: "positional", description: "Arguments passed to qmd verbatim", required: true },
-    root: { type: "string", description: "Explicit dev root directory" },
+    args: {
+      type: "positional",
+      description: "Arguments for qmd, passed as typed (required)",
+      required: false,
+    },
   },
-  async run({ args, rawArgs }) {
-    return await runPassthrough(args.root, passthroughAfter(rawArgs, "x"));
+  async run({ rawArgs }) {
+    // Every word after `x` is qmd's, including --root, --json and --help.
+    if (rawArgs.length === 0) {
+      return reportError(
+        new CliInputRequiredError({
+          command: "qmd x",
+          field: "args",
+          usage: "dev qmd x <args>",
+          description: "Arguments for qmd",
+        }),
+        ui.isJson(),
+      );
+    }
+    return await runQmd(rawArgs);
   },
 });
 
 export const qmdSearchCommand = defineCommand({
   meta: {
     name: "search",
-    description: "Search the scoped qmd index (shortcut for 'qmd x search')",
+    description:
+      "Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- -n 5)",
   },
   args: {
-    query: { type: "positional", description: "Search query", required: true },
+    // Required, but checked in run so the error names this command's usage.
+    query: { type: "positional", description: "Search query (required)", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Ask qmd for JSON results" },
   },
   async run({ args, rawArgs }) {
-    return await runPassthrough(args.root, ["search", ...passthroughAfter(rawArgs, "search")]);
+    const boundary = rawArgs.indexOf("--");
+    const extras = boundary === -1 ? [] : rawArgs.slice(boundary + 1);
+    // citty lists the words after `--` as positionals too, at the end.
+    const query = args._.slice(0, args._.length - extras.length);
+    if (query.length === 0) {
+      return reportError(
+        new CliInputRequiredError({
+          command: "qmd search",
+          field: "query",
+          usage: "dev qmd search <query>",
+          description: "Search query",
+        }),
+        ui.isJson(),
+      );
+    }
+    return await runQmd(
+      ["search", ...query, ...(ui.isJson() ? ["--json"] : []), ...extras],
+      args.root,
+    );
   },
 });
 

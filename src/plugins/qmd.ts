@@ -3,12 +3,7 @@ import type { RuntimeConfig } from "../config.ts";
 import * as git from "../git.ts";
 import * as mirror from "../mirror.ts";
 import { devDir, deriveCanonicalParts } from "../paths.ts";
-import {
-  LabelError,
-  parseDeclaredSources,
-  resolveLabelAssignments,
-  resolveLabeledSources,
-} from "../labels.ts";
+import { parseDeclaredSources, resolveLabelAssignments, resolveLabeledSources } from "../labels.ts";
 import type { Plugin, PluginFactory, PluginBase } from "./events.ts";
 
 export interface QmdPluginConfig {
@@ -120,23 +115,12 @@ export function createQmdPlugin(base: PluginBase): Plugin {
       const sub = String(args.subcommand ?? "");
 
       if (sub === "x") {
+        // qmd writes to the terminal itself: exact bytes, streamed, MCP stdio included.
         const passthrough = (args.passthrough as string[]) ?? [];
-        const res = await qmd(base, config, passthrough, {
-          stdio: passthrough[0] === "mcp" ? "inherit" : "pipe",
-        });
-        if (res.exitCode !== 0) base.ui.error(res.stderr || res.stdout);
-        else if (res.stdout) process.stdout.write(res.stdout);
-        return res.exitCode;
+        return (await qmd(base, config, passthrough, { stdio: "inherit" })).exitCode;
       }
 
-      if (sub === "sync") {
-        return syncCollections(base, config, {
-          label: args.label === undefined ? undefined : String(args.label ?? ""),
-          noEmbed: Boolean(args.noEmbed),
-        });
-      }
-
-      base.ui.error(`Unknown qmd subcommand '${sub}'. Use 'sync' or 'x'.`);
+      base.ui.error(`Unknown qmd subcommand '${sub}'. Use 'x'.`);
       return 1;
     },
 
@@ -155,33 +139,35 @@ export function createQmdPlugin(base: PluginBase): Plugin {
   };
 }
 
+export interface QmdSyncResult {
+  exitCode: 0;
+  labels: Array<{ label: string; collections: number }>;
+  warnings: string[];
+}
+
+/** A qmd step failed; the details keep what qmd said and returned. */
+export class QmdError extends Error {
+  readonly code = "QMD_FAILED";
+  constructor(
+    readonly details: { args: string[]; exitCode: number; step: string; stderr: string },
+  ) {
+    super(`qmd ${details.step} failed: ${details.stderr.trim()}`);
+    this.name = "QmdError";
+  }
+}
+
+/** Reconciles one collection per labeled repository. No labels is an empty
+ * state, not a failure; a label error or a failed qmd step is thrown. */
 export async function syncCollections(
   base: PluginBase,
   config: QmdPluginConfig,
   opts: { label?: string; noEmbed: boolean },
-): Promise<number> {
+): Promise<QmdSyncResult> {
+  const result: QmdSyncResult = { exitCode: 0, labels: [], warnings: [] };
   const labels = qmdSyncLabels(base.config, opts.label);
-  if (labels.length === 0) {
-    // An empty state, not a failure: nothing is labeled for indexing yet.
-    base.ui.info(
-      `No ${DEFAULT_QMD_LABEL_PREFIX}* labels in dev.yaml, so there is nothing to index.`,
-    );
-    base.ui.info(`↳ dev label add ${DEFAULT_QMD_LABEL_PREFIX}docs <repository>`);
-    return 0;
-  }
-
   for (const [index, label] of labels.entries()) {
-    let resolved;
-    try {
-      resolved = await resolveLabeledSources(base.config, label);
-    } catch (error) {
-      if (error instanceof LabelError) {
-        base.ui.error(`✗ ${error.message}`);
-        return 1;
-      }
-      throw error;
-    }
-    for (const warning of resolved.warnings) base.ui.warn(`⚠ ${warning}`);
+    const resolved = await resolveLabeledSources(base.config, label);
+    result.warnings.push(...resolved.warnings);
 
     const desired = new Map<string, string>();
     for (const source of resolved.sources) {
@@ -191,14 +177,10 @@ export async function syncCollections(
     const update = index === labels.length - 1;
     const embed = update && !opts.noEmbed;
     const failed = await reconcileCollections(base, config, label, desired, { update, embed });
-    if (failed) {
-      base.ui.error(`qmd ${failed.step} failed: ${failed.stderr}`);
-      return 1;
-    }
-
-    base.ui.log(`qmd sync '${label}': ${desired.size} collection(s) reconciled`);
+    if (failed) throw new QmdError(failed);
+    result.labels.push({ label, collections: desired.size });
   }
-  return 0;
+  return result;
 }
 
 /** Reconciles owned collections (`<label>--*`) toward `desired`: removes

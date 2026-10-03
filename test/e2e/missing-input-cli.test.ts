@@ -65,7 +65,8 @@ describe("missing CLI input", () => {
     { args: ["ws", "add"], usage: "dev ws add <url|path|name>" },
     { args: ["workset", "create"], usage: "dev workset create [name] [repository]" },
   ])("reports missing input and its remedy for $args", async ({ args, usage }) => {
-    const json = await run([...args, "--json"]);
+    // Prefix form: after `qmd x`, a trailing --json would be qmd's own flag.
+    const json = await run(["--json", ...args]);
     expect(json.exitCode).toBe(2);
     expect(json.stdout).toBe("");
     expect(JSON.parse(json.stderr).error).toMatchObject({

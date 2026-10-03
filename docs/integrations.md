@@ -50,9 +50,10 @@ dev qmd sync index:docs
 dev qmd sync --no-embed
 ```
 
-Collections are named `<label>--<checkout>`, so the example creates `index:docs--oh-my-pi`. Query the resulting index through the passthrough:
+Collections are named `<label>--<checkout>`, so the example creates `index:docs--oh-my-pi`. Search it with `dev qmd search`, which takes dev's own options and hands QMD the options after `--`; `--json` asks QMD for JSON. For any other QMD command, use the passthrough:
 
 ```bash
+dev qmd search "how are tools registered?" --json -- -c index:docs--oh-my-pi -n 10
 dev qmd x query "how are tools registered?" -c index:docs--oh-my-pi --json -n 10
 dev qmd x status
 ```
@@ -65,7 +66,7 @@ plugins:
     config_dir: global
 ```
 
-Everything after `dev qmd x` is passed to QMD unchanged. Run `qmd --help` for the installed command reference and `qmd mcp` for the stdio server.
+Every word after `dev qmd x` is passed to QMD unchanged, including `--root`, `--json` and `--help`, and QMD's own output and exit status come back as they are. Put dev's options before `x`: `dev --root ~/work qmd x status`. `dev qmd sync --json` is dev's own command: it prints one JSON result, and a failed QMD step is the error `QMD_FAILED` (exit 4) with the step, its arguments and what QMD printed. Run `qmd --help` for the installed command reference and `qmd mcp` for the stdio server.
 
 ## Run your code after a sync or label change
 

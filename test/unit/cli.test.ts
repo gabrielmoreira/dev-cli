@@ -147,7 +147,7 @@ describe("CLI entrypoint (Phase 0)", () => {
           isTTY: false,
         }),
       ).toBe(0);
-      expect(JSON.parse(logs.join("\n"))).toEqual({ exitCode: 0 });
+      expect(JSON.parse(logs.join("\n"))).toEqual({ exitCode: 0, labels: [], warnings: [] });
     } finally {
       console.log = originalLog;
       await rm(root, { recursive: true, force: true });

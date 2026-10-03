@@ -1043,11 +1043,11 @@ QMD plugin: collections from labeled sources (scoped registry)
 | `--root <value>` | string     | Explicit dev root directory                                          |
 | `--json`         | boolean    | Output in structured JSON format                                     |
 
-| Subcommand       | Description                                               |
-| ---------------- | --------------------------------------------------------- |
-| `dev qmd sync`   | Reconcile qmd collections from sources carrying a label   |
-| `dev qmd search` | Search the scoped qmd index (shortcut for 'qmd x search') |
-| `dev qmd x`      | Raw qmd passthrough with the scoped registry env          |
+| Subcommand       | Description                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| `dev qmd sync`   | Reconcile qmd collections from sources carrying a label                                           |
+| `dev qmd search` | Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- -n 5)             |
+| `dev qmd x`      | Run qmd with every word after x, unchanged; dev options go before x (dev --root <path> qmd x ...) |
 
 ## `dev qmd sync`
 
@@ -1064,25 +1064,25 @@ Reconcile qmd collections from sources carrying a label
 
 ## `dev qmd search`
 
-Search the scoped qmd index (shortcut for 'qmd x search')
+Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- -n 5)
 
-**Usage:** `dev qmd search <query> [--root <value>]`
+**Usage:** `dev qmd search [query] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                 |
 | ---------------- | ---------- | --------------------------- |
-| `query`          | positional | Search query Required.      |
+| `query`          | positional | Search query (required)     |
 | `--root <value>` | string     | Explicit dev root directory |
+| `--json`         | boolean    | Ask qmd for JSON results    |
 
 ## `dev qmd x`
 
-Raw qmd passthrough with the scoped registry env
+Run qmd with every word after x, unchanged; dev options go before x (dev --root <path> qmd x ...)
 
-**Usage:** `dev qmd x <args> [--root <value>]`
+**Usage:** `dev qmd x [args]`
 
-| Argument         | Type       | Description                                |
-| ---------------- | ---------- | ------------------------------------------ |
-| `args`           | positional | Arguments passed to qmd verbatim Required. |
-| `--root <value>` | string     | Explicit dev root directory                |
+| Argument | Type       | Description                                   |
+| -------- | ---------- | --------------------------------------------- |
+| `args`   | positional | Arguments for qmd, passed as typed (required) |
 
 ## `dev workset`
 

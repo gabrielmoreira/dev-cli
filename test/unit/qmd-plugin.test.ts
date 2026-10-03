@@ -11,6 +11,7 @@ import {
   qmdEnv,
   qmdSyncLabels,
   reconcileCollections,
+  syncCollections,
 } from "../../src/plugins/qmd.ts";
 
 interface QmdCall {
@@ -97,30 +98,6 @@ describe("qmd plugin config", () => {
     expect(shell.calls[0]?.args).toEqual(["mise", "exec", "-q", "--", "status"]);
     rmSync(root, { recursive: true, force: true });
   });
-
-  it("writes successful qmd passthrough output to stdout", async () => {
-    const { base, shell, root } = makeHarness();
-    const plugin = createQmdPlugin(base);
-    shell.answerWith(() => ({ stdout: '{"items":[]}\n', stderr: "", exitCode: 0 }));
-    const chunks: string[] = [];
-    const originalWrite = process.stdout.write;
-    process.stdout.write = ((chunk: string | Uint8Array) => {
-      chunks.push(String(chunk));
-      return true;
-    }) as typeof process.stdout.write;
-    try {
-      const code = await plugin.run({
-        subcommand: "x",
-        passthrough: ["search", "sample query", "--json"],
-      });
-      expect(code).toBe(0);
-      expect(chunks.join("")).toBe('{"items":[]}\n');
-      expect(JSON.parse(chunks.join(""))).toEqual({ items: [] });
-    } finally {
-      process.stdout.write = originalWrite;
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
 });
 
 describe("qmd sync label selection", () => {
@@ -144,20 +121,26 @@ describe("qmd sync label selection", () => {
 });
 
 describe("qmd sync", () => {
-  it("succeeds without touching qmd when no index label is configured", async () => {
+  it("is an empty result without touching qmd when no index label is configured", async () => {
     const { base, shell, root } = makeHarness();
-    const plugin = createQmdPlugin(base);
-    expect(await plugin.run({ subcommand: "sync", label: "" })).toBe(0);
+    const config = parseQmdConfig(base.config.plugins);
+    expect(await syncCollections(base, config, { label: "", noEmbed: false })).toEqual({
+      exitCode: 0,
+      labels: [],
+      warnings: [],
+    });
     expect(shell.calls).toHaveLength(0);
     rmSync(root, { recursive: true, force: true });
   });
 
-  it("errors on a label no source carries (before touching qmd)", async () => {
+  it("throws the label error for a label no source carries, before touching qmd", async () => {
     const { base, shell, root } = makeHarness(
       "sources:\n  - url: https://github.com/org/docs\n    branch: main\n",
     );
-    const plugin = createQmdPlugin(base);
-    expect(await plugin.run({ subcommand: "sync", label: "ghost" })).toBe(1);
+    const config = parseQmdConfig(base.config.plugins);
+    await expect(
+      syncCollections(base, config, { label: "ghost", noEmbed: false }),
+    ).rejects.toMatchObject({ code: "LABEL_NOT_FOUND" });
     expect(shell.calls).toHaveLength(0);
     rmSync(root, { recursive: true, force: true });
   });

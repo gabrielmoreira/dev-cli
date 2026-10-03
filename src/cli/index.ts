@@ -33,7 +33,7 @@ import {
   reportError,
   takeReportedExitCode,
 } from "./errors.ts";
-import { qmdCommand, qmdSearchCommand, qmdXCommand } from "./qmd.ts";
+import { qmdCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
 import { parsePullRequestUrl } from "../pr-workspace.ts";
@@ -267,7 +267,24 @@ async function findByName(
 }
 
 /** Hands everything after its name to another program, so any option is fine. */
-const PASSTHROUGH_COMMANDS = new Set<unknown>([qmdXCommand, qmdSearchCommand]);
+const PASSTHROUGH_COMMANDS = new Set<unknown>([qmdXCommand]);
+
+/** How many leading words are dev's. The rest follows `--`, or follows `qmd x`,
+ * whose words all belong to qmd, even `--root`, `--json` or `--help`. */
+export function countDevWords(argv: string[]): number {
+  const boundary = argv.indexOf("--");
+  const end = boundary === -1 ? argv.length : boundary;
+  const words: string[] = [];
+  for (let index = 0; index < end; index++) {
+    const word = argv[index]!;
+    if (word === "--root" || word === "--ws") index++;
+    else if (!word.startsWith("-")) {
+      words.push(word);
+      if (words.length === 2) return words[0] === "qmd" && word === "x" ? index + 1 : end;
+    }
+  }
+  return end;
+}
 
 /** `dry-run` and `dryRun` spell the same option, as citty reads it; `dryrun` does not. */
 function optionKey(name: string): string {
@@ -470,20 +487,23 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   const currentAmbient = ambient ?? createDefaultAmbient();
   ui.reset();
   takeReportedExitCode();
-  setAmbient(currentAmbient);
   process.exitCode = 0;
 
-  const argv = currentAmbient.argv;
+  // Flags in the words dev hands to another program are not dev's flags.
+  const fullArgv = currentAmbient.argv;
+  const argv = fullArgv.slice(0, countDevWords(fullArgv));
+  const handedOver = fullArgv.slice(argv.length);
+  setAmbient({ ...currentAmbient, argv });
 
   // Help errors use the same coded presentation as command errors.
   try {
-    if (argv.length === 0) {
+    if (fullArgv.length === 0) {
       ui.log(await formatHelp(false));
       return 0;
     }
 
     if (argv[0] === "help") {
-      ui.log(await formatCommandHelp(normalizeCliArgs(argv.slice(1))));
+      ui.log(await formatCommandHelp([...normalizeCliArgs(argv.slice(1)), ...handedOver]));
       return 0;
     }
 
@@ -517,7 +537,7 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
   }
 
   // Normalize workspace selection and pull-request URL intent before tree dispatch.
-  const normalizedArgs = normalizeCliArgs(argv);
+  const normalizedArgs = [...normalizeCliArgs(argv), ...handedOver];
   if (normalizedArgs[1] === "init" && !argv.includes("init")) {
     ui.info(`↳ dev ws init ${normalizedArgs[2]}`);
   }
@@ -572,18 +592,6 @@ export async function runCli(ambient?: AmbientContext): Promise<number> {
     // printed an error without reporting a code still failed.
     return takeReportedExitCode() ?? (ui.hasError() ? 1 : 0);
   } catch (error: unknown) {
-    const code = (error as { code?: string } | null)?.code;
-    if (code === "EARG" || code === "E_NO_COMMAND") {
-      const command = normalizedArgs[0] === "qmd" ? normalizedArgs[1] : undefined;
-      const usage =
-        command === "search"
-          ? "dev qmd search <query>"
-          : command === "x"
-            ? "dev qmd x <args>"
-            : "dev --help";
-      return reportError(Object.assign(error as Error, { details: { usage } }), ui.isJson());
-    }
-
     return reportError(error, ui.isJson());
   }
 }

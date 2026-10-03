@@ -1050,16 +1050,14 @@ describe("smart CLI input", () => {
 
   test("treats argument-free qmd sync with no index labels as an empty state", async () => {
     const exitCode = await runCli({
-      argv: ["qmd", "sync", "--root", root],
+      argv: ["qmd", "sync", "--root", root, "--json"],
       cwd: root,
       env: {},
       isTTY: false,
     });
 
     expect(exitCode).toBe(0);
-    const narration = errors.join("\n");
-    expect(narration).toContain("nothing to index");
-    expect(narration).toContain("dev label add index:docs <repository>");
+    expect(JSON.parse(logs.join("\n"))).toEqual({ exitCode: 0, labels: [], warnings: [] });
   });
 
   test("prompts for a repository source before creating a mirror", async () => {
