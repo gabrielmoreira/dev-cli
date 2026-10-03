@@ -30,10 +30,16 @@ function currentConfig(config: RuntimeConfig): RuntimeConfig {
   return configFile.resolveConfig({ rootFlag: config.root, cwd: config.root, env: process.env });
 }
 
-function requireDevYaml(config: RuntimeConfig): string | undefined {
-  return config.configPath?.endsWith(".yaml")
-    ? undefined
-    : "Labels live in dev.yaml, and this dev root has none. Run 'dev init' first.";
+function requireDevYaml(config: RuntimeConfig): Error | undefined {
+  if (config.configPath?.endsWith(".yaml")) return undefined;
+  return Object.assign(
+    new Error(
+      config.configPath
+        ? "This root needs a dev.yaml settings file to save labels."
+        : "No dev root yet.",
+    ),
+    { details: { usage: config.configPath ? `dev init "${config.root}"` : "dev init" } },
+  );
 }
 
 function parseFields(raw: string | undefined): { fields: Record<string, unknown>; error?: string } {
@@ -82,7 +88,15 @@ async function chooseLabel(config: RuntimeConfig, message: string): Promise<stri
 
 async function chooseExistingLabel(config: RuntimeConfig, message: string): Promise<string> {
   const known = labels.listLabels(config);
-  if (known.length === 0) throw new Error("No repository carries a label yet.");
+  if (known.length === 0)
+    throw Object.assign(new Error("No repository carries a label yet."), {
+      details: {
+        kind: "label",
+        value: "",
+        candidates: [],
+        usage: !config.configPath ? "dev init" : "dev label add <label> <repository-url>",
+      },
+    });
   return await ui.select({
     message,
     hint: "A label names a group of repositories; choose the group to change.",
@@ -111,7 +125,18 @@ async function chooseRepositories(config: RuntimeConfig, label: string): Promise
       options.set(key, { label: `${record.name} — ${record.url}`, value: record.url });
   }
   if (options.size === 0) {
-    throw new Error("No repositories known yet. Run 'dev sync inventory', or pass a URL.");
+    throw Object.assign(new Error("No repositories are available to label yet."), {
+      details: {
+        kind: "repository",
+        value: "",
+        candidates: [],
+        usage: !config.configPath
+          ? "dev init"
+          : config.providers.length > 0
+            ? "dev sync inventory"
+            : `Pass a repository URL: dev label add ${JSON.stringify(label)} <repository-url>`,
+      },
+    });
   }
   return await ui.multiSelect({
     message: `Select repositories for '${label}'`,
@@ -426,7 +451,18 @@ export const labelRmCommand = defineCommand({
       if (!label)
         return reportError("Usage: dev label rm <label> [repository...] [--all]", args.json);
       if (carrying.length === 0) {
-        return reportError(`No repository carries label '${label}'.`, args.json);
+        return reportError(
+          new labels.LabelError("LABEL_NOT_FOUND", `No repository carries label '${label}'.`, {
+            kind: "label",
+            value: label,
+            candidates: labels.listLabels(config).map((item) => item.label),
+            usage:
+              labels.listLabels(config).length > 0
+                ? "dev label list"
+                : "dev label add <label> <repository-url>",
+          }),
+          args.json,
+        );
       }
 
       const given = (args._ as string[]).slice(1);
@@ -444,7 +480,17 @@ export const labelRmCommand = defineCommand({
             (!args.ref || source.branch === args.ref || source.pin === args.ref),
         );
         if (chosen.length === 0) {
-          return reportError(`None of those repositories carries label '${label}'.`, args.json);
+          return reportError(
+            Object.assign(new Error(`None of those repositories carries label '${label}'.`), {
+              details: {
+                kind: "repository",
+                value: given.map((value) => git.stripCredentialsFromUrl(value)).join(", "),
+                candidates: carrying.map((source) => git.stripCredentialsFromUrl(source.url)),
+                usage: "dev label list",
+              },
+            }),
+            args.json,
+          );
         }
       } else if (interactive) {
         const picked = await ui.multiSelect({
@@ -566,7 +612,19 @@ export const labelRenameCommand = defineCommand({
       const renamed = await labels.renameLabel(config, from, to);
       if (renamed.sources === 0 && !renamed.def && renamed.worksetMembers === 0) {
         return reportError(
-          `No repository, label definition, or workset uses '${from}'.`,
+          new labels.LabelError(
+            "LABEL_NOT_FOUND",
+            `No repository, label definition, or workset uses '${from}'.`,
+            {
+              kind: "label",
+              value: from,
+              candidates: labels.listLabels(config).map((item) => item.label),
+              usage:
+                labels.listLabels(config).length > 0
+                  ? "dev label list"
+                  : "dev label add <label> <repository-url>",
+            },
+          ),
           args.json,
         );
       }

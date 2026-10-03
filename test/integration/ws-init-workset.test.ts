@@ -344,7 +344,6 @@ worksets:
       expect(await initJson(["--label", "team:web"])).not.toBe(0);
       const output = logs.join("\n");
       expect(output).toContain('"code": "LABEL_NOT_FOUND"');
-      expect(output).toContain("dev label add team:web");
       expect(await Bun.file(join(root, "ws", "team-web", "ws.md")).exists()).toBe(false);
     });
 

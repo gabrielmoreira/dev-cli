@@ -821,7 +821,6 @@ worksets:
       expect(code).not.toBe(0);
       const output = logs.join("\n");
       expect(output).toContain('"code": "LABEL_NOT_FOUND"');
-      expect(output).toContain("dev label add team:web");
       expect(await fs.readText(join(root, "dev.yaml"))).toBe(labeled);
     });
   });

@@ -155,7 +155,12 @@ export const wiListCommand = defineCommand({
       }
       if (refreshTargets.length === 0) {
         return reportError(
-          `Workspace '${workspaceContext.name}' has no matching Azure DevOps projects.`,
+          Object.assign(
+            new Error(
+              `Workspace '${workspaceContext.name}' has no matching Azure DevOps projects.`,
+            ),
+            { details: { usage: `dev ws status --ws ${JSON.stringify(workspaceContext.name)}` } },
+          ),
           args.json,
         );
       }
@@ -178,7 +183,21 @@ export const wiListCommand = defineCommand({
       });
       const provider = configuredProviders.find((candidate) => candidate.id === providerId.value);
       if (!provider) {
-        return reportError(`Unknown provider '${providerId.value}'.`, args.json);
+        return reportError(
+          Object.assign(new Error(`Unknown provider '${providerId.value}'.`), {
+            details: {
+              kind: "provider",
+              value: providerId.value,
+              candidates: configuredProviders.map((provider) => provider.id),
+              usage: !config.configPath
+                ? "dev init"
+                : configuredProviders.length > 0
+                  ? "dev provider list"
+                  : "dev provider add azure_devops",
+            },
+          }),
+          args.json,
+        );
       }
       const tenant = adoTenant(provider.organization);
       const client = createAzureDevOps({
@@ -336,7 +355,10 @@ export const wiViewCommand = defineCommand({
       selected = candidates[Number(choice.value)];
       idStr = selected ? String(selected.id) : undefined;
     }
-    if (!idStr) throw new Error("Selected work item is unavailable.");
+    if (!idStr)
+      throw Object.assign(new Error("Selected work item is unavailable."), {
+        details: { usage: "dev wi list" },
+      });
     const id =
       explicitId ?? parsePositiveInteger(idStr, "id", "dev wi view <id> [--project <name>]");
 
@@ -368,7 +390,12 @@ export const wiViewCommand = defineCommand({
     });
 
     if (!item) {
-      return reportError(`Work item #${id} not found.`, args.json);
+      return reportError(
+        Object.assign(new Error(`Work item #${id} not found.`), {
+          details: { usage: !config.configPath ? "dev init" : "dev wi list" },
+        }),
+        args.json,
+      );
     }
 
     ui.result({

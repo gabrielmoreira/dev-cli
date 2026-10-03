@@ -7,6 +7,7 @@ import {
   registerGlobalRoot,
   saveGlobalConfig,
   unregisterGlobalRoot,
+  GlobalRootError,
 } from "../global.ts";
 import { configFilePath, rootAgentsPath } from "../paths.ts";
 import { ui } from "../ui.ts";
@@ -441,7 +442,12 @@ export const rootAddCommand = defineCommand({
     });
     const rootPath = resolve(ambient.cwd, pathInput.value);
     if (!fs.exists(configFilePath({ root: rootPath }))) {
-      return reportError(`'${rootPath}' is not a dev root because dev.yaml is missing.`, args.json);
+      return reportError(
+        Object.assign(new Error(`'${rootPath}' has no dev root settings yet.`), {
+          details: { usage: `dev init ${JSON.stringify(rootPath)}` },
+        }),
+        args.json,
+      );
     }
 
     const globalPath = getGlobalConfigPath(ambient.env.HOME || ambient.env.USERPROFILE);
@@ -497,7 +503,17 @@ export const rootRemoveCommand = defineCommand({
     const aliasOrPath = Object.hasOwn(globalConfig.roots, target.value)
       ? target.value
       : resolve(ambient.cwd, target.value);
-    const removed = unregisterGlobalRoot(globalConfig, aliasOrPath);
+    let removed: ReturnType<typeof unregisterGlobalRoot>;
+    try {
+      removed = unregisterGlobalRoot(globalConfig, aliasOrPath);
+    } catch (error) {
+      if (error instanceof GlobalRootError && error.code === "ROOT_NOT_FOUND" && error.details) {
+        error.details.value = target.value;
+        if (Array.isArray(error.details.candidates) && error.details.candidates.length > 0)
+          error.message = `Registered root '${target.value}' was not found.`;
+      }
+      return reportError(error, args.json);
+    }
     await saveGlobalConfig(globalConfig, globalPath);
     const result = { ...removed, filesRemoved: false };
     ui.result({

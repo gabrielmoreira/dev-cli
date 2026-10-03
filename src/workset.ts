@@ -12,6 +12,7 @@ import {
   resolveLabelAssignments,
   type SourceDeclaration,
 } from "./labels.ts";
+import { stripCredentialsFromUrl } from "./git.ts";
 
 export type WorksetErrorCode =
   | "WORKSET_CONFIG_UNWRITABLE"
@@ -25,6 +26,7 @@ export class WorksetError extends Error {
   constructor(
     public readonly code: WorksetErrorCode,
     message: string,
+    public readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "WorksetError";
@@ -89,7 +91,11 @@ export async function renameWorkset(
   const next = nextName.trim();
   const definition = config.worksets[current];
   if (!definition) {
-    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${current}'.`);
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${current}'.`, {
+      kind: "workset",
+      value: current,
+      candidates: Object.keys(config.worksets),
+    });
   }
   if (Object.hasOwn(config.worksets, next)) {
     throw new WorksetError("WORKSET_EXISTS", `Workset '${next}' already exists.`);
@@ -133,10 +139,11 @@ export function labelSources(
 ): SourceDeclaration[] {
   const { matches } = resolveLabelAssignments(config, label);
   if (matches.length === 0) {
-    throw new LabelError(
-      "LABEL_NOT_FOUND",
-      `No declared source carries label '${label}'. Add it to a repository with: dev label add ${label}`,
-    );
+    throw new LabelError("LABEL_NOT_FOUND", `No declared repository carries label '${label}'.`, {
+      kind: "label",
+      value: label,
+      candidates: [...declaredLabels(config).keys()],
+    });
   }
   return matches.map((match) => match.source);
 }
@@ -158,7 +165,11 @@ export async function addWorksetMember(
 ): Promise<{ definition: WorksetDefinition; added: boolean }> {
   const definition = config.worksets[name];
   if (!definition) {
-    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`, {
+      kind: "workset",
+      value: name,
+      candidates: Object.keys(config.worksets),
+    });
   }
   if (member.label !== undefined) labelSources(config, member.label);
   const identity = memberIdentity(member);
@@ -187,13 +198,26 @@ function findMemberIndex(definition: WorksetDefinition, target: string): number 
     sourceMatches.length > 1
       ? `Repository '${target}' is ambiguous; select it by path.`
       : `Repository '${target}' is not in the workset.`,
+    {
+      kind: "workset member",
+      value: stripCredentialsFromUrl(target),
+      candidates: definition.members.flatMap((member) =>
+        member.source !== undefined ? [member.path ?? stripCredentialsFromUrl(member.source)] : [],
+      ),
+    },
   );
 }
 
 function findLabelIndex(definition: WorksetDefinition, label: string): number {
   const index = definition.members.findIndex((member) => member.label === label);
   if (index < 0) {
-    throw new WorksetError("WORKSET_MEMBER_NOT_FOUND", `Label '${label}' is not in the workset.`);
+    throw new WorksetError("WORKSET_MEMBER_NOT_FOUND", `Label '${label}' is not in the workset.`, {
+      kind: "workset label",
+      value: label,
+      candidates: definition.members.flatMap((member) =>
+        member.label !== undefined ? [member.label] : [],
+      ),
+    });
   }
   return index;
 }
@@ -206,7 +230,11 @@ export async function editWorksetMember(
 ): Promise<WorksetDefinition> {
   const definition = config.worksets[name];
   if (!definition) {
-    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`, {
+      kind: "workset",
+      value: name,
+      candidates: Object.keys(config.worksets),
+    });
   }
   const index = findMemberIndex(definition, target);
   const members = definition.members.map((member, memberIndex) =>
@@ -242,7 +270,11 @@ async function removeMember(
 ): Promise<WorksetDefinition> {
   const definition = config.worksets[name];
   if (!definition) {
-    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`, {
+      kind: "workset",
+      value: name,
+      candidates: Object.keys(config.worksets),
+    });
   }
   const index = find(definition);
   if (definition.members.length === 1) {
@@ -269,7 +301,11 @@ export async function saveWorksetDraft(
   const parsed = WorksetDefinitionSchema.parse(definition);
   validateUniqueMembers(parsed.members);
   if (originalName && !Object.hasOwn(config.worksets, originalName)) {
-    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${originalName}'.`);
+    throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${originalName}'.`, {
+      kind: "workset",
+      value: originalName,
+      candidates: Object.keys(config.worksets),
+    });
   }
   if (normalizedName !== originalName && Object.hasOwn(config.worksets, normalizedName)) {
     throw new WorksetError("WORKSET_EXISTS", `Workset '${normalizedName}' already exists.`);

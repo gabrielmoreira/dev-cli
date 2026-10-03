@@ -377,7 +377,13 @@ export async function untrack(
   if (!deps.fs.exists(plan.absolutePath)) {
     throw new CanonicalMirrorError(
       "WORKTREE_NOT_FOUND",
-      `Canonical worktree does not exist at ${plan.absolutePath}`,
+      `The reference copy does not exist at ${plan.absolutePath}.`,
+      {
+        kind: "mirror",
+        value: input.alias ?? input.branch,
+        candidates: [],
+        usage: "dev mirror ls",
+      },
     );
   }
 
@@ -567,8 +573,17 @@ export async function sync(
     if (worktreePaths.length === 0 && unlinked.length === 0) {
       throw new CanonicalMirrorError(
         "SOURCE_NOT_FOUND",
-        `No mirror matches source '${input.source}'.`,
-        { source: input.source, usage: "dev mirror ls" },
+        `No mirror matches source '${deps.git.stripCredentialsFromUrl(input.source!)}'.`,
+        {
+          source: deps.git.stripCredentialsFromUrl(input.source!),
+          kind: "mirror",
+          value: deps.git.stripCredentialsFromUrl(input.source!),
+          candidates: identified.flatMap((item) =>
+            item.source ? [deps.git.stripCredentialsFromUrl(item.source)] : [],
+          ),
+          mirrorCount: identified.length,
+          usage: "dev mirror ls",
+        },
       );
     }
   }

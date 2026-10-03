@@ -36,76 +36,76 @@ Complete command, argument, option, and subcommand reference generated from the 
 
 An empty next step means the error message supplies the context; no generic remedy is added.
 
-| Code                         | Exit | Next step                                                          |
-| ---------------------------- | ---- | ------------------------------------------------------------------ |
-| `API_ERROR`                  | 4    |                                                                    |
-| `AUTH_FAILED`                | 4    | gh auth login # or: az login                                       |
-| `BRANCH_ALREADY_MOUNTED`     | 3    | dev ws status                                                      |
-| `CANCELLED`                  | 130  |                                                                    |
-| `CANNOT_DETERMINE_COMMIT`    | 1    | dev ws status                                                      |
-| `CONFLICTING_OPTIONS`        | 2    | <usage>                                                            |
-| `CREDENTIAL_NOT_AVAILABLE`   | 4    | gh auth login # or: az login                                       |
-| `DEFAULT_BRANCH`             | 2    | dev mirror ls                                                      |
-| `DEFAULT_BRANCH_UNKNOWN`     | 2    | Pass --branch <branch> explicitly.                                 |
-| `DIRTY_WORKTREE`             | 3    | dev ws status                                                      |
-| `ERROR`                      | 1    |                                                                    |
-| `FAILED`                     | 1    |                                                                    |
-| `FILE_LOCKED`                | 3    | Wait for the active writer of <path> to finish, then retry.        |
-| `HERDR_AMBIGUOUS_SESSION`    | 4    | Pass --session <name> explicitly.                                  |
-| `HERDR_COMMAND_FAILED`       | 4    |                                                                    |
-| `HERDR_INVALID_RESPONSE`     | 4    |                                                                    |
-| `HERDR_SERVER_START_TIMEOUT` | 4    | herdr server status                                                |
-| `HERDR_SESSION_NOT_RUNNING`  | 4    | herdr session list                                                 |
-| `HOOK_FAILED`                | 4    |                                                                    |
-| `INTERACTION_REQUIRED`       | 2    | <usage>                                                            |
-| `INVALID_ARGUMENT`           | 2    | <usage>                                                            |
-| `INVALID_CONFIG`             | 2    | Edit <path> to fix the configuration syntax or values, then retry. |
-| `INVALID_GLOBAL_TOML`        | 2    | Edit <path> to fix the TOML syntax or root entries, then retry.    |
-| `INVALID_LABEL_FIELD`        | 2    | dev label --help                                                   |
-| `INVALID_MANIFEST`           | 2    | Edit <filePath> to fix the workspace manifest, then retry.         |
-| `INVALID_MOUNT_PATH`         | 2    | dev ws add --help                                                  |
-| `INVALID_SOURCE`             | 2    | Pass a repository URL or local path.                               |
-| `INVALID_UPDATE_PLAN`        | 1    |                                                                    |
-| `INVALID_WORKSPACE_NAME`     | 2    | dev ws init --help                                                 |
-| `LABEL_NOT_FOUND`            | 1    | dev label list                                                     |
-| `LABEL_VALIDATION`           | 2    | dev label --help                                                   |
-| `MANIFEST_NOT_FOUND`         | 1    | dev ls                                                             |
-| `MIRROR_ADMIN_MISSING`       | 1    | dev mirror ls                                                      |
-| `MIRROR_PATH_COLLISION`      | 3    | git -C "<path>" status                                             |
-| `MOUNT_ALREADY_DECLARED`     | 3    | dev ws status                                                      |
-| `MOUNT_ALREADY_EXISTS`       | 3    | dev ws status                                                      |
-| `MOUNT_NOT_FOUND`            | 1    | dev ws status                                                      |
-| `MOUNT_PATH_EXISTS_ON_DISK`  | 3    | dev ws add <source> --path <another-name>                          |
-| `NETWORK`                    | 4    | Check connectivity to the source or provider, then retry.          |
-| `NOT_FOUND`                  | 1    | Check the repository URL or provider resource, then retry.         |
-| `PATH_OUTSIDE_ROOT`          | 2    | Choose a path inside <root>.                                       |
-| `PROVIDER_NOT_CONFIGURED`    | 2    | dev provider add <type>                                            |
-| `PROVIDER_NOT_FOUND`         | 2    | dev provider list                                                  |
-| `PULL_REQUEST_UNAVAILABLE`   | 4    | dev pr list                                                        |
-| `QMD_FAILED`                 | 4    | dev qmd sync --help                                                |
-| `RATE_LIMITED`               | 4    | Wait for the provider rate limit to reset, then retry.             |
-| `REBASE_ABORT_FAILED`        | 1    | git -C "<worktreePath>" status                                     |
-| `REF_NOT_FOUND`              | 2    | git ls-remote --heads --tags "<source>"                            |
-| `REMOVE_FAILED`              | 1    | git -C "<path>" status                                             |
-| `ROOT_ALIAS_EXISTS`          | 3    | dev roots                                                          |
-| `ROOT_NOT_FOUND`             | 2    | dev roots                                                          |
-| `SOURCE_AMBIGUOUS`           | 2    | <usage>                                                            |
-| `SOURCE_NOT_FOUND`           | 2    | <usage>                                                            |
-| `STASH_RESTORE_FAILED`       | 1    | <recovery>                                                         |
-| `UNKNOWN_COMMAND`            | 2    | <usage>                                                            |
-| `UNKNOWN_OPTION`             | 2    | <usage>                                                            |
-| `UNMANAGED_CHECKOUT`         | 3    | git -C "<path>" status                                             |
-| `UNSAFE_REMOVE`              | 3    | git -C <path> status                                               |
-| `UNTRUSTED_HOOK_BLOCKED`     | 3    | rerun with --consent to allow hooks from <source>                  |
-| `WORKSET_CONFIG_UNWRITABLE`  | 2    | Use a dev root with dev.yaml: dev init <path>.                     |
-| `WORKSET_EXISTS`             | 3    | dev workset list                                                   |
-| `WORKSET_LAST_MEMBER`        | 3    | dev workset show <name>                                            |
-| `WORKSET_MEMBER_EXISTS`      | 3    | dev workset list                                                   |
-| `WORKSET_MEMBER_NOT_FOUND`   | 1    | dev workset list                                                   |
-| `WORKSET_NOT_FOUND`          | 1    | dev workset list                                                   |
-| `WORKSPACE_ALREADY_EXISTS`   | 3    | dev go <name>                                                      |
-| `WORKSPACE_NOT_FOUND`        | 1    | dev ls                                                             |
-| `WORKTREE_NOT_FOUND`         | 1    | dev ws update                                                      |
+| Code                         | Exit | Next step                                                                                 |
+| ---------------------------- | ---- | ----------------------------------------------------------------------------------------- |
+| `API_ERROR`                  | 4    |                                                                                           |
+| `AUTH_FAILED`                | 4    | gh auth login # or: az login                                                              |
+| `BRANCH_ALREADY_MOUNTED`     | 3    | dev ws status                                                                             |
+| `CANCELLED`                  | 130  |                                                                                           |
+| `CANNOT_DETERMINE_COMMIT`    | 1    | dev ws status                                                                             |
+| `CONFLICTING_OPTIONS`        | 2    | <usage>                                                                                   |
+| `CREDENTIAL_NOT_AVAILABLE`   | 4    | gh auth login # or: az login                                                              |
+| `DEFAULT_BRANCH`             | 2    | dev mirror ls                                                                             |
+| `DEFAULT_BRANCH_UNKNOWN`     | 2    | Pass --branch <branch> explicitly.                                                        |
+| `DIRTY_WORKTREE`             | 3    | dev ws status                                                                             |
+| `ERROR`                      | 1    |                                                                                           |
+| `FAILED`                     | 1    |                                                                                           |
+| `FILE_LOCKED`                | 3    | Wait for the active writer of <path> to finish, then retry.                               |
+| `HERDR_AMBIGUOUS_SESSION`    | 4    | Pass --session <name> explicitly.                                                         |
+| `HERDR_COMMAND_FAILED`       | 4    |                                                                                           |
+| `HERDR_INVALID_RESPONSE`     | 4    |                                                                                           |
+| `HERDR_SERVER_START_TIMEOUT` | 4    | herdr server status                                                                       |
+| `HERDR_SESSION_NOT_RUNNING`  | 4    | herdr session list                                                                        |
+| `HOOK_FAILED`                | 4    |                                                                                           |
+| `INTERACTION_REQUIRED`       | 2    | <usage>                                                                                   |
+| `INVALID_ARGUMENT`           | 2    | <usage>                                                                                   |
+| `INVALID_CONFIG`             | 2    | Edit <path> to fix the configuration syntax or values, then retry.                        |
+| `INVALID_GLOBAL_TOML`        | 2    | Edit <path> to fix the TOML syntax or root entries, then retry.                           |
+| `INVALID_LABEL_FIELD`        | 2    | Pass fields as key=value pairs, using names and types declared for the label in dev.yaml. |
+| `INVALID_MANIFEST`           | 2    | Edit <filePath> to fix the workspace manifest, then retry.                                |
+| `INVALID_MOUNT_PATH`         | 2    | Choose a relative mount path without '..' or an absolute path prefix.                     |
+| `INVALID_SOURCE`             | 2    | Pass a repository URL or local path.                                                      |
+| `INVALID_UPDATE_PLAN`        | 1    |                                                                                           |
+| `INVALID_WORKSPACE_NAME`     | 2    | Pass a non-empty workspace name without path separators.                                  |
+| `LABEL_NOT_FOUND`            | 1    | dev label list                                                                            |
+| `LABEL_VALIDATION`           | 2    | Check the label fields and repository assignments in dev.yaml, then retry.                |
+| `MANIFEST_NOT_FOUND`         | 1    | dev ls                                                                                    |
+| `MIRROR_ADMIN_MISSING`       | 1    | dev mirror ls                                                                             |
+| `MIRROR_PATH_COLLISION`      | 3    | git -C "<path>" status                                                                    |
+| `MOUNT_ALREADY_DECLARED`     | 3    | dev ws status                                                                             |
+| `MOUNT_ALREADY_EXISTS`       | 3    | dev ws status                                                                             |
+| `MOUNT_NOT_FOUND`            | 1    | dev ws status                                                                             |
+| `MOUNT_PATH_EXISTS_ON_DISK`  | 3    | dev ws add <source> --path <another-name>                                                 |
+| `NETWORK`                    | 4    | Check connectivity to the source or provider, then retry.                                 |
+| `NOT_FOUND`                  | 1    | Check the repository URL or provider resource, then retry.                                |
+| `PATH_OUTSIDE_ROOT`          | 2    | Choose a path inside <root>.                                                              |
+| `PROVIDER_NOT_CONFIGURED`    | 2    | dev provider add <type>                                                                   |
+| `PROVIDER_NOT_FOUND`         | 2    | dev provider list                                                                         |
+| `PULL_REQUEST_UNAVAILABLE`   | 4    | dev pr list                                                                               |
+| `QMD_FAILED`                 | 4    | dev qmd sync --help                                                                       |
+| `RATE_LIMITED`               | 4    | Wait for the provider rate limit to reset, then retry.                                    |
+| `REBASE_ABORT_FAILED`        | 1    | git -C "<worktreePath>" status                                                            |
+| `REF_NOT_FOUND`              | 2    | git ls-remote --heads --tags "<source>"                                                   |
+| `REMOVE_FAILED`              | 1    | git -C "<path>" status                                                                    |
+| `ROOT_ALIAS_EXISTS`          | 3    | dev roots                                                                                 |
+| `ROOT_NOT_FOUND`             | 2    | dev roots                                                                                 |
+| `SOURCE_AMBIGUOUS`           | 2    | <usage>                                                                                   |
+| `SOURCE_NOT_FOUND`           | 2    | <usage>                                                                                   |
+| `STASH_RESTORE_FAILED`       | 1    | <recovery>                                                                                |
+| `UNKNOWN_COMMAND`            | 2    | <usage>                                                                                   |
+| `UNKNOWN_OPTION`             | 2    | <usage>                                                                                   |
+| `UNMANAGED_CHECKOUT`         | 3    | git -C "<path>" status                                                                    |
+| `UNSAFE_REMOVE`              | 3    | git -C <path> status                                                                      |
+| `UNTRUSTED_HOOK_BLOCKED`     | 3    | rerun with --consent to allow hooks from <source>                                         |
+| `WORKSET_CONFIG_UNWRITABLE`  | 2    | Use a dev root with dev.yaml: dev init <path>.                                            |
+| `WORKSET_EXISTS`             | 3    | dev workset list                                                                          |
+| `WORKSET_LAST_MEMBER`        | 3    | dev workset show <name>                                                                   |
+| `WORKSET_MEMBER_EXISTS`      | 3    | dev workset list                                                                          |
+| `WORKSET_MEMBER_NOT_FOUND`   | 1    | dev workset list                                                                          |
+| `WORKSET_NOT_FOUND`          | 1    | dev workset list                                                                          |
+| `WORKSPACE_ALREADY_EXISTS`   | 3    | dev go <name>                                                                             |
+| `WORKSPACE_NOT_FOUND`        | 1    | dev ls                                                                                    |
+| `WORKTREE_NOT_FOUND`         | 1    | dev ws update                                                                             |
 
 ## `dev`
 

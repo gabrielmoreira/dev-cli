@@ -26,6 +26,9 @@ export async function resolveJumpTarget(input: ResolveJumpTargetInput): Promise<
     throw new WorkspaceError("WORKSPACE_NOT_FOUND", `Workspace '${name}' not found at ${wsPath}`, {
       workspaceName: name,
       path: wsPath,
+      kind: "workspace",
+      value: name,
+      candidates: [],
     });
   }
   return {

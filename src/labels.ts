@@ -9,6 +9,7 @@ export class LabelError extends Error {
   constructor(
     public readonly code: "LABEL_VALIDATION" | "LABEL_NOT_FOUND" | "INVALID_LABEL_FIELD",
     message: string,
+    public readonly details: Record<string, unknown> = {},
   ) {
     super(message);
     this.name = "LabelError";
@@ -392,10 +393,15 @@ export async function resolveLabeledSources(
     if (sources.length === 0) {
       throw new LabelError(
         "LABEL_NOT_FOUND",
-        `No sources declared in dev.yaml; add sources before resolving label '${label}'`,
+        `No repositories are declared, so no repository carries label '${label}'.`,
+        { kind: "label", value: label, candidates: listLabels(config).map((item) => item.label) },
       );
     }
-    throw new LabelError("LABEL_NOT_FOUND", `No source carries label '${label}'`);
+    throw new LabelError("LABEL_NOT_FOUND", `No repository carries label '${label}'.`, {
+      kind: "label",
+      value: label,
+      candidates: listLabels(config).map((item) => item.label),
+    });
   }
   if (errors.length > 0) {
     throw new LabelError("LABEL_VALIDATION", errors.join("; "));

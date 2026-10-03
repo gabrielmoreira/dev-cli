@@ -120,7 +120,7 @@ export async function resolveWorkspaceInput(
     required: {
       command: options.command,
       field: "workspace",
-      usage: options.usage,
+      usage: `${options.usage}    (see workspace names with dev ls)`,
       description: "Target workspace",
     },
     ambient,
@@ -150,7 +150,7 @@ export async function resolveWorkspaceMountInput(
     required: {
       command: options.command,
       field: "mount",
-      usage: options.usage,
+      usage: `${options.usage}    (see mount paths with dev ws status --ws ${JSON.stringify(options.workspace)})`,
       description: "Target mount",
     },
     ambient,
@@ -167,7 +167,7 @@ export async function resolveWorkspaceMountScope(
   const required = {
     command: options.command,
     field: "mount",
-    usage: options.usage,
+    usage: `${options.usage}    (see mount paths with dev ws status --ws ${JSON.stringify(options.workspace)})`,
     description: "Target mount or explicit --all scope",
   };
   if (!canPrompt(ambient)) throw new CliInputRequiredError(required);

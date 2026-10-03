@@ -225,7 +225,28 @@ export const providerRemoveCommand = defineCommand({
     const success = await removeProvider(config.root, provider.value);
 
     if (!success) {
-      return reportError(`Provider '${provider.value}' not found in dev.yaml.`, args.json);
+      return reportError(
+        Object.assign(
+          new Error(
+            !config.configPath
+              ? "No dev root yet."
+              : `Provider '${provider.value}' is not connected.`,
+          ),
+          {
+            details: {
+              kind: "provider",
+              value: provider.value,
+              candidates: config.providers.map((item) => item.id),
+              usage: !config.configPath
+                ? "dev init"
+                : config.providers.length > 0
+                  ? "dev provider list"
+                  : "dev provider add <type>",
+            },
+          },
+        ),
+        args.json,
+      );
     }
 
     ui.result({

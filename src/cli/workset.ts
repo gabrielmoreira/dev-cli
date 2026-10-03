@@ -2,12 +2,44 @@ import { defineCommand } from "citty";
 import * as git from "../git.ts";
 import * as workset from "../workset.ts";
 import type { RuntimeConfig, WorksetDefinition, WorksetMember } from "../config.ts";
+import { LabelError } from "../labels.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
 import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { reportError } from "./errors.ts";
+
+function reportWorksetError(error: unknown, config: RuntimeConfig, json?: boolean): number {
+  if (error instanceof workset.WorksetError) {
+    if (error.code === "WORKSET_NOT_FOUND") {
+      if (!config.configPath) error.message = "No dev root yet.";
+      else if (Object.keys(config.worksets).length === 0)
+        error.message = "This root has no worksets yet.";
+      error.details.usage = !config.configPath
+        ? "dev init"
+        : Object.keys(config.worksets).length === 0
+          ? canPrompt()
+            ? "dev workset manage <name>"
+            : "dev workset create <name> <repository-url>"
+          : "dev workset list";
+    } else if (error.code === "WORKSET_CONFIG_UNWRITABLE" && !config.configPath) {
+      error.message = "No dev root yet.";
+      error.details.usage = "dev init";
+    } else if (error.code === "WORKSET_MEMBER_NOT_FOUND") {
+      error.details.usage = "dev workset list";
+    }
+  }
+  if (error instanceof LabelError && error.code === "LABEL_NOT_FOUND") {
+    if (!config.configPath) error.message = "No dev root yet.";
+    error.details.usage = !config.configPath
+      ? "dev init"
+      : Array.isArray(error.details.candidates) && error.details.candidates.length > 0
+        ? "dev label list"
+        : "dev label add <label> <repository-url>";
+  }
+  return reportError(error, json);
+}
 
 export const worksetCreateCommand = defineCommand({
   meta: { name: "create", description: "Create a reusable repository workset" },
@@ -126,7 +158,7 @@ export const worksetCreateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -177,7 +209,7 @@ export const worksetRenameCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -219,10 +251,17 @@ export const worksetManageCommand = defineCommand({
   },
   async run({ args }) {
     const ambient = getAmbient();
-    if (!canPrompt(ambient)) {
-      return reportError("'dev workset manage' requires an interactive terminal.", args.json);
-    }
     const config = getActiveConfig(args.root);
+    if (!canPrompt(ambient)) {
+      return reportError(
+        Object.assign(new Error("'dev workset manage' requires an interactive terminal."), {
+          details: {
+            usage: !config.configPath ? "dev init" : "dev workset create <name> <repository-url>",
+          },
+        }),
+        args.json,
+      );
+    }
     let name = args.name?.trim();
     let originalName: string | undefined;
 
@@ -465,7 +504,7 @@ export const worksetManageCommand = defineCommand({
         });
         return 0;
       } catch (error) {
-        return reportError(error, args.json);
+        return reportWorksetError(error, config, args.json);
       }
     }
   },
@@ -581,7 +620,7 @@ export const worksetRepoAddCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -621,6 +660,11 @@ export const worksetRepoEditCommand = defineCommand({
         throw new workset.WorksetError(
           "WORKSET_NOT_FOUND",
           `Unknown workset '${selectedWorkset.value}'.`,
+          {
+            kind: "workset",
+            value: selectedWorkset.value,
+            candidates: Object.keys(config.worksets),
+          },
         );
       }
       const repositories = currentWorkset.members.filter((member) => member.source !== undefined);
@@ -708,7 +752,7 @@ export const worksetRepoEditCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -745,6 +789,11 @@ export const worksetRepoRemoveCommand = defineCommand({
         throw new workset.WorksetError(
           "WORKSET_NOT_FOUND",
           `Unknown workset '${selectedWorkset.value}'.`,
+          {
+            kind: "workset",
+            value: selectedWorkset.value,
+            candidates: Object.keys(config.worksets),
+          },
         );
       }
       const selectedMember = await resolveChoiceInput({
@@ -790,7 +839,7 @@ export const worksetRepoRemoveCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -891,7 +940,7 @@ export const worksetLabelAddCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -928,6 +977,11 @@ export const worksetLabelRemoveCommand = defineCommand({
         throw new workset.WorksetError(
           "WORKSET_NOT_FOUND",
           `Unknown workset '${selectedWorkset.value}'.`,
+          {
+            kind: "workset",
+            value: selectedWorkset.value,
+            candidates: Object.keys(config.worksets),
+          },
         );
       }
       const label = await resolveChoiceInput({
@@ -971,7 +1025,7 @@ export const worksetLabelRemoveCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });
@@ -1055,7 +1109,11 @@ export const worksetShowCommand = defineCommand({
       });
       const definition = config.worksets[selected.value];
       if (!definition)
-        throw new workset.WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${selected.value}'.`);
+        throw new workset.WorksetError(
+          "WORKSET_NOT_FOUND",
+          `Unknown workset '${selected.value}'.`,
+          { kind: "workset", value: selected.value, candidates: Object.keys(config.worksets) },
+        );
       ui.result({
         data: { name: selected.value, ...definition },
         json: args.json,
@@ -1064,7 +1122,7 @@ export const worksetShowCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorksetError(error, config, args.json);
     }
   },
 });

@@ -11,6 +11,33 @@ import { resolveRepositoryInput } from "./repository-input.ts";
 import { resolveMirrorSourceInput } from "./mirror-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { reportError } from "./errors.ts";
+function reportMirrorError(
+  error: unknown,
+  config: ReturnType<typeof getActiveConfig>,
+  json?: boolean,
+): number {
+  if (
+    error instanceof mirror.CanonicalMirrorError &&
+    error.details &&
+    (error.code === "SOURCE_NOT_FOUND" || error.code === "WORKTREE_NOT_FOUND")
+  ) {
+    if (!config.configPath) {
+      error.message = "No dev root yet.";
+      error.details.usage = "dev init";
+    } else if (error.code === "SOURCE_NOT_FOUND" && error.details.mirrorCount === 0) {
+      error.message = "This root has no mirrors yet.";
+      error.details.usage = "dev mirror add <source>";
+    }
+  } else if (error instanceof labels.LabelError && error.code === "LABEL_NOT_FOUND") {
+    if (!config.configPath) error.message = "No dev root yet.";
+    error.details.usage = !config.configPath
+      ? "dev init"
+      : Array.isArray(error.details.candidates) && error.details.candidates.length > 0
+        ? "dev label list"
+        : "dev label add <label> <repository-url>";
+  }
+  return reportError(error, json);
+}
 
 export const mirrorAddCommand = defineCommand({
   meta: {
@@ -70,7 +97,7 @@ export const mirrorAddCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });
@@ -139,7 +166,7 @@ export const mirrorListCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });
@@ -288,7 +315,7 @@ export const mirrorSyncCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });
@@ -353,7 +380,7 @@ export const mirrorTrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });
@@ -434,7 +461,7 @@ export const mirrorUntrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });
@@ -513,7 +540,7 @@ export const mirrorPickCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportMirrorError(error, config, args.json);
     }
   },
 });

@@ -1,4 +1,38 @@
 import { CancelledError, ui } from "../ui.ts";
+function editDistance(a: string, b: string): number {
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  let current: number[] = [];
+  current.length = b.length + 1;
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        previous[j]! + 1,
+        current[j - 1]! + 1,
+        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    const previousRow = previous;
+    previous = current;
+    current = previousRow;
+  }
+  return previous[b.length]!;
+}
+
+/** A nearby name must be within two edits and closer than half the query. */
+export function closestName(value: string, candidates: readonly string[]): string | undefined {
+  let closest: string | undefined;
+  let bestDistance = 3;
+  for (const candidate of candidates) {
+    if (Math.abs(candidate.length - value.length) >= bestDistance) continue;
+    const distance = editDistance(candidate, value);
+    if (distance < bestDistance && distance < value.length / 2) {
+      closest = candidate;
+      bestDistance = distance;
+    }
+  }
+  return closest;
+}
 
 /**
  * The command that gets the user out of each failure. One line per code, defined once.
@@ -30,14 +64,15 @@ export const NEXT_STEPS: Record<string, string | undefined> = {
   INVALID_ARGUMENT: "<usage>",
   INVALID_CONFIG: "Edit <path> to fix the configuration syntax or values, then retry.",
   INVALID_GLOBAL_TOML: "Edit <path> to fix the TOML syntax or root entries, then retry.",
-  INVALID_LABEL_FIELD: "dev label --help",
+  INVALID_LABEL_FIELD:
+    "Pass fields as key=value pairs, using names and types declared for the label in dev.yaml.",
   INVALID_MANIFEST: "Edit <filePath> to fix the workspace manifest, then retry.",
-  INVALID_MOUNT_PATH: "dev ws add --help",
+  INVALID_MOUNT_PATH: "Choose a relative mount path without '..' or an absolute path prefix.",
   INVALID_SOURCE: "Pass a repository URL or local path.",
   INVALID_UPDATE_PLAN: undefined,
-  INVALID_WORKSPACE_NAME: "dev ws init --help",
+  INVALID_WORKSPACE_NAME: "Pass a non-empty workspace name without path separators.",
   LABEL_NOT_FOUND: "dev label list",
-  LABEL_VALIDATION: "dev label --help",
+  LABEL_VALIDATION: "Check the label fields and repository assignments in dev.yaml, then retry.",
   MANIFEST_NOT_FOUND: "dev ls",
   MIRROR_ADMIN_MISSING: "dev mirror ls",
   MIRROR_PATH_COLLISION: 'git -C "<path>" status',
@@ -205,11 +240,12 @@ export function describeError(error: unknown): StructuredError {
   return {
     code,
     message,
-    nextStep: hint
-      ? fillPlaceholders(hint, details)
-      : typeof details?.usage === "string"
+    nextStep:
+      typeof details?.usage === "string"
         ? details.usage
-        : undefined,
+        : hint
+          ? fillPlaceholders(hint, details)
+          : undefined,
     details,
   };
 }
@@ -250,6 +286,7 @@ export function reportError(error: unknown, json?: boolean): number {
             message: described.message,
             ...(described.nextStep ? { nextStep: described.nextStep } : {}),
             ...described.details,
+            ...(Array.isArray(described.details?.candidates) ? { details: described.details } : {}),
           },
         },
         null,
@@ -263,6 +300,26 @@ export function reportError(error: unknown, json?: boolean): number {
   const healWarnings = described.details?.healWarnings;
   if (Array.isArray(healWarnings)) for (const warning of healWarnings) ui.warn(`⚠ ${warning}`);
   ui.error(`✗ ${described.message}`);
+  const candidates = described.details?.candidates;
+  if (Array.isArray(candidates) && candidates.every((candidate) => typeof candidate === "string")) {
+    const value = described.details?.value;
+    const near = typeof value === "string" ? closestName(value, candidates) : undefined;
+    if (near && near !== value) ui.error(`Did you mean '${near}'?`);
+    else if (candidates.length > 0)
+      ui.error(
+        `Known ${described.details?.kind ?? "available"} names: ${candidates.slice(0, 5).join(", ")}`,
+      );
+  }
+  const choices = described.details?.choices;
+  if (
+    !Array.isArray(candidates) &&
+    Array.isArray(choices) &&
+    choices.length > 0 &&
+    choices.every((choice) => typeof choice === "string")
+  )
+    ui.error(
+      `Known ${described.details?.field ?? "available"} values: ${choices.slice(0, 5).join(", ")}`,
+    );
   if (described.nextStep) ui.error(`↳ ${described.nextStep}`);
   return reportedExitCode;
 }

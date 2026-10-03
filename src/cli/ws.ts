@@ -10,6 +10,7 @@ import type { RuntimeConfig } from "../config.ts";
 import * as cache from "../cache.ts";
 import type { InventoryRecord } from "../cache.ts";
 import { WorksetError, declaredLabels, labelSources } from "../workset.ts";
+import { LabelError } from "../labels.ts";
 import { resolveJumpTarget } from "../nav.ts";
 import {
   CredentialError,
@@ -33,6 +34,31 @@ import {
 } from "./workspace-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { reportError } from "./errors.ts";
+function reportWorkspaceError(error: unknown, config: RuntimeConfig, json?: boolean): number {
+  if (error instanceof ws.WorkspaceError && error.details) {
+    if (
+      (error.code === "WORKSPACE_NOT_FOUND" || error.code === "MANIFEST_NOT_FOUND") &&
+      !config.configPath
+    ) {
+      error.message = "No dev root yet.";
+      error.details.usage = "dev init";
+    } else if (error.code === "MOUNT_NOT_FOUND") {
+      const workspace = JSON.stringify(error.details.workspaceName);
+      error.details.usage =
+        Array.isArray(error.details.candidates) && error.details.candidates.length > 0
+          ? `dev ws status --ws ${workspace}`
+          : `dev ws add <source> --ws ${workspace}`;
+    }
+  } else if (error instanceof LabelError && error.code === "LABEL_NOT_FOUND") {
+    if (!config.configPath) error.message = "No dev root yet.";
+    error.details.usage = !config.configPath
+      ? "dev init"
+      : Array.isArray(error.details.candidates) && error.details.candidates.length > 0
+        ? "dev label list"
+        : "dev label add <label> <repository-url>";
+  }
+  return reportError(error, json);
+}
 
 async function resolvePullRequestPlan(
   config: RuntimeConfig,
@@ -176,7 +202,7 @@ export const wsInitCommand = defineCommand({
         );
         suggestedDescription = resolved?.description;
       } catch (error) {
-        return reportError(error, args.json);
+        return reportWorkspaceError(error, config, args.json);
       }
       suggestedName =
         args.workset ?? (labels.length === 1 ? labels[0]!.replaceAll(":", "-") : undefined);
@@ -231,7 +257,7 @@ export const wsInitCommand = defineCommand({
           mounts = dedupeMounts(resolved.mounts, inventory);
           suggestedDescription = resolved.description;
         } catch (error) {
-          return reportError(error, args.json);
+          return reportWorkspaceError(error, config, args.json);
         }
         suggestedName = worksetName;
         reviewPlan = true;
@@ -291,7 +317,7 @@ export const wsInitCommand = defineCommand({
     try {
       validateMountPlan(mounts);
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
 
     let initializedPath: string | undefined;
@@ -353,7 +379,7 @@ export const wsInitCommand = defineCommand({
       return 0;
     } catch (error) {
       if (initializedPath && mounts.length > 0) await fs.removeDir(initializedPath);
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -403,7 +429,29 @@ async function resolveWorksetMounts(
   inventory: InventoryRecord[],
 ): Promise<{ mounts: PlannedMount[]; description?: string }> {
   const definition = config.worksets[name];
-  if (!definition) throw new WorksetError("WORKSET_NOT_FOUND", `Unknown workset '${name}'.`);
+  if (!definition) {
+    const candidates = Object.keys(config.worksets);
+    throw new WorksetError(
+      "WORKSET_NOT_FOUND",
+      !config.configPath
+        ? "No dev root yet."
+        : candidates.length === 0
+          ? "This root has no worksets yet."
+          : `Unknown workset '${name}'.`,
+      {
+        kind: "workset",
+        value: name,
+        candidates,
+        usage: !config.configPath
+          ? "dev init"
+          : candidates.length === 0
+            ? canPrompt()
+              ? "dev workset manage <name>"
+              : "dev workset create <name> <repository-url>"
+            : "dev workset list",
+      },
+    );
+  }
   const mounts: PlannedMount[] = [];
   for (const member of definition.members) {
     if (member.label !== undefined) {
@@ -806,7 +854,7 @@ export const wsAddCommand = defineCommand({
       warnHealFailures(results);
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -887,7 +935,7 @@ export const wsStatusCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1028,7 +1076,7 @@ export const wsUpdateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1105,7 +1153,7 @@ export const wsTrackCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1168,7 +1216,7 @@ export const wsLockCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1267,7 +1315,7 @@ export const wsUnlockCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1335,7 +1383,7 @@ export const wsTagCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1416,7 +1464,7 @@ export const wsRemoveCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1460,7 +1508,7 @@ export const wsListCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1518,7 +1566,7 @@ export const wsDuplicateCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1558,7 +1606,7 @@ export const wsPathCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1576,12 +1624,8 @@ export const wsGoCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const query = args.query?.trim() ?? "";
-    const workspaces = (
-      await ws.list({
-        root: config.root,
-        workspacePrefix: config.workspacePrefix,
-      })
-    )
+    const available = await ws.list({ root: config.root, workspacePrefix: config.workspacePrefix });
+    const workspaces = available
       .filter((workspace) => matchesWorkspaceQuery(workspace.name, query))
       .sort((left, right) => {
         const leftCreatedAt = left.createdAt
@@ -1595,7 +1639,24 @@ export const wsGoCommand = defineCommand({
 
     if (workspaces.length === 0) {
       return reportError(
-        query ? `No workspace matches '${query}'.` : "No workspaces found.",
+        new ws.WorkspaceError(
+          "WORKSPACE_NOT_FOUND",
+          !config.configPath
+            ? "No dev root yet."
+            : available.length === 0
+              ? "This root has no workspaces yet."
+              : `No workspace matches '${query}'.`,
+          {
+            kind: "workspace",
+            value: query,
+            candidates: available.map((workspace) => workspace.name),
+            usage: !config.configPath
+              ? "dev init"
+              : available.length === 0
+                ? "dev ws init <name>"
+                : "dev ls",
+          },
+        ),
         args.json,
       );
     }
@@ -1631,7 +1692,12 @@ export const wsGoCommand = defineCommand({
     }
 
     if (!selected) {
-      return reportError("Selected workspace is unavailable.", args.json);
+      return reportError(
+        Object.assign(new Error("Selected workspace is unavailable."), {
+          details: { usage: "dev ls" },
+        }),
+        args.json,
+      );
     }
 
     await ws.recordUse({ root: config.root, workspaceName: selected.name });
@@ -1681,7 +1747,7 @@ export const wsJumpCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1793,7 +1859,7 @@ export const wsPickCommand = defineCommand({
       });
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });
@@ -1871,7 +1937,7 @@ export const wsStartCommand = defineCommand({
       }
       return 0;
     } catch (error) {
-      return reportError(error, args.json);
+      return reportWorkspaceError(error, config, args.json);
     }
   },
 });

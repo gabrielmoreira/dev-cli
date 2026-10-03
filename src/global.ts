@@ -119,6 +119,10 @@ export function unregisterGlobalRoot(
   if (!alias)
     throw new GlobalRootError("ROOT_NOT_FOUND", `Registered root '${aliasOrPath}' was not found.`, {
       target: aliasOrPath,
+      kind: "root",
+      value: aliasOrPath,
+      candidates: Object.keys(config.roots),
+      usage: Object.keys(config.roots).length === 0 ? "dev init" : "dev roots",
     });
 
   const path = config.roots[alias].path;

@@ -9,7 +9,7 @@ import { reportError, reportExitCode } from "./errors.ts";
 import { getActiveConfig, getAmbient } from "./context.ts";
 import { describeSkipReason, warnHealFailures, workspaceSyncOptions } from "./ws.ts";
 import { formatLabelMirrors, formatMirrorSync } from "./mirror.ts";
-import type { ProviderConfig } from "../config.ts";
+import type { ProviderConfig, RuntimeConfig } from "../config.ts";
 import { resolveChoiceInput, resolveTextInput } from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 
@@ -17,8 +17,25 @@ import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function providerError(code: "PROVIDER_NOT_CONFIGURED" | "PROVIDER_NOT_FOUND", message: string) {
-  return Object.assign(new Error(message), { code });
+function providerError(
+  code: "PROVIDER_NOT_CONFIGURED" | "PROVIDER_NOT_FOUND",
+  message: string,
+  config: RuntimeConfig,
+  value?: string,
+) {
+  return Object.assign(new Error(!config.configPath ? "No dev root yet." : message), {
+    code,
+    details: {
+      kind: "provider",
+      value: value ?? "",
+      candidates: config.providers.map((provider) => provider.id),
+      usage: !config.configPath
+        ? "dev init"
+        : config.providers.length === 0
+          ? "dev provider add <type>"
+          : "dev provider list",
+    },
+  });
 }
 
 function formatInventoryResults(results: sync.InventorySyncSummary[]): string {
@@ -115,8 +132,18 @@ export const syncInventoryCommand = defineCommand({
     if (providers.length === 0) {
       return reportError(
         args.provider
-          ? providerError("PROVIDER_NOT_FOUND", `No provider with id '${args.provider}' found.`)
-          : providerError("PROVIDER_NOT_CONFIGURED", "No providers configured."),
+          ? providerError(
+              "PROVIDER_NOT_FOUND",
+              `No provider with id '${args.provider}' found.`,
+              config,
+              args.provider,
+            )
+          : providerError(
+              "PROVIDER_NOT_CONFIGURED",
+              "No providers configured.",
+              config,
+              args.provider,
+            ),
         args.json,
       );
     }
@@ -216,8 +243,15 @@ export const syncDataCommand = defineCommand({
           ? providerError(
               "PROVIDER_NOT_FOUND",
               `No Azure DevOps provider with id '${args.provider}' found.`,
+              config,
+              args.provider,
             )
-          : providerError("PROVIDER_NOT_CONFIGURED", "No Azure DevOps providers configured."),
+          : providerError(
+              "PROVIDER_NOT_CONFIGURED",
+              "No Azure DevOps providers configured.",
+              config,
+              args.provider,
+            ),
         args.json,
       );
     }
@@ -244,6 +278,8 @@ export const syncDataCommand = defineCommand({
         providerError(
           "PROVIDER_NOT_FOUND",
           `No Azure DevOps provider with id '${providerChoice.value}' found.`,
+          config,
+          args.provider,
         ),
         args.json,
       );
@@ -404,7 +440,12 @@ export const syncCommand = defineCommand({
       }
       if (args.provider && !config.providers.some((p) => p.id === args.provider)) {
         return reportError(
-          providerError("PROVIDER_NOT_FOUND", `No provider with id '${args.provider}' found.`),
+          providerError(
+            "PROVIDER_NOT_FOUND",
+            `No provider with id '${args.provider}' found.`,
+            config,
+            args.provider,
+          ),
           args.json,
         );
       }

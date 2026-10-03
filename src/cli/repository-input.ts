@@ -121,8 +121,9 @@ export async function resolveRepositoryInput(
         );
       }
       const fallback = await resolveInputSource(options.root, query);
-      const usage =
-        config.providers.length > 0
+      const usage = !config.configPath
+        ? "dev init"
+        : config.providers.length > 0
           ? "dev sync inventory"
           : "Pass a repository URL or local path, or configure a provider: dev provider add <type>";
       const disabled = resolved.disabledMatches?.[0];
@@ -130,8 +131,18 @@ export async function resolveRepositoryInput(
         "SOURCE_NOT_FOUND",
         disabled
           ? fallback.error!
-          : `No repository matching '${query}' found in local inventory or declared sources.`,
-        { query, usage },
+          : !config.configPath
+            ? "No dev root yet."
+            : `No repository matching '${query}' is known in this root.`,
+        {
+          query,
+          usage,
+          kind: "repository",
+          value: query,
+          candidates: parseDeclaredSources(config.sources).sources.map((source) =>
+            git.deriveDefaultMountPath(source.url),
+          ),
+        },
       );
     }
   }

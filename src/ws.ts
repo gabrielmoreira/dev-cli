@@ -247,7 +247,13 @@ export async function loadWorkspaceContext(
     throw new WorkspaceError(
       "WORKSPACE_NOT_FOUND",
       `Workspace '${workspaceName}' not found at ${workspacePath}`,
-      { workspaceName, path: workspacePath },
+      {
+        workspaceName,
+        path: workspacePath,
+        kind: "workspace",
+        value: workspaceName,
+        candidates: [],
+      },
     );
   }
 
@@ -255,8 +261,8 @@ export async function loadWorkspaceContext(
   if (!deps.fs.exists(manifestPath)) {
     throw new WorkspaceError(
       "MANIFEST_NOT_FOUND",
-      `Workspace manifest not found at ${manifestPath}`,
-      { manifestPath },
+      `Workspace task notes are missing at ${manifestPath}`,
+      { manifestPath, kind: "workspace", value: workspaceName, candidates: [] },
     );
   }
 
@@ -378,7 +384,13 @@ export function findMountOrThrow(
   if (index < 0) {
     throw new WorkspaceError(
       "MOUNT_NOT_FOUND",
-      `Mount '${mountPath}' not found in workspace manifest`,
+      `Mount '${mountPath}' was not found in workspace '${currentManifest.name}'.`,
+      {
+        workspaceName: currentManifest.name,
+        kind: "mount",
+        value: mountPath,
+        candidates: currentManifest.mounts.map((mount) => mount.path),
+      },
     );
   }
   return { mount: currentManifest.mounts[index], index };
@@ -2203,6 +2215,12 @@ export function resolveWorkspacePath(input: {
   throw new WorkspaceError(
     "WORKSPACE_NOT_FOUND",
     "Target workspace could not be determined. Provide workspace name or run from inside a workspace.",
+    {
+      kind: "workspace",
+      value: input.workspaceName ?? "",
+      candidates: [],
+      usage: "Pass the workspace name; see names with dev ls.",
+    },
   );
 }
 
@@ -2343,6 +2361,7 @@ export async function duplicate(
     throw new WorkspaceError(
       "WORKSPACE_NOT_FOUND",
       `Source workspace '${input.sourceName}' not found at ${sourcePath}`,
+      { kind: "workspace", value: input.sourceName, candidates: [] },
     );
   }
 

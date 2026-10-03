@@ -110,16 +110,34 @@ export const prListCommand = defineCommand({
       !args.all &&
       statusFilter === "open";
     if (args.mine && args.all) {
-      return reportError("--mine and --all cannot be used together.", args.json);
+      return reportError(
+        Object.assign(new Error("--mine and --all cannot be used together."), {
+          details: { usage: "dev pr list --mine    # or: dev pr list --all" },
+        }),
+        args.json,
+      );
     }
     if (requestedLabel && (requestedRepository || args.interactive)) {
       return reportError(
-        "--label cannot be combined with a repository or --interactive.",
+        Object.assign(new Error("--label cannot be combined with a repository or --interactive."), {
+          details: {
+            usage:
+              "Choose a label with dev pr list --label <label>, or a repository with dev pr list <repository>.",
+          },
+        }),
         args.json,
       );
     }
     if (workspaceContext && (requestedLabel || args.interactive)) {
-      return reportError("--ws cannot be combined with --label or --interactive.", args.json);
+      return reportError(
+        Object.assign(new Error("--ws cannot be combined with --label or --interactive."), {
+          details: {
+            usage:
+              "Choose a workspace with dev pr list --ws <name>, or a label with dev pr list --label <label>.",
+          },
+        }),
+        args.json,
+      );
     }
 
     let targetUrls: string[] = workspaceContext?.sources ?? [];
@@ -132,7 +150,19 @@ export const prListCommand = defineCommand({
       );
       if (targetUrls.length === 0) {
         return reportError(
-          `Repository '${requestedRepository}' is not mounted in workspace '${workspaceContext.name}'.`,
+          Object.assign(
+            new Error(
+              `Repository '${requestedRepository}' is not mounted in workspace '${workspaceContext.name}'.`,
+            ),
+            {
+              details: {
+                kind: "repository",
+                value: requestedRepository,
+                candidates: workspaceContext.sources.map((source) => normalizeSourceKey(source)),
+                usage: `dev ws status --ws ${JSON.stringify(workspaceContext.name)}`,
+              },
+            },
+          ),
           args.json,
         );
       }
@@ -146,7 +176,21 @@ export const prListCommand = defineCommand({
         ),
       ];
       if (targetUrls.length === 0) {
-        return reportError(`Label '${requestedLabel}' has no repository sources.`, args.json);
+        return reportError(
+          Object.assign(new Error(`No repository carries label '${requestedLabel}'.`), {
+            details: {
+              kind: "label",
+              value: requestedLabel,
+              candidates: labels.listLabels(config).map((item) => item.label),
+              usage: !config.configPath
+                ? "dev init"
+                : labels.listLabels(config).length > 0
+                  ? "dev label list"
+                  : "dev label add <label> <repository-url>",
+            },
+          }),
+          args.json,
+        );
       }
     } else if (!workspaceContext && requestedRepository && !args.interactive) {
       const exactMatches = inventory.filter(
@@ -778,7 +822,10 @@ export const prViewCommand = defineCommand({
       selected = candidates[Number(choice.value)];
       idStr = selected ? String(selected.id) : undefined;
     }
-    if (!idStr) throw new Error("Selected pull request is unavailable.");
+    if (!idStr)
+      throw Object.assign(new Error("Selected pull request is unavailable."), {
+        details: { usage: "dev pr list" },
+      });
     const id = explicitId ?? parsePositiveInteger(idStr, "id", "dev pr view <id> [--repo <name>]");
 
     // A URL names its organization, project, and repository, so a closed pull request
@@ -817,7 +864,12 @@ export const prViewCommand = defineCommand({
 
     if (!item) {
       const hint = repository ? "" : " Pass its URL, or --repo <name>.";
-      return reportError(`Pull request #${id} not found.${hint}`, args.json);
+      return reportError(
+        Object.assign(new Error(`Pull request #${id} not found.${hint}`), {
+          details: { usage: !config.configPath ? "dev init" : "dev pr list" },
+        }),
+        args.json,
+      );
     }
 
     ui.result({

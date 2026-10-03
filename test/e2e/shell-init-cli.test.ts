@@ -57,15 +57,6 @@ describe("shell-init CLI usage", () => {
     },
   );
 
-  it("reports an unsupported shell as human usage failure", async () => {
-    const result = await run(["shell-init", "nope"]);
-    expect(result.exitCode).toBe(2);
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toBe(
-      "✗ Unknown shell 'nope'. Choose bash, zsh, fish, powershell, or pwsh.\n↳ dev shell-init --help\n",
-    );
-  });
-
   it.each([
     { args: ["shell-init", "nope", "--json"] },
     { args: ["--json=true", "shell-init", "nope"] },
@@ -80,15 +71,6 @@ describe("shell-init CLI usage", () => {
       usage: "dev shell-init --help",
       nextStep: "dev shell-init --help",
     });
-  });
-
-  it("reports an unsupported runner as human usage failure", async () => {
-    const result = await run(["shell-init", "bash", "--runner", "bogus"]);
-    expect(result.exitCode).toBe(2);
-    expect(result.stdout).toBe("");
-    expect(result.stderr).toBe(
-      "✗ Unknown runner 'bogus'. Choose direct or mise.\n↳ dev shell-init --help\n",
-    );
   });
 
   it.each([

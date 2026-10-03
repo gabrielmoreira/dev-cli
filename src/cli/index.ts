@@ -32,6 +32,7 @@ import {
   NEXT_STEPS,
   reportError,
   takeReportedExitCode,
+  closestName,
 } from "./errors.ts";
 import { qmdCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
@@ -249,22 +250,6 @@ export async function formatCommandHelp(path: string[], allowArguments = false):
   return await renderCommandUsage({ ...command, meta: { ...meta, name: names.at(-1) } }, parent);
 }
 
-function editDistance(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-  for (let i = 1; i <= a.length; i++) {
-    const current = [i];
-    for (let j = 1; j <= b.length; j++) {
-      current[j] = Math.min(
-        previous[j]! + 1,
-        current[j - 1]! + 1,
-        previous[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-    }
-    previous = current;
-  }
-  return previous[b.length]!;
-}
-
 /**
  * The command the user probably meant when a word is not a command: a
  * sibling one or two edits away (`dev ws strat`), or a command elsewhere with
@@ -282,11 +267,8 @@ export async function suggestCommand(words: string[]): Promise<string | undefine
       continue;
     }
     // At most two edits, and fewer than half the word, so `xy` suggests nothing.
-    const near = Object.keys(siblings)
-      .map((name) => ({ name, distance: editDistance(name, word) }))
-      .filter(({ distance }) => distance <= 2 && distance < word.length / 2)
-      .sort((x, y) => x.distance - y.distance)[0];
-    if (near) return ["dev", ...names, near.name].join(" ");
+    const near = closestName(word, Object.keys(siblings));
+    if (near) return ["dev", ...names, near].join(" ");
     return await findByName(mainCommand as unknown as InspectableCommand, word, ["dev"]);
   }
   return undefined;
@@ -404,13 +386,9 @@ export async function findUnknownOption(
       if (option.takesValue && !word.includes("=")) index++;
       continue;
     }
-    const suggestion = [...new Set([...known.values()].map((candidate) => candidate.name))]
-      .map((candidate) => ({
-        candidate,
-        distance: editDistance(optionKey(candidate), optionKey(name)),
-      }))
-      .filter(({ distance }) => distance <= Math.min(2, Math.max(1, Math.floor(name.length / 2))))
-      .sort((x, y) => x.distance - y.distance)[0]?.candidate;
+    const candidates = [...new Set([...known.values()].map((candidate) => candidate.name))];
+    const near = closestName(optionKey(name), candidates.map(optionKey));
+    const suggestion = candidates.find((candidate) => optionKey(candidate) === near);
     return {
       option: word.split("=")[0]!,
       command: names.join(" "),

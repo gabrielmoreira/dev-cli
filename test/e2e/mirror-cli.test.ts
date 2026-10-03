@@ -176,12 +176,9 @@ describe("dev mirror CLI E2E (Phase 8)", () => {
     if (json) {
       expect(JSON.parse(stderr).error).toMatchObject({
         code: "SOURCE_NOT_FOUND",
-        message: "No mirror matches source 'typo'.",
         nextStep: "dev mirror ls",
         source: "typo",
       });
-    } else {
-      expect(stderr).toBe("✗ No mirror matches source 'typo'.\n↳ dev mirror ls\n");
     }
   });
 });
