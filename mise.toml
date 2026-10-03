@@ -39,5 +39,5 @@ description = "Build the disposable environment and render the VHS demo"
 run = "bash docs/demo/render.sh"
 
 [tasks."docs:commands"]
-description = "Generate the complete CLI command reference"
-run = "bun scripts/generate-cli-reference.ts && bun run format -- docs/commands.md"
+description = "Generate the complete CLI command reference and the README concept table"
+run = "bun scripts/generate-cli-reference.ts && bun run format -- docs/commands.md README.md"
