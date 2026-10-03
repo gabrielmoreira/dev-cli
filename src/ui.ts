@@ -159,6 +159,18 @@ export const ui = {
     console.log(JSON.stringify(options.data, null, 2));
   },
 
+  empty(options: {
+    message: string;
+    next: readonly [{ command: string; why: string }, ...{ command: string; why: string }[]];
+  }): void {
+    console.log(
+      [
+        `○ ${options.message}`,
+        ...options.next.map(({ command, why }) => `↳ ${command}  ${why}`),
+      ].join("\n"),
+    );
+  },
+
   // Every prompt goes through Clack: mixing prompt libraries left two readers on
   // stdin, and on Windows ConPTY the second one failed with EPIPE.
   async text({

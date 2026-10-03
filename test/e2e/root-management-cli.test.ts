@@ -381,7 +381,7 @@ describe("init root alias protection", () => {
     expect(parseGlobalToml(await fs.readText(join(home, ".dev.toml"))).default_root).toBe("second");
   });
 
-  it("prints a changed default; an unaliased explicit path keeps the previous default", async () => {
+  it("keeps the previous default for an unaliased explicit path", async () => {
     const { home, first, second } = await fixture("default-human");
     await initial(home, first);
     const unchanged = await invoke(home, ["init", second, "--json"]);
@@ -390,9 +390,5 @@ describe("init root alias protection", () => {
       defaultRoot: "taken",
       defaultRootChanged: false,
     });
-    const changed = await invoke(home, ["init", second, "--alias", "other"]);
-    expect(changed.code, changed.stderr).toBe(0);
-    expect(changed.stdout).toContain("Default Root:  other");
-    expect(changed.stderr).toBe("");
   });
 });

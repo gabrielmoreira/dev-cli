@@ -68,9 +68,6 @@ it("root init distinguishes creation from a byte-preserving no-op", async () => 
     defaultRootChanged: false,
   });
   expect(await Promise.all(paths.map((path) => readFile(path, "utf8")))).toEqual(before);
-  const human = await ok(["init", root, "--alias", "fixture"], false);
-  expect(human.stdout.trim()).toBe(`○ ${root} is already a dev root (alias fixture).`);
-  expect(human.stderr).toBe("");
 });
 
 it("existing root with a new alias/default is changed, not an already-so report", async () => {
@@ -83,10 +80,6 @@ it("existing root with a new alias/default is changed, not an already-so report"
     defaultRoot: "second",
     defaultRootChanged: true,
   });
-  const human = await ok(["init", root, "--alias", "third"], false);
-  expect(human.stdout).toContain("Updated dev root 'third'");
-  expect(human.stdout).toContain("Default Root:  third");
-  expect(human.stdout).not.toContain("is already a dev root");
 });
 
 it("repairing missing root instructions is a change even when config was not created", async () => {

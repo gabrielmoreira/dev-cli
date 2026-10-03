@@ -110,14 +110,14 @@ export const providerAddCommand = defineCommand({
       data: entry,
       json: args.json,
       text: () => {
-        let out = `○ Registered provider '${entry.id}' (${entry.type}):\n`;
+        let out = `○ Provider '${entry.id}' (${entry.type}) is connected:\n`;
         if (entry.type === "azure_devops") {
           out += `  Organization: ${entry.organization}\n`;
           if (entry.project) out += `  Project:      ${entry.project}\n`;
         } else {
           out += `  Owner:        ${entry.owner}\n`;
         }
-        out += `\n↳ dev sync inventory  (refresh this provider's repository inventory)`;
+        out += "\n↳ dev sync inventory  list repositories from this connection";
         return out;
       },
     });
@@ -144,11 +144,19 @@ export const providerListCommand = defineCommand({
       json: args.json,
       text: () => {
         if (providers.length === 0) {
-          return [
-            "No providers configured in dev.yaml.",
-            "  Add one: dev provider add ado --org <org>",
-            "           dev provider add github --owner <user>",
-          ].join("\n");
+          return ui.empty({
+            message: config.configPath
+              ? "No provider connected, so dev cannot list your remote repositories."
+              : "No dev root yet, so there are no providers to show.",
+            next: config.configPath
+              ? [
+                  {
+                    command: "dev provider add",
+                    why: "connect GitHub or Azure DevOps; you can still use URLs without one",
+                  },
+                ]
+              : [{ command: "dev init", why: "choose where to keep your work" }],
+          });
         }
         const maxIdLen = Math.max(...providers.map((p) => p.id.length));
         let out = `Configured Providers (${config.root}):\n`;

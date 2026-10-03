@@ -337,13 +337,16 @@ export const wsInitCommand = defineCommand({
             ? `✓ Initialized workspace '${result.name}' at:\n`
             : `○ Workspace '${result.name}' already exists at:\n`;
           out += `  Directory: ${result.path}\n`;
-          out += `  Manifest:  ${result.manifestPath}`;
+          out += `  Task notes: ${result.manifestPath}`;
           for (const mount of mounted) {
             out +=
               mount.outcome === "already_mounted"
                 ? `\n  ○ Mounted: ${mount.mountName} (already there)`
                 : `\n  ✓ Mounted: ${mount.mountName}${mount.mirrorReused ? " (reused the local mirror)" : ""}`;
           }
+          out += `\n↳ dev go ${result.name}  work in this task folder`;
+          if (mounted.length === 0)
+            out += `\n↳ dev ws add <repository-url> --ws ${result.name}  add a repository to the task`;
           return out;
         },
       });
@@ -794,7 +797,8 @@ export const wsAddCommand = defineCommand({
               const reused = result.mirrorReused ? " (reused the local mirror)" : "";
               return `✓ ${verb} ${at} from ${result.source} in '${result.workspaceName}'${reused}`;
             })
-            .join("\n"),
+            .join("\n") +
+          `\n↳ dev ws status --ws ${workspace.value}  inspect the task's repository branches`,
       });
       for (const result of results) {
         if (result.hookWarning) ui.warn(`⚠ ${result.hookWarning}`);
@@ -847,22 +851,31 @@ export const wsStatusCommand = defineCommand({
         text: () => {
           let out = `Workspace: ${result.workspaceName}\n`;
           out += `Path:      ${result.workspacePath}\n`;
-          out += `Status:    ${result.isClean ? "clean" : "diverged / changes detected"}\n\n`;
+          out += `Status:    ${result.isClean ? "matches your workspace plan" : "needs attention; see each mount below"}\n\n`;
           if (result.mounts.length === 0) {
-            out += "  No mounts declared in workspace.";
+            ui.log(out.trimEnd());
+            return ui.empty({
+              message: `Workspace '${result.workspaceName}' has no repository mounts yet.`,
+              next: [
+                {
+                  command: `dev ws add <repository-url> --ws ${result.workspaceName}`,
+                  why: "add a repository for this task",
+                },
+              ],
+            });
           } else {
             out += "Mounts:\n";
             for (const mount of result.mounts) {
               const sym = mount.state === "clean" ? "○" : "⚠";
               out += `  ${sym} ${mount.path} [${mount.state}]\n`;
-              out += `      Source:   ${mount.source}\n`;
+              out += `      Repository: ${mount.source}\n`;
               if (mount.desired.revision.mode === "track") {
-                out += `      Desired:  branch ${mount.desired.revision.branch}\n`;
+                out += `      Planned:  branch ${mount.desired.revision.branch}\n`;
               } else if (mount.desired.revision.mode === "lock") {
-                out += `      Desired:  commit ${mount.desired.revision.commit}\n`;
+                out += `      Planned:  commit ${mount.desired.revision.commit}\n`;
               }
               if (mount.observed.exists && mount.observed.isGitWorktree) {
-                out += `      Observed: branch=${mount.observed.currentRevision.branch || "detached"} commit=${mount.observed.currentRevision.commitSha?.slice(0, 8)}\n`;
+                out += `      Checked out: branch=${mount.observed.currentRevision.branch || "detached"} commit=${mount.observed.currentRevision.commitSha?.slice(0, 8)}\n`;
               }
               for (const msg of mount.messages) {
                 out += `      Note:     ${msg}\n`;
@@ -1009,6 +1022,7 @@ export const wsUpdateCommand = defineCommand({
               out += `    Recovery: ${mount.stash.recovery}\n`;
             }
           }
+          out += `\n↳ dev ws status --ws ${result.workspaceName}  inspect the task's repository state`;
           return out.trimEnd();
         },
       });
@@ -1080,10 +1094,12 @@ export const wsTrackCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          let out = `○ Mount '${result.path}' is now tracking branch '${result.branch}'.`;
+          const changed = result.manifestUpdated || result.worktreeSwitched;
+          let out = `${changed ? "✓" : "○"} Mount '${result.path}' ${changed ? "now tracks" : "already tracks"} branch '${result.branch}'.`;
           if (result.worktreeSwitched) {
             out += `\n✓ Switched worktree to branch '${result.branch}'.`;
           }
+          out += `\n↳ dev ws status --ws ${workspace.value}  inspect the branch now in use`;
           return out;
         },
       });
@@ -1140,11 +1156,13 @@ export const wsLockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          if (!result.changed) return "○ No revision changes required.";
+          if (!result.changed)
+            return `○ No revision changes required.\n↳ dev ws status --ws ${workspace.value}  inspect the pinned repository commits`;
           let out = "";
           for (const m of result.lockedMounts) {
             out += `✓ Mount '${m.path}' locked to commit ${m.commit.slice(0, 8)}.\n`;
           }
+          out += `↳ dev ws status --ws ${workspace.value}  inspect the pinned repository commits`;
           return out.trimEnd();
         },
       });
@@ -1237,11 +1255,13 @@ export const wsUnlockCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
-          if (!result.changed) return "○ No revision changes required.";
+          if (!result.changed)
+            return `○ No revision changes required.\n↳ dev ws status --ws ${workspace.value}  inspect the tracked repository branches`;
           let out = "";
           for (const m of result.unlockedMounts) {
             out += `✓ Mount '${m.path}' unlocked to track branch '${m.branch}'.\n`;
           }
+          out += `↳ dev ws status --ws ${workspace.value}  inspect the tracked repository branches`;
           return out.trimEnd();
         },
       });
@@ -1308,9 +1328,10 @@ export const wsTagCommand = defineCommand({
         data: result,
         json: args.json,
         text: () =>
-          result.changed
+          (result.changed
             ? `✓ Mount '${result.path}' pinned to tag '${result.tag}'.`
-            : `○ Mount '${result.path}' is already pinned to tag '${result.tag}'.`,
+            : `○ Mount '${result.path}' is already pinned to tag '${result.tag}'.`) +
+          `\n↳ dev ws status --ws ${workspace.value}  inspect the pinned repository tag`,
       });
       return 0;
     } catch (error) {
@@ -1388,9 +1409,10 @@ export const wsRemoveCommand = defineCommand({
         data: result,
         json: args.json,
         text: () =>
-          result.removed
+          (result.removed
             ? `✓ Removed mount '${result.path}' from workspace '${workspace.value}'.`
-            : `○ '${result.path}' is not mounted in workspace '${workspace.value}'.`,
+            : `○ '${result.path}' is not mounted in workspace '${workspace.value}'.`) +
+          `\n↳ dev ws status --ws ${workspace.value}  inspect the remaining mounts`,
       });
       return 0;
     } catch (error) {
@@ -1418,7 +1440,14 @@ export const wsListCommand = defineCommand({
         json: args.json,
         text: () => {
           if (items.length === 0) {
-            return "No workspaces found.";
+            return ui.empty({
+              message: config.configPath
+                ? "No workspaces created in this root yet."
+                : "No dev root yet, so there are no workspaces to show.",
+              next: config.configPath
+                ? [{ command: "dev ws init <repository-url>", why: "start a workspace for a task" }]
+                : [{ command: "dev init", why: "choose where to keep your work" }],
+            });
           }
           let out = `Workspaces in ${config.root}:\nWorkspace | Mounts | Last used | Path\n`;
           for (const item of items) {
@@ -1483,6 +1512,7 @@ export const wsDuplicateCommand = defineCommand({
         text: () => {
           let out = `✓ Duplicated workspace '${result.sourceName}' to '${result.targetName}' (${result.mountsCount} mounts).\n`;
           out += `  Path: ${result.path}`;
+          out += `\n↳ dev go ${result.targetName}  work in the new task folder`;
           return out;
         },
       });
@@ -1711,6 +1741,16 @@ export const wsPickCommand = defineCommand({
           data: { workspace: wsName, mounts },
           json: args.json,
           text: () => {
+            if (mounts.length === 0)
+              return ui.empty({
+                message: `Workspace '${wsName}' has no repository mounts yet.`,
+                next: [
+                  {
+                    command: `dev ws add <repository-url> --ws ${wsName}`,
+                    why: "add a repository for this task",
+                  },
+                ],
+              });
             let out = `Mounts in workspace '${wsName}':\n`;
             for (const mount of mounts) {
               const rev =
@@ -1732,6 +1772,15 @@ export const wsPickCommand = defineCommand({
         data: items,
         json: args.json,
         text: () => {
+          if (items.length === 0)
+            return ui.empty({
+              message: config.configPath
+                ? "No workspaces created in this root yet."
+                : "No dev root yet, so there are no workspaces to show.",
+              next: config.configPath
+                ? [{ command: "dev ws init <repository-url>", why: "start a workspace for a task" }]
+                : [{ command: "dev init", why: "choose where to keep your work" }],
+            });
           let out = "Workspaces:\n";
           for (const item of items) {
             const state = item.error

@@ -204,15 +204,15 @@ export const initCommand = defineCommand({
       data: result,
       json: args.json,
       text: () => {
-        if (!changed) return `○ ${targetDir} is already a dev root (alias ${alias}).`;
-        let out = created
-          ? `✓ Initialized dev root '${alias}' at:\n`
-          : `✓ Updated dev root '${alias}' at:\n`;
-        out += `  Directory:     ${targetDir}\n`;
-        out += `  Configuration: ${devYamlPath}\n`;
-        out += `  Global Config: ${globalPath} (alias: ${alias})`;
-        if (defaultRootChanged) out += `\n  Default Root:  ${globalConfig.default_root}`;
-        return out;
+        const defaultHint = targetDir === resolve(homeDir, "dev") ? " (default)" : "";
+        const outcome = !changed
+          ? `○ Your dev root at ${targetDir} is ready`
+          : `${created ? "✓ Created" : "✓ Updated"} your dev root at ${targetDir}${defaultHint}`;
+        return [
+          outcome,
+          "↳ dev ws init <repository-url>  start a workspace for a task",
+          "↳ dev provider add  connect GitHub or Azure DevOps",
+        ].join("\n");
       },
     });
 
@@ -350,12 +350,12 @@ export const currentCommand = defineCommand({
       data: result,
       json: args.json,
       text: () => {
-        let out = `Dev Root: ${config.root}\n`;
-        out += `  Source: ${config.rootSource}\n`;
-        if (config.configPath) {
-          out += `  Config: ${config.configPath}`;
-        }
-        return out.trimEnd();
+        if (!config.configPath)
+          return ui.empty({
+            message: "No dev root yet.",
+            next: [{ command: "dev init", why: "choose where to keep your work" }],
+          });
+        return `Your dev root: ${config.root}\n↳ dev ls  see your task workspaces\n↳ dev roots  see the roots you can switch to`;
       },
     });
 
@@ -395,9 +395,12 @@ export const rootsCommand = defineCommand({
       json: args.json,
       text: () => {
         if (list.length === 0) {
-          return `No dev roots registered in ${globalPath}. Run 'dev init [path]' to create one.`;
+          return ui.empty({
+            message: "No dev root yet; you have not registered one.",
+            next: [{ command: "dev init", why: "choose where to keep your work" }],
+          });
         }
-        let out = `Registered Dev Roots (${globalPath}):\n`;
+        let out = "Your dev roots:\n";
         for (const item of list) {
           const marker = item.isActive ? "* " : "  ";
           const defaultBadge = item.isDefault ? " (default)" : "";

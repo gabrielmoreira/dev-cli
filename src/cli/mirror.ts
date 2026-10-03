@@ -63,9 +63,10 @@ export const mirrorAddCommand = defineCommand({
         data: result,
         json: args.json,
         text: () =>
-          result.created
+          (result.created
             ? `✓ Mirrored ${result.canonicalUrl} @ ${result.branch} at ${result.path}`
-            : `○ ${result.canonicalUrl} @ ${result.branch} is already mirrored at ${result.path}`,
+            : `○ ${result.canonicalUrl} @ ${result.branch} is already mirrored at ${result.path}`) +
+          "\n↳ dev mirror ls  see your reference copies for reading and search",
       });
       return 0;
     } catch (error) {
@@ -108,9 +109,25 @@ export const mirrorListCommand = defineCommand({
         json: args.json,
         text: () => {
           if (shown.length === 0) {
-            return "No mirrors found.";
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there are no mirrors to show."
+                : labelFilter
+                  ? `No mirrors match label '${labelFilter}'.`
+                  : "No mirrors created in this root yet.",
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : labelFilter
+                  ? [{ command: "dev mirror ls", why: "see all reference copies" }]
+                  : [
+                      {
+                        command: "dev mirror add <repository-url>",
+                        why: "keep a reference copy for reading and search",
+                      },
+                    ],
+            });
           }
-          let out = `Mirrors in /mirrors:\n`;
+          let out = `Mirrors in ${config.root}:\n`;
           for (const item of shown) {
             const statusStr = item.isClean ? "clean" : "dirty";
             const syncStr = item.behind > 0 ? `behind ${item.behind}` : "up-to-date";
@@ -167,7 +184,7 @@ export function formatMirrorSync(
   ].filter(Boolean);
   const lines = [
     total === 0
-      ? "○ no mirrors  ↳ dev mirror add <source>"
+      ? "○ No mirrors created yet.\n↳ dev mirror add <repository-url>  keep a reference copy for reading and search"
       : `${problems > 0 ? "⚠" : result.updated.length > 0 ? "✓" : "○"} ${counts.join(", ")}`,
   ];
   for (const item of result.updated) {
@@ -245,6 +262,11 @@ export const mirrorSyncCommand = defineCommand({
         data: result,
         json: args.json,
         text: () => {
+          if (!config.configPath)
+            return ui.empty({
+              message: "No dev root yet, so there are no mirrors to update.",
+              next: [{ command: "dev init", why: "choose where to keep your work" }],
+            });
           const lines = [
             ...formatLabelMirrors(labelMirrors),
             ...formatMirrorSync(result, { changes: true }),
@@ -324,9 +346,10 @@ export const mirrorTrackCommand = defineCommand({
         data: result,
         json: args.json,
         text: () =>
-          result.created
+          (result.created
             ? `✓ Tracking ${result.branch} at ${result.path}`
-            : `○ ${result.branch} is already tracked at ${result.path}`,
+            : `○ ${result.branch} is already tracked at ${result.path}`) +
+          "\n↳ dev mirror ls  see your reference copies",
       });
       return 0;
     } catch (error) {
@@ -406,7 +429,8 @@ export const mirrorUntrackCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () => `✓ Untracked canonical worktree: ${result.path}`,
+        text: () =>
+          `✓ Stopped tracking the mirror at ${result.path}\n↳ dev mirror ls  see the remaining reference copies`,
       });
       return 0;
     } catch (error) {
@@ -462,8 +486,25 @@ export const mirrorPickCommand = defineCommand({
         data: items,
         json: args.json,
         text: () => {
-          if (items.length === 0) return "No mirrors found.";
-          let out = `Mirrors:\n`;
+          if (items.length === 0)
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there are no mirrors to show."
+                : filter
+                  ? `No mirrors match '${filter}'.`
+                  : "No mirrors created in this root yet.",
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : filter
+                  ? [{ command: "dev mirror ls", why: "see all reference copies" }]
+                  : [
+                      {
+                        command: "dev mirror add <repository-url>",
+                        why: "keep a reference copy for reading and search",
+                      },
+                    ],
+            });
+          let out = `Mirrors in ${config.root}:\n`;
           for (const item of items) {
             out += `  - ${item.name} (${item.branch}) -> ${item.path}\n`;
           }

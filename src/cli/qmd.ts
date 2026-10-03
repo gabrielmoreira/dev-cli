@@ -39,16 +39,30 @@ export const qmdSyncCommand = defineCommand({
       ui.result({
         data: result,
         json: args.json,
-        text: () =>
-          result.labels.length === 0
-            ? `No ${DEFAULT_QMD_LABEL_PREFIX}* labels in dev.yaml, so there is nothing to index.\n↳ dev label add ${DEFAULT_QMD_LABEL_PREFIX}docs <repository>`
-            : [
-                ...result.labels.map(
-                  ({ label, collections }) =>
-                    `qmd sync '${label}': ${collections} collection(s) reconciled`,
-                ),
-                "qmd sync complete",
-              ].join("\n"),
+        text: () => {
+          if (result.labels.length === 0)
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there is nothing to index."
+                : `No ${DEFAULT_QMD_LABEL_PREFIX}* labels group repositories, so there is nothing to index.`,
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : [
+                    {
+                      command: `dev label add ${DEFAULT_QMD_LABEL_PREFIX}docs <repository-url>`,
+                      why: "keep these repositories mirrored and searchable",
+                    },
+                  ],
+            });
+          return [
+            ...result.labels.map(
+              ({ label, collections }) =>
+                `qmd sync '${label}': ${collections} collection(s) reconciled`,
+            ),
+            "qmd sync complete",
+            "↳ dev qmd search <query>  search your indexed repository documents",
+          ].join("\n");
+        },
       });
       return 0;
     } catch (error) {

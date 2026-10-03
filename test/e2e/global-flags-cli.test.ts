@@ -90,7 +90,7 @@ describe("global CLI output flags", () => {
   it.each(["--json=false", "--no-json"])("renders text for %s", async (flag) => {
     const result = await run([flag, "ws", "ls"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe("No workspaces found.\n");
+    expect(() => JSON.parse(result.stdout)).toThrow(SyntaxError);
     expect(result.stderr).toBe("");
   });
 

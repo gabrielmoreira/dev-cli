@@ -24,8 +24,8 @@ function providerError(code: "PROVIDER_NOT_CONFIGURED" | "PROVIDER_NOT_FOUND", m
 function formatInventoryResults(results: sync.InventorySyncSummary[]): string {
   let out = "";
   for (const result of results) {
-    out += `Synchronized repository inventory for '${result.tenant}': ${result.total} repositories (${result.added} added, ${result.updated} updated).\n`;
-    out += `  Cache: ${result.cachePath}\n`;
+    out += `✓ Listed ${result.total} repositories from '${result.tenant}' (${result.added} added, ${result.updated} updated).\n`;
+    out += "↳ dev ws init  choose repositories for a task\n";
   }
   return out.trimEnd();
 }
@@ -44,12 +44,13 @@ function formatDataResult(result: sync.SyncDataResult): string {
     out += `  ○ ${result.skippedDisabled.length} repositories are disabled in Azure DevOps; their pull requests were skipped\n`;
   }
   if (result.canonicalRepos) {
-    out += `  Canonical:     ${result.canonicalRepos.updated.length} updated, ${result.canonicalRepos.skipped.length} skipped\n`;
+    out += `  Mirrors:      ${result.canonicalRepos.updated.length} reference copies updated, ${result.canonicalRepos.skipped.length} skipped\n`;
   }
   if (result.errors && result.errors.length > 0) {
     out += "\nWarnings/Errors:\n";
     for (const err of result.errors) out += `  - ${err.message}\n`;
   }
+  out += "\n↳ dev pr  see pull requests\n↳ dev wi  see saved work items\n";
   return out.trimEnd();
 }
 
@@ -80,7 +81,29 @@ export const syncInventoryCommand = defineCommand({
       ui.result({
         data: { action: "data", mode: "offline", total: cached.length, repositories: cached },
         json: args.json,
-        text: `Offline mode: ${cached.length} repositories from local cache.`,
+        text: () =>
+          cached.length > 0
+            ? `Offline: ${cached.length} repositories saved locally.\n↳ dev ws init  choose repositories for a task`
+            : ui.empty({
+                message: !config.configPath
+                  ? "No dev root yet, so there are no repositories saved locally."
+                  : "No repositories saved locally; --offline does not read providers.",
+                next: !config.configPath
+                  ? [{ command: "dev init", why: "choose where to keep your work" }]
+                  : config.providers.length === 0
+                    ? [
+                        {
+                          command: "dev provider add",
+                          why: "connect GitHub or Azure DevOps, or use a repository URL",
+                        },
+                      ]
+                    : [
+                        {
+                          command: "dev sync inventory",
+                          why: "read repositories from your providers",
+                        },
+                      ],
+              }),
       });
       return 0;
     }
@@ -156,10 +179,25 @@ export const syncDataCommand = defineCommand({
         },
         json: args.json,
         text: () => {
-          let out = "Offline Cached Data:\n";
-          out += `  Repositories:  ${inventories.length}\n`;
-          out += `  Work Items:    ${workItems.length}\n`;
-          out += `  Pull Requests: ${pullRequests.length}`;
+          if (inventories.length + workItems.length + pullRequests.length === 0)
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there is no saved provider data."
+                : "No provider data saved locally; --offline does not read providers.",
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : config.providers.length === 0
+                  ? [{ command: "dev provider add", why: "connect GitHub or Azure DevOps" }]
+                  : [{ command: "dev sync", why: "read current data from your providers" }],
+            });
+          let out = "Saved provider data (--offline, not refreshed):\n";
+          out += `  ${inventories.length} repositories\n`;
+          out += `  ${workItems.length} work items\n`;
+          out += `  ${pullRequests.length} pull requests\n`;
+          out +=
+            config.providers.length > 0
+              ? "↳ dev sync  read current data from your providers"
+              : "↳ dev provider add  connect a provider to refresh this data";
           return out;
         },
       });
@@ -410,7 +448,13 @@ export const syncCommand = defineCommand({
         json: args.json,
         text: () => {
           const out: string[] = ["Providers"];
-          if (!providers) out.push("  ○ none configured  ↳ dev provider add <type>");
+          if (!providers)
+            out.push(
+              "  ○ No provider connected; repository URLs still work.",
+              config.configPath
+                ? "  ↳ dev provider add  connect GitHub or Azure DevOps"
+                : "  ↳ dev init  choose where to keep your work",
+            );
           else if (!providers.ok) out.push(`  ✗ ${providers.error}`);
           else out.push(formatProviderSync(providers.result).replace(/^/gm, "  "));
 
@@ -426,7 +470,13 @@ export const syncCommand = defineCommand({
           }
 
           out.push("", "Workspaces");
-          if (workspaces.length === 0) out.push("  ○ none  ↳ dev ws init <name>");
+          if (workspaces.length === 0)
+            out.push(
+              "  ○ No workspaces created yet.",
+              config.configPath
+                ? "  ↳ dev ws init <repository-url>  start a task workspace"
+                : "  ↳ dev init  choose where to keep your work",
+            );
           for (const item of workspaces) {
             if (!item.ok) {
               out.push(`  ✗ ${item.name}: ${item.error}`);
@@ -441,6 +491,10 @@ export const syncCommand = defineCommand({
             out.push(
               `  ${skipped > 0 ? "⚠" : updated > 0 ? "✓" : "○"} ${item.name}: ${counts.join(", ") || "no mounts"}`,
             );
+            if (item.result.mounts.length === 0)
+              out.push(
+                `  ↳ dev ws add <repository-url> --ws ${item.name}  add a repository for this task`,
+              );
             for (const mount of item.result.mounts) {
               if (mount.action !== "skipped") continue;
               const skip = describeSkipReason(mount.reason, item.name);

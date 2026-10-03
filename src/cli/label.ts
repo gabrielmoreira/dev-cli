@@ -374,6 +374,7 @@ export const labelAddCommand = defineCommand({
             ...applied.unchanged.map(
               (source) => `○ ${describeSource(source)} already labeled '${label}'.`,
             ),
+            `↳ dev label ls ${label}  see this group of repositories`,
           ].join("\n"),
       });
       if (missing.length === 0) return 0;
@@ -513,6 +514,7 @@ export const labelRmCommand = defineCommand({
               (source) =>
                 `  ○ ${describeSource(source)}: no label needs its mirror now; it stays on disk.`,
             ),
+            "↳ dev label ls  see the remaining repository groups",
           ].join("\n"),
       });
       return 0;
@@ -574,7 +576,7 @@ export const labelRenameCommand = defineCommand({
         text: () =>
           `✓ Renamed '${from}' to '${to}' on ${renamed.sources} repositor${renamed.sources === 1 ? "y" : "ies"}` +
           `${renamed.def ? ", its definition" : ""}` +
-          `${renamed.worksetMembers > 0 ? `, and ${renamed.worksetMembers} workset member(s)` : ""}.`,
+          `${renamed.worksetMembers > 0 ? `, and ${renamed.worksetMembers} workset member(s)` : ""}.\n↳ dev label ls ${to}  see the renamed repository group`,
       });
       return 0;
     } catch (error) {
@@ -599,9 +601,21 @@ export const labelListCommand = defineCommand({
       json: args.json,
       text: () => {
         if (shown.length === 0) {
-          return args.label
-            ? `No repository carries label '${args.label}'.`
-            : "No labels yet.  ↳ dev label add <label> <repository>";
+          return ui.empty({
+            message: !config.configPath
+              ? "No dev root yet, so there are no labels to show."
+              : args.label
+                ? `No repository carries label '${args.label}'.`
+                : "No labels added to repositories yet.",
+            next: !config.configPath
+              ? [{ command: "dev init", why: "choose where to keep your work" }]
+              : [
+                  {
+                    command: `dev label add ${args.label || "<label>"} <repository-url>`,
+                    why: "name a group of repositories",
+                  },
+                ],
+          });
         }
         return shown
           .flatMap((item) => [

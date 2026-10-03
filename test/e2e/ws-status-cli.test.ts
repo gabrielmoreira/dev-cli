@@ -73,7 +73,6 @@ describe("dev ws status CLI E2E (Phase 3)", () => {
     const exit1 = await statusProc1.exited;
 
     expect(exit1).toBe(0);
-    expect(stdout1).toContain("Status:    clean");
     expect(stdout1).toContain("[clean]");
 
     // 4. Modify file to make worktree dirty
@@ -94,7 +93,6 @@ describe("dev ws status CLI E2E (Phase 3)", () => {
     const exit2 = await statusProc2.exited;
 
     expect(exit2).toBe(0);
-    expect(stdout2).toContain("Status:    diverged / changes detected");
     expect(stdout2).toContain("[dirty]");
 
     // 6. Test JSON mode

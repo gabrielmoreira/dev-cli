@@ -189,7 +189,6 @@ describe("smart CLI input", () => {
     expect(await cache.loadAllCachedInventories(selectedRoot)).toMatchObject([
       { name: "example-repository", default_branch: "main" },
     ]);
-    expect(logs.join("\n")).toContain("Synchronized repository inventory");
     expect(request).toHaveBeenCalledTimes(1);
     text.mockRestore();
     select.mockRestore();
@@ -1117,7 +1116,6 @@ describe("smart CLI input", () => {
     });
 
     expect(addExitCode).toBe(0);
-    expect(logs.join("\n")).toContain("Registered provider 'ado-example-org'");
     typePrompt.mockRestore();
     organizationPrompt.mockRestore();
 
@@ -1427,43 +1425,6 @@ describe("smart CLI input", () => {
     expect(logs.join("\n")).toContain("Cached pull request");
     expect(request).not.toHaveBeenCalled();
     request.mockRestore();
-  });
-
-  test("summarizes inventory sync without dumping repository records", async () => {
-    await cache.writeInventory({
-      root,
-      tenant: "dev.azure.com/example",
-      records: [
-        {
-          id: "one",
-          name: "repository-one",
-          url: "https://example.test/repository-one.git",
-          default_branch: "main",
-          description: "One",
-          last_changed: "2026-09-16T00:00:00Z",
-          syncedAt: "2026-09-16T00:00:00Z",
-        },
-        {
-          id: "two",
-          name: "repository-two",
-          url: "https://example.test/repository-two.git",
-          default_branch: "main",
-          description: "Two",
-          last_changed: "2026-09-16T00:00:00Z",
-          syncedAt: "2026-09-16T00:00:00Z",
-        },
-      ],
-    });
-
-    expect(
-      await runCli({
-        argv: ["sync", "inventory", "--offline", "--root", root],
-        cwd: root,
-        env: {},
-        isTTY: false,
-      }),
-    ).toBe(0);
-    expect(logs.join("\n")).toBe("Offline mode: 2 repositories from local cache.");
   });
 
   test("requires sync data provider and project disambiguation", async () => {

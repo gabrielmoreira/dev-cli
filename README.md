@@ -63,6 +63,7 @@ eval "$(dev shell-init zsh)"     # bash, zsh, fish and PowerShell
 
 Interactive pickers use fuzzy search. Without the integration, `dev go` prints the path instead of jumping to it.
 Each prompt explains what your answer changes. Enter keeps a shown proposal; confirmations say what Yes and No do.
+Results name what changed and the command you can run next. An empty list still succeeds and explains whether you need setup, a first task, or a different filter.
 
 ## Your first workspace
 

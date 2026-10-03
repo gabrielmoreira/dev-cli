@@ -262,7 +262,35 @@ export const prListCommand = defineCommand({
         data: shown,
         json: args.json,
         text: () => {
-          if (shown.length === 0) return "No cached pull requests found.";
+          if (shown.length === 0)
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there are no pull requests to show."
+                : config.providers.length === 0
+                  ? "No provider connected, so there are no pull requests to show."
+                  : providers.length === 0
+                    ? "No Azure DevOps provider matches this selection."
+                    : all.length === 0
+                      ? "No pull requests saved locally; --offline reads only saved data."
+                      : "No saved pull requests match your filters.",
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : config.providers.length === 0
+                  ? [{ command: "dev provider add", why: "connect GitHub or Azure DevOps" }]
+                  : providers.length === 0
+                    ? [
+                        {
+                          command: "dev provider add ado --org <name>",
+                          why: "connect the organization whose pull requests you need",
+                        },
+                      ]
+                    : [
+                        {
+                          command: "dev pr --all",
+                          why: "read pull requests from the provider without these filters",
+                        },
+                      ],
+            });
           let out = `Pull Requests (${shown.length}${filtered.length > limit ? ` of ${filtered.length}` : ""}):\n`;
           for (const item of shown) out += `  ${formatPullRequestLine(item)}\n`;
           return out.trimEnd();
@@ -395,7 +423,22 @@ export const prListCommand = defineCommand({
         let out = "";
         for (const error of errors) out += `  ⚠ ${error}\n`;
         if (shown.length === 0) {
-          out += "No pull requests found.";
+          if (out) ui.log(out.trimEnd());
+          return ui.empty({
+            message:
+              errors.length > 0
+                ? "Pull requests could not be read; see the provider errors above."
+                : "No pull requests match your selection.",
+            next: [
+              {
+                command: errors.length > 0 ? "dev doctor" : "dev pr --all --status all",
+                why:
+                  errors.length > 0
+                    ? "check tools and provider access"
+                    : "see pull requests without the task and status filters",
+              },
+            ],
+          });
         } else {
           out += `Pull Requests (${shown.length}${deduped.length > limit ? ` of ${deduped.length}` : ""}):\n`;
           for (const item of shown) out += `  ${formatPullRequestLine(item)}\n`;

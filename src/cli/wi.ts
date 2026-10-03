@@ -89,9 +89,30 @@ export const wiListCommand = defineCommand({
         json: args.json,
         text: () => {
           if (shown.length === 0) {
-            return configuredProviders.length > 0 && !args.offline
-              ? "No cached work items found. Run 'dev wi --refresh' to select a provider and project."
-              : "No work items found.";
+            return ui.empty({
+              message: !config.configPath
+                ? "No dev root yet, so there are no work items to show."
+                : configuredProviders.length === 0
+                  ? "No Azure DevOps provider connected, so there are no work items to show."
+                  : all.length === 0
+                    ? "No work items saved locally yet."
+                    : "No saved work items match your filters.",
+              next: !config.configPath
+                ? [{ command: "dev init", why: "choose where to keep your work" }]
+                : configuredProviders.length === 0
+                  ? [
+                      {
+                        command: "dev provider add ado --org <name>",
+                        why: "connect the organization that holds your work items",
+                      },
+                    ]
+                  : [
+                      {
+                        command: "dev wi --refresh",
+                        why: "read work items from a provider and project",
+                      },
+                    ],
+            });
           }
           let out = `Work Items (${shown.length}${filtered.length > limit ? ` of ${filtered.length}` : ""}):\n`;
           for (const item of shown) {
@@ -240,7 +261,22 @@ export const wiListCommand = defineCommand({
           for (const e of errors) out += `  ⚠ ${e}\n`;
         }
         if (shown.length === 0) {
-          out += "No work items found.";
+          if (out) ui.log(out.trimEnd());
+          return ui.empty({
+            message:
+              errors.length > 0
+                ? "Work items could not be read; see the provider errors above."
+                : "No work items match your selection.",
+            next: [
+              {
+                command: errors.length > 0 ? "dev doctor" : "dev wi --refresh",
+                why:
+                  errors.length > 0
+                    ? "check tools and provider access"
+                    : "choose a provider and project without these filters",
+              },
+            ],
+          });
         } else {
           out += `Work Items (${shown.length}${filtered.length > limit ? ` of ${filtered.length}` : ""}):\n`;
           for (const item of shown) {

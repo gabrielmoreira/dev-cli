@@ -23,9 +23,7 @@ export const doctorCommand = defineCommand({
       text: () => {
         let out = "Diagnostic Report\n";
         out += `Status:   ${report.status.toUpperCase()}\n`;
-        out += `Dev Root: ${report.root.path} (${report.root.exists ? "exists" : "missing"}, .dev/: ${
-          report.root.hasDevDir ? "yes" : "no"
-        })\n\n`;
+        out += `Dev root: ${report.root.path} (${config.configPath ? "configured" : "not initialized"})\n\n`;
         out += "Tools:\n";
         for (const tool of report.tools) {
           const status = tool.available
@@ -37,7 +35,9 @@ export const doctorCommand = defineCommand({
         }
 
         if (report.providerList.length === 0) {
-          out += "\nProviders: none configured (run 'dev provider add <type>')\n";
+          out += config.configPath
+            ? "\nNo provider connected.\n↳ dev provider add  connect GitHub or Azure DevOps\n"
+            : "\nNo dev root yet.\n↳ dev init  choose where to keep your work\n";
         } else {
           const maxIdLen = Math.max(...report.providerList.map((p) => p.id.length));
           out += "\nProviders:\n";
