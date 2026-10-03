@@ -138,7 +138,7 @@ describe("dev mirror CLI E2E (Phase 8)", () => {
     expect(listAfterJson.length).toBe(1);
   });
 
-  it.each([false, true])("rejects an unknown mirror sync source (json=%s)", async (json) => {
+  it.each([false, true])("rejects an unknown mirror sync repository (json=%s)", async (json) => {
     const proc = Bun.spawn(
       [
         process.execPath,
@@ -177,7 +177,7 @@ describe("dev mirror CLI E2E (Phase 8)", () => {
       expect(JSON.parse(stderr).error).toMatchObject({
         code: "SOURCE_NOT_FOUND",
         nextStep: "dev mirror ls",
-        source: "typo",
+        repository: "typo",
       });
     }
   });

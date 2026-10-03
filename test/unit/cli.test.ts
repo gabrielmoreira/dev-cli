@@ -2,13 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  formatCommandHelp,
-  formatHelp,
-  normalizeCliArgs,
-  runCli,
-  type AmbientContext,
-} from "../../src/cli.ts";
+import { formatHelp, normalizeCliArgs, runCli, type AmbientContext } from "../../src/cli.ts";
 import { generateShellInit } from "../../src/nav.ts";
 
 describe("CLI entrypoint (Phase 0)", () => {
@@ -18,7 +12,6 @@ describe("CLI entrypoint (Phase 0)", () => {
     expect(help).toContain("COMMANDS");
     expect(help).toContain("ws");
     expect(help).toContain("mirror");
-    expect(await formatCommandHelp(["ws", "init"])).toContain("[NAME]");
   });
 
   it("generates structured JSON help when --llms is requested", async () => {

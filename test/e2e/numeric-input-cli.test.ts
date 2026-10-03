@@ -119,7 +119,7 @@ describe("numeric CLI inputs", () => {
         expect(result.exitCode).toBe(2);
         expect(JSON.parse(result.stderr).error).toMatchObject({
           code: "INVALID_ARGUMENT",
-          field: "id",
+          field: command === "pr" ? "reference" : "id",
           value,
         });
       }

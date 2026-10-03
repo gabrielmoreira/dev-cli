@@ -26,13 +26,13 @@ export async function resolveMirrorSourceInput(
       }
       return [...sources].map(([value, name]) => ({ label: name, value }));
     },
-    message: "Select mirror source",
+    message: "Select mirror repository",
     hint: "Choose the repository whose reference copies you manage.",
     required: {
       command: options.command,
-      field: "source",
+      field: "repository",
       usage: options.usage,
-      description: "Mirror source",
+      description: "Mirror repository",
     },
   });
 }

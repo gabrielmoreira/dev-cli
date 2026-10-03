@@ -92,7 +92,7 @@ Results use `✓` for a completed action, `○` for a fact or an already-applied
 
 Every repository is cloned once, as a bare mirror under `.dev/git/<host>/<owner>/<repo>.git`. Workspace mounts and `mirrors/` checkouts are Git worktrees on that clone, so the same repository in ten workspaces is downloaded once.
 
-`dev ws remove <mount> --yes` skips confirmation but refuses uncommitted changes, unpushed commits, and unmanaged checkouts. `dev mirror untrack <source> <branch> --yes` skips confirmation but refuses modified or untracked files. Use `--force` only when you intend to remove those checkouts despite the named hazard; it also skips confirmation.
+`dev ws remove <mount> --yes` skips confirmation but refuses uncommitted changes, unpushed commits, and unmanaged checkouts. `dev mirror untrack <repository> <branchName> --yes` skips confirmation but refuses modified or untracked files. Use `--force` only when you intend to remove those checkouts despite the named hazard; it also skips confirmation.
 
 `dev ws update --rebase` rolls back a conflicting rebase. If Git rejects the operation before a rebase starts, such as a failing `pre-rebase` hook, the command reports the original Git failure instead of attempting an abort.
 

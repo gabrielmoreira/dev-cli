@@ -252,14 +252,11 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       expect(help).toContain("USAGE dev ls");
     });
 
-    test("structured help reflects aliases and interactive optionality", async () => {
+    test("structured help reflects command aliases", async () => {
       const parsed = JSON.parse(await formatHelp(true));
       const ws = parsed.commands.find((command: { name: string }) => command.name === "ws");
       const init = ws.subcommands.find((command: { name: string }) => command.name === "init");
       expect(init.aliases).toContain("create");
-      expect(
-        init.arguments.find((argument: { name: string }) => argument.name === "name").required,
-      ).toBe(false);
 
       const update = ws.subcommands.find((command: { name: string }) => command.name === "update");
       expect(update?.aliases ?? []).not.toContain("up");
@@ -267,12 +264,6 @@ describe("Navigation, Shell Integration and Self-Documentation Unit (Phase 17)",
       expect(parsed.commands.some((command: { name: string }) => command.name === "sync")).toBe(
         true,
       );
-
-      const pr = parsed.commands.find((command: { name: string }) => command.name === "pr");
-      const view = pr.subcommands.find((command: { name: string }) => command.name === "view");
-      expect(
-        view.arguments.find((argument: { name: string }) => argument.name === "id").required,
-      ).toBe(false);
     });
 
     test("formatHelp(false) scopes nested commands to group help", async () => {

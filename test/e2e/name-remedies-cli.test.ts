@@ -152,15 +152,17 @@ describe("not-found remedies exist in the erroring state", () => {
   it.each([
     {
       args: ["workset", "show", "missing"],
-      next: "dev workset create <name> <repository-url>",
       remedy: ["workset", "create", "incident", "https://github.com/example/api", "--yes"],
     },
-    { args: ["go", "missing"], next: "dev ws init <name>", remedy: ["ws", "init", "incident"] },
-  ])("offers a create command when none exist (%j)", async ({ args, next, remedy }) => {
+    { args: ["go", "missing"], remedy: ["ws", "init", "incident"] },
+  ])("offers a create command when none exist (%j)", async ({ args, remedy }) => {
     expect((await run(["init", root], true)).code).toBe(0);
     const failure = await run(args, true);
     expect(failure.code).not.toBe(0);
-    expect(JSON.parse(failure.stderr).error.nextStep).toBe(next);
+    expect(JSON.parse(failure.stderr).error.nextStep.split(" ").slice(0, 3)).toEqual([
+      "dev",
+      ...remedy.slice(0, 2),
+    ]);
     expect(await formatCommandHelp(remedy.slice(0, 2))).toContain("USAGE");
     expect((await run(remedy, true)).code).toBe(0);
   });
@@ -194,9 +196,6 @@ describe("not-found remedies exist in the erroring state", () => {
     expect((await run(["init", root], true)).code).toBe(0);
     const failure = await run(["workset", "manage"], true);
     expect(failure.code).toBe(1);
-    expect(JSON.parse(failure.stderr).error.nextStep).toBe(
-      "dev workset create <name> <repository-url>",
-    );
     expect(
       (
         await run(

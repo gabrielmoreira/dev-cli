@@ -81,7 +81,7 @@ describe("missing worktree ref CLI", () => {
     ]);
     expect(revision.stdout.trim()).toBe("main");
   });
-  it("names the ref and source in a human usage error", async () => {
+  it("names the ref and repository in a human usage error", async () => {
     const result = await run([
       process.execPath,
       CLI,
@@ -100,7 +100,7 @@ describe("missing worktree ref CLI", () => {
     expect(result.stderr).toContain("↳ git ls-remote --heads --tags");
     expect(result.stderr).toContain(remote);
   });
-  it("retains structured ref and source alongside diagnostics", async () => {
+  it("retains structured ref and repository alongside diagnostics", async () => {
     const result = await run([
       process.execPath,
       CLI,
@@ -119,7 +119,7 @@ describe("missing worktree ref CLI", () => {
     expect(JSON.parse(result.stderr).error).toMatchObject({
       code: "REF_NOT_FOUND",
       ref: "missing-ref",
-      source: remote,
+      repository: remote,
     });
   });
 });

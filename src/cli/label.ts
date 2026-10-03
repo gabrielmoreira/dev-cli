@@ -152,9 +152,9 @@ async function resolveUrl(config: RuntimeConfig, value: string): Promise<string>
     message: "Select repository",
     required: {
       command: "label",
-      field: "sources",
+      field: "repository",
       usage: "dev label add <label> <repository...>",
-      description: "Repository source",
+      description: "Repository",
     },
   });
   return git.stripCredentialsFromUrl(resolved.value);
@@ -296,9 +296,9 @@ export const labelAddCommand = defineCommand({
   },
   args: {
     label: { type: "positional", description: "Label name", required: false },
-    sources: {
+    repository: {
       type: "positional",
-      description: "Repositories: URL, path, or name (several allowed)",
+      description: "Repository URL, path, or a name dev knows (several allowed)",
       required: false,
     },
     ref: { type: "string", description: "Branch or pinned ref for every repository given" },
@@ -330,7 +330,7 @@ export const labelAddCommand = defineCommand({
       if (given.length === 0 && !interactive) {
         throw new CliInputRequiredError({
           command: "label add",
-          field: "sources",
+          field: "repository",
           usage,
           description: "At least one repository",
         });
@@ -427,9 +427,10 @@ export const labelRmCommand = defineCommand({
   },
   args: {
     label: { type: "positional", description: "Label name", required: false },
-    sources: {
+    repository: {
       type: "positional",
-      description: "Repositories to take it off (several allowed)",
+      description:
+        "Repository URL, path, or a name dev knows to take the label off (several allowed)",
       required: false,
     },
     ref: { type: "string", description: "Declared branch or pinned ref" },

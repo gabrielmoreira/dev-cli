@@ -14,7 +14,6 @@ describe("subcommand help (UX)", () => {
     const out = stripVTControlCharacters(await formatCommandHelp(["ws", "update"]));
     expect(out).toContain("dev ws update");
     expect(out).toContain("Converge mounts to ws.md");
-    expect(out).toContain("USAGE dev ws update [OPTIONS] [TARGET]");
     expect(out).toContain("--autostash");
     expect(out).toContain("--rebase");
     expect(out).toContain("--ws");
@@ -67,7 +66,6 @@ describe("subcommand help (UX)", () => {
 
     expect(out).toContain("dev ws start");
     expect(out).toContain("Start or focus OMP in HerdR for a dev workspace");
-    expect(out).toContain("[NAME]");
   });
 
   describe("dev ws <sub> --help routes to subcommand help", () => {

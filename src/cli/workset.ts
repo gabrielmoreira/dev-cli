@@ -20,8 +20,8 @@ function reportWorksetError(error: unknown, config: RuntimeConfig, json?: boolea
         ? "dev init"
         : Object.keys(config.worksets).length === 0
           ? canPrompt()
-            ? "dev workset manage <name>"
-            : "dev workset create <name> <repository-url>"
+            ? "dev workset manage <workset>"
+            : "dev workset create <workset> <repository>"
           : "dev workset list";
     } else if (error.code === "WORKSET_CONFIG_UNWRITABLE" && !config.configPath) {
       error.message = "No dev root yet.";
@@ -44,10 +44,10 @@ function reportWorksetError(error: unknown, config: RuntimeConfig, json?: boolea
 export const worksetCreateCommand = defineCommand({
   meta: { name: "create", description: "Create a reusable repository workset" },
   args: {
-    name: { type: "positional", description: "Workset name", required: false },
-    source: {
+    workset: { type: "positional", description: "Workset name", required: false },
+    repository: {
       type: "positional",
-      description: "First repository: URL, path, or the name of a repository dev already knows",
+      description: "First repository: URL, path, or a name dev knows",
       required: false,
     },
     description: { type: "string", description: "Workset description" },
@@ -63,13 +63,13 @@ export const worksetCreateCommand = defineCommand({
     const ambient = getAmbient();
     try {
       const name = await resolveTextInput({
-        value: args.name,
+        value: args.workset,
         message: "Workset name",
         hint: "Name a saved recipe. Start it with dev ws init --workset <name>.",
         required: {
           command: "workset create",
-          field: "name",
-          usage: "dev workset create [name] [repository]",
+          field: "workset",
+          usage: "dev workset create [workset] [repository]",
           description: "Workset name",
         },
         ambient,
@@ -86,13 +86,13 @@ export const worksetCreateCommand = defineCommand({
               )
             : undefined;
       const source = await resolveRepositoryInput({
-        value: args.source,
+        value: args.repository,
         root: config.root,
         message: "Select initial repository",
         required: {
           command: "workset create",
           field: "repository",
-          usage: "dev workset create [name] [repository]",
+          usage: "dev workset create [workset] [repository]",
           description: "Initial repository",
         },
         ambient,
@@ -166,8 +166,8 @@ export const worksetCreateCommand = defineCommand({
 export const worksetRenameCommand = defineCommand({
   meta: { name: "rename", description: "Rename a configured workset" },
   args: {
-    name: { type: "positional", description: "Current workset name", required: false },
-    newName: { type: "positional", description: "New workset name", required: false },
+    from: { type: "positional", description: "Current workset name", required: false },
+    to: { type: "positional", description: "New workset name", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -176,27 +176,27 @@ export const worksetRenameCommand = defineCommand({
     const ambient = getAmbient();
     try {
       const current = await resolveChoiceInput({
-        value: args.name,
+        value: args.from,
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset to rename",
         hint: "Rename a saved workspace recipe, not a task folder.",
         required: {
           command: "workset rename",
-          field: "name",
-          usage: "dev workset rename [name] [new-name]",
+          field: "from",
+          usage: "dev workset rename [from] [to]",
           description: "Current workset name",
         },
         ambient,
       });
       const next = await resolveTextInput({
-        value: args.newName,
+        value: args.to,
         message: "New workset name",
         hint: "Rename this saved recipe. Enter keeps the shown name.",
         required: {
           command: "workset rename",
-          field: "new-name",
-          usage: "dev workset rename [name] [new-name]",
+          field: "to",
+          usage: "dev workset rename [from] [to]",
           description: "New workset name",
         },
         ambient,
@@ -245,7 +245,7 @@ function repositoryChoice(member: WorksetMember & { source: string }): string {
 export const worksetManageCommand = defineCommand({
   meta: { name: "manage", description: "Interactively manage a workset" },
   args: {
-    name: { type: "positional", description: "Workset name", required: false },
+    workset: { type: "positional", description: "Workset name", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -256,13 +256,13 @@ export const worksetManageCommand = defineCommand({
       return reportError(
         Object.assign(new Error("'dev workset manage' requires an interactive terminal."), {
           details: {
-            usage: !config.configPath ? "dev init" : "dev workset create <name> <repository-url>",
+            usage: !config.configPath ? "dev init" : "dev workset create <workset> <repository>",
           },
         }),
         args.json,
       );
     }
-    let name = args.name?.trim();
+    let name = args.workset?.trim();
     let originalName: string | undefined;
 
     if (!name && Object.keys(config.worksets).length > 0) {
@@ -291,8 +291,8 @@ export const worksetManageCommand = defineCommand({
           hint: "Name a saved recipe. Start it with dev ws init --workset <name>.",
           required: {
             command: "workset manage",
-            field: "name",
-            usage: "dev workset manage [name]",
+            field: "workset",
+            usage: "dev workset manage [workset]",
             description: "Workset name",
           },
           ambient,
@@ -352,8 +352,8 @@ export const worksetManageCommand = defineCommand({
             initial: name,
             required: {
               command: "workset manage",
-              field: "name",
-              usage: "dev workset manage [name]",
+              field: "workset",
+              usage: "dev workset manage [workset]",
               description: "Workset name",
             },
             ambient,
@@ -378,7 +378,7 @@ export const worksetManageCommand = defineCommand({
           required: {
             command: "workset manage",
             field: "repository",
-            usage: "dev workset manage [name]",
+            usage: "dev workset manage [workset]",
             description: "Repository",
           },
           ambient,
@@ -514,9 +514,9 @@ export const worksetRepoAddCommand = defineCommand({
   meta: { name: "add", description: "Add a repository to a workset" },
   args: {
     workset: { type: "positional", description: "Workset name", required: false },
-    source: {
+    repository: {
       type: "positional",
-      description: "Repository URL, path, or the name of a repository dev already knows",
+      description: "Repository URL, path, or a name dev knows",
       required: false,
     },
     ref: { type: "string", description: "Branch, tag, or revision" },
@@ -545,7 +545,7 @@ export const worksetRepoAddCommand = defineCommand({
         ambient,
       });
       const source = await resolveRepositoryInput({
-        value: args.source,
+        value: args.repository,
         root: config.root,
         message: "Select repository to add",
         required: {
@@ -629,7 +629,7 @@ export const worksetRepoEditCommand = defineCommand({
   meta: { name: "edit", description: "Edit repository metadata in a workset" },
   args: {
     workset: { type: "positional", description: "Workset name", required: false },
-    member: { type: "positional", description: "Repository path or source", required: false },
+    member: { type: "positional", description: "Declared repository path or URL", required: false },
     ref: { type: "string", description: "Branch, tag, or revision" },
     path: { type: "string", description: "Workspace mount path" },
     reason: { type: "string", description: "Reason this repository belongs in the workset" },
@@ -761,7 +761,7 @@ export const worksetRepoRemoveCommand = defineCommand({
   meta: { name: "remove", description: "Remove a repository from a workset" },
   args: {
     workset: { type: "positional", description: "Workset name", required: false },
-    member: { type: "positional", description: "Repository path or source", required: false },
+    member: { type: "positional", description: "Declared repository path or URL", required: false },
     force: { type: "boolean", description: "Remove without interactive confirmation" },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
@@ -858,7 +858,7 @@ export const worksetLabelAddCommand = defineCommand({
   meta: { name: "add", description: "Add every repository carrying a label to a workset" },
   args: {
     workset: { type: "positional", description: "Workset name", required: false },
-    label: { type: "positional", description: "Label on declared sources", required: false },
+    label: { type: "positional", description: "Label on declared repositories", required: false },
     reason: { type: "string", description: "Reason this label belongs in the workset" },
     yes: { type: "boolean", description: "Add without interactive confirmation" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -1066,7 +1066,7 @@ export const worksetListCommand = defineCommand({
             next: config.configPath
               ? [
                   {
-                    command: "dev workset manage <name>",
+                    command: "dev workset manage <workset>",
                     why: "save a recipe you can start a workspace from",
                   },
                 ]
@@ -1087,7 +1087,7 @@ export const worksetListCommand = defineCommand({
 export const worksetShowCommand = defineCommand({
   meta: { name: "show", description: "Show one configured workset" },
   args: {
-    name: { type: "positional", description: "Workset name", required: false },
+    workset: { type: "positional", description: "Workset name", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -1095,15 +1095,15 @@ export const worksetShowCommand = defineCommand({
     const config = getActiveConfig(args.root);
     try {
       const selected = await resolveChoiceInput({
-        value: args.name,
+        value: args.workset,
         choices: async () =>
           Object.keys(config.worksets).map((name) => ({ label: name, value: name })),
         message: "Select workset",
         hint: "Use this saved recipe to choose repositories and branches.",
         required: {
           command: "workset show",
-          field: "name",
-          usage: "dev workset show <name>",
+          field: "workset",
+          usage: "dev workset show <workset>",
           description: "Workset name",
         },
       });

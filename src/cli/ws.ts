@@ -24,7 +24,12 @@ import { createGitHubClient } from "../github.ts";
 import * as prWorkspace from "../pr-workspace.ts";
 import { CancelledError, ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
-import { CliInputRequiredError, resolveConfirmation, resolveTextInput } from "./input.ts";
+import {
+  CliInputRequiredError,
+  resolveConfirmation,
+  resolveDualInput,
+  resolveTextInput,
+} from "./input.ts";
 import { resolveRepositoryInputs } from "./repository-input.ts";
 import {
   matchesWorkspaceQuery,
@@ -47,7 +52,7 @@ function reportWorkspaceError(error: unknown, config: RuntimeConfig, json?: bool
       error.details.usage =
         Array.isArray(error.details.candidates) && error.details.candidates.length > 0
           ? `dev ws status --ws ${workspace}`
-          : `dev ws add <source> --ws ${workspace}`;
+          : `dev ws add <repository> --ws ${workspace}`;
     }
   } else if (error instanceof LabelError && error.code === "LABEL_NOT_FOUND") {
     if (!config.configPath) error.message = "No dev root yet.";
@@ -140,7 +145,7 @@ export const wsInitCommand = defineCommand({
     description: "Initialize a new workspace with ws.md and .local/",
   },
   args: {
-    name: {
+    workspace: {
       type: "positional",
       description: "Workspace name, repository URI, or pull request URL",
       required: false,
@@ -159,7 +164,7 @@ export const wsInitCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const ambient = getAmbient();
     const inventory = canPrompt(ambient) ? await cache.loadAllCachedInventories(config.root) : [];
-    let rawName = args.name;
+    let rawName = args.workspace;
     let suggestedName: string | undefined;
     let suggestedDescription: string | undefined;
     let mounts: PlannedMount[] = [];
@@ -286,9 +291,9 @@ export const wsInitCommand = defineCommand({
       initial: suggestedName,
       required: {
         command: "ws init",
-        field: "name",
+        field: "workspace",
         usage:
-          "dev ws init <name|repository-uri|pull-request-url> [--workset <name>] [--label <label>]",
+          "dev ws init <workspace|repository-uri|pull-request-url> [--workset <name>] [--label <label>]",
         description: "Workspace name",
       },
       ambient,
@@ -446,8 +451,8 @@ async function resolveWorksetMounts(
           ? "dev init"
           : candidates.length === 0
             ? canPrompt()
-              ? "dev workset manage <name>"
-              : "dev workset create <name> <repository-url>"
+              ? "dev workset manage <workset>"
+              : "dev workset create <workset> <repository>"
             : "dev workset list",
       },
     );
@@ -578,9 +583,9 @@ export const wsAddCommand = defineCommand({
     description: "Mount a repository into the workspace",
   },
   args: {
-    source: {
+    repository: {
       type: "positional",
-      description: "Repository URL, path, or the name of a repository dev already knows",
+      description: "Repository URL, path, or a name dev knows",
       required: false,
     },
     ws: { type: "string", description: "Target workspace name" },
@@ -603,16 +608,18 @@ export const wsAddCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const ambient = getAmbient();
     const inventory =
-      !args.source && canPrompt(ambient) ? await cache.loadAllCachedInventories(config.root) : [];
+      !args.repository && canPrompt(ambient)
+        ? await cache.loadAllCachedInventories(config.root)
+        : [];
     const repositoryInput = await resolveRepositoryInputs({
-      value: args.source,
+      value: args.repository,
       root: config.root,
       message: "Select repositories",
       required: {
         command: "ws add",
-        field: "source",
-        usage: "dev ws add <url|path|name>",
-        description: "Repository source",
+        field: "repository",
+        usage: "dev ws add <repository>",
+        description: "Repository",
       },
     });
     const sources = repositoryInput.value;
@@ -629,7 +636,7 @@ export const wsAddCommand = defineCommand({
     const preHook = args.preHook || args.preCheckout;
     const postHook = args.postHook || args.postCheckout;
     const interactivePlanning =
-      !args.source &&
+      !args.repository &&
       !args.branch &&
       !args.tag &&
       !args.commit &&
@@ -865,8 +872,12 @@ export const wsStatusCommand = defineCommand({
     description: "Compare each mount with the plan in ws.md",
   },
   args: {
-    target: { type: "positional", description: "Workspace name", required: false },
-    ws: { type: "string", description: "Target workspace name" },
+    workspace: { type: "positional", description: "Workspace name", required: false },
+    ws: {
+      type: "string",
+      description:
+        "Target workspace name; when the positional is also given, both must name the same workspace",
+    },
     refresh: { type: "boolean", description: "Fetch latest remote refs before comparing" },
     offline: { type: "boolean", description: "Read strictly from local mirror without network" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -875,7 +886,12 @@ export const wsStatusCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const workspace = await resolveWorkspaceInput({
-      value: args.ws || args.target,
+      value: resolveDualInput(args.workspace, args.ws, {
+        command: "ws status",
+        usage: "dev ws status [workspace] [--ws <name>]",
+        positionalName: "workspace",
+        flagName: "--ws",
+      }),
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws status",
@@ -970,8 +986,16 @@ export const wsUpdateCommand = defineCommand({
       "Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones",
   },
   args: {
-    target: { type: "positional", description: "Workspace name or path to ws.md", required: false },
-    ws: { type: "string", description: "Target workspace name" },
+    workspace: {
+      type: "positional",
+      description: "Workspace name or path to ws.md",
+      required: false,
+    },
+    ws: {
+      type: "string",
+      description:
+        "Target workspace name; when the positional is also given, both must name the same workspace",
+    },
     ...workspaceSyncOptions,
     offline: { type: "boolean", description: "Read strictly from local mirror without network" },
     root: { type: "string", description: "Explicit dev root directory" },
@@ -981,18 +1005,25 @@ export const wsUpdateCommand = defineCommand({
     const config = getActiveConfig(args.root);
 
     try {
-      // A ws.md path names its workspace: the manifest's own name decides.
-      const workspaceName = args.target?.endsWith(".md")
-        ? (await manifest.readWorkspace(args.target)).manifest.name
-        : (
-            await resolveWorkspaceInput({
-              value: args.ws || args.target,
-              root: config.root,
-              workspacePrefix: config.workspacePrefix,
-              command: "ws update",
-              usage: "dev ws update [workspace | path/to/ws.md] [--ws <name>]",
-            })
-          ).value;
+      // A ws.md path selects the identity stored in its manifest, not its spelling.
+      const positionalWorkspace = args.workspace?.endsWith(".md")
+        ? (await manifest.readWorkspace(args.workspace)).manifest.name
+        : args.workspace;
+      const selectedWorkspace = resolveDualInput(positionalWorkspace, args.ws, {
+        command: "ws update",
+        usage: "dev ws update [workspace | path/to/ws.md] [--ws <name>]",
+        positionalName: "workspace",
+        flagName: "--ws",
+      });
+      const workspaceName = (
+        await resolveWorkspaceInput({
+          value: selectedWorkspace,
+          root: config.root,
+          workspacePrefix: config.workspacePrefix,
+          command: "ws update",
+          usage: "dev ws update [workspace | path/to/ws.md] [--ws <name>]",
+        })
+      ).value;
       const fetching = !args.offline && args.refresh !== false;
       if (fetching && !args.json) ui.info(`↻ Fetching remotes for ${workspaceName}...`);
       const result = await ws.update({
@@ -1518,29 +1549,29 @@ export const wsDuplicateCommand = defineCommand({
     description: "Duplicate a workspace with independent worktrees",
   },
   args: {
-    source: { type: "positional", description: "Source workspace name", required: false },
-    target: { type: "positional", description: "Target workspace name", required: false },
+    from: { type: "positional", description: "Workspace to copy", required: false },
+    to: { type: "positional", description: "New workspace name", required: false },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const source = await resolveWorkspaceInput({
-      value: args.source,
+      value: args.from,
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws duplicate",
-      usage: "dev ws duplicate <source> <target>",
+      usage: "dev ws duplicate <from> <to>",
     });
     const target = await resolveTextInput({
-      value: args.target,
+      value: args.to,
       message: "New workspace name",
       hint: "Create a separate task folder with the same repository plan.",
       required: {
         command: "ws duplicate",
-        field: "target",
-        usage: "dev ws duplicate <source> <target>",
-        description: "Target workspace name",
+        field: "to",
+        usage: "dev ws duplicate <from> <to>",
+        description: "New workspace name",
       },
     });
 
@@ -1576,19 +1607,28 @@ export const wsPathCommand = defineCommand({
     description: "Print absolute path of target or current workspace",
   },
   args: {
-    name: { type: "positional", description: "Optional workspace name", required: false },
-    ws: { type: "string", description: "Target workspace name" },
+    workspace: { type: "positional", description: "Optional workspace name", required: false },
+    ws: {
+      type: "string",
+      description:
+        "Target workspace name; when the positional is also given, both must name the same workspace",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const workspace = await resolveWorkspaceInput({
-      value: args.name || args.ws,
+      value: resolveDualInput(args.workspace, args.ws, {
+        command: "ws path",
+        usage: "dev ws path [workspace] [--ws <name>]",
+        positionalName: "workspace",
+        flagName: "--ws",
+      }),
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws path",
-      usage: "dev ws path [name] [--ws <name>]",
+      usage: "dev ws path [workspace] [--ws <name>]",
     });
 
     try {
@@ -1652,7 +1692,7 @@ export const wsGoCommand = defineCommand({
             usage: !config.configPath
               ? "dev init"
               : available.length === 0
-                ? "dev ws init <name>"
+                ? "dev ws init <workspace>"
                 : "dev ls",
           },
         ),
@@ -1716,19 +1756,28 @@ export const wsJumpCommand = defineCommand({
     description: "Print jump target path for shell cd integration",
   },
   args: {
-    name: { type: "positional", description: "Optional workspace name", required: false },
-    ws: { type: "string", description: "Target workspace name" },
+    workspace: { type: "positional", description: "Optional workspace name", required: false },
+    ws: {
+      type: "string",
+      description:
+        "Target workspace name; when the positional is also given, both must name the same workspace",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const workspace = await resolveWorkspaceInput({
-      value: args.name || args.ws,
+      value: resolveDualInput(args.workspace, args.ws, {
+        command: "ws jump",
+        usage: "dev ws jump [workspace] [--ws <name>]",
+        positionalName: "workspace",
+        flagName: "--ws",
+      }),
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws jump",
-      usage: "dev ws jump [name] [--ws <name>]",
+      usage: "dev ws jump [workspace] [--ws <name>]",
     });
 
     try {
@@ -1869,7 +1918,7 @@ export const wsStartCommand = defineCommand({
     description: "Start or focus OMP in HerdR for a dev workspace",
   },
   args: {
-    name: {
+    query: {
       type: "positional",
       description: "Optional workspace name or fuzzy query",
       required: false,
@@ -1882,12 +1931,12 @@ export const wsStartCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const ambient = getAmbient();
     const workspace = await resolveWorkspaceInput({
-      value: args.name,
+      value: args.query,
       fuzzyValue: true,
       root: config.root,
       workspacePrefix: config.workspacePrefix,
       command: "ws start",
-      usage: "dev ws start [name]",
+      usage: "dev ws start [query]",
       ambient,
     });
     const workspacePath = ws.deriveWorkspacePath(

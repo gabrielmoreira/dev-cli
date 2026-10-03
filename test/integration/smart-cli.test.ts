@@ -398,8 +398,7 @@ describe("smart CLI input", () => {
 
     expect(exitCode).toBe(2);
     expect(errors.join("\n")).toContain('"code": "INTERACTION_REQUIRED"');
-    expect(errors.join("\n")).toContain('"field": "name"');
-    expect(errors.join("\n")).toContain("dev ws init <name|repository-uri|pull-request-url>");
+    expect(errors.join("\n")).toContain('"field": "workspace"');
   });
 
   test("selects a workspace when interactive context is ambiguous", async () => {
@@ -446,7 +445,7 @@ describe("smart CLI input", () => {
       fuzzyValue: true,
       root,
       command: "ws start",
-      usage: "dev ws start [name]",
+      usage: "dev ws start [query]",
       ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
     });
 
@@ -562,7 +561,7 @@ describe("smart CLI input", () => {
             fuzzyValue: true,
             root,
             command: "ws start",
-            usage: "dev ws start [name]",
+            usage: "dev ws start [query]",
             ambient: { argv: [], cwd: root, env: {}, isTTY: true, stdinIsTTY: true },
           }),
         ).toEqual({ value: "sample-z-new", source: "prompt" });

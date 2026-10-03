@@ -26,7 +26,7 @@ function reportMirrorError(
       error.details.usage = "dev init";
     } else if (error.code === "SOURCE_NOT_FOUND" && error.details.mirrorCount === 0) {
       error.message = "This root has no mirrors yet.";
-      error.details.usage = "dev mirror add <source>";
+      error.details.usage = "dev mirror add <repository>";
     }
   } else if (error instanceof labels.LabelError && error.code === "LABEL_NOT_FOUND") {
     if (!config.configPath) error.message = "No dev root yet.";
@@ -45,9 +45,9 @@ export const mirrorAddCommand = defineCommand({
     description: "Copy a repository as a mirror for reading, search and agents",
   },
   args: {
-    source: {
+    repository: {
       type: "positional",
-      description: "Repository URL, path, or the name of a repository dev already knows",
+      description: "Repository URL, path, or a name dev knows",
       required: false,
     },
     branch: { type: "string", description: "Default branch to track" },
@@ -59,14 +59,14 @@ export const mirrorAddCommand = defineCommand({
     const config = getActiveConfig(args.root);
     const url = (
       await resolveRepositoryInput({
-        value: args.source,
+        value: args.repository,
         root: config.root,
         message: "Select repository",
         required: {
           command: "mirror add",
-          field: "source",
-          usage: "dev mirror add <url|path|name>",
-          description: "Repository source",
+          field: "repository",
+          usage: "dev mirror add <repository>",
+          description: "Repository",
         },
       })
     ).value;
@@ -108,7 +108,10 @@ export const mirrorListCommand = defineCommand({
     description: "List all mirrors in /mirrors (optionally filtered by label)",
   },
   args: {
-    label: { type: "string", description: "Only show checkouts of sources carrying this label" },
+    label: {
+      type: "string",
+      description: "Only show checkouts of repositories carrying this label",
+    },
     root: { type: "string", description: "Explicit dev root directory" },
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
@@ -253,7 +256,11 @@ export const mirrorSyncCommand = defineCommand({
     description: "Preserve local edits, then synchronize one or all mirrors",
   },
   args: {
-    source: { type: "positional", description: "Specific mirror source URL", required: false },
+    repository: {
+      type: "positional",
+      description: "Repository URL, path, or a name dev knows",
+      required: false,
+    },
     refresh: {
       type: "boolean",
       description: "Fetch remotes before comparing (default, unless --offline)",
@@ -268,7 +275,7 @@ export const mirrorSyncCommand = defineCommand({
     try {
       // Labels that keep repositories mirrored get their missing mirrors first.
       const labelMirrors =
-        fetching && !args.source
+        fetching && !args.repository
           ? await labels.ensureLabelMirrors(config, {
               resolveExtraHeader: (source) => resolveExtraHeader(config, source),
             })
@@ -277,7 +284,7 @@ export const mirrorSyncCommand = defineCommand({
       const synced = await mirror.sync({
         root: config.root,
         canonicalPrefix: config.canonicalPrefix,
-        source: args.source,
+        source: args.repository,
         refresh: fetching,
         offline: args.offline,
         resolveExtraHeader: (source) => resolveExtraHeader(config, source),
@@ -326,9 +333,9 @@ export const mirrorTrackCommand = defineCommand({
     description: "Set up a sibling worktree tracking an additional branch",
   },
   args: {
-    source: {
+    repository: {
       type: "positional",
-      description: "mirror source URL or alias",
+      description: "Repository URL, path, or a name dev knows",
       required: false,
     },
     branchName: {
@@ -344,11 +351,11 @@ export const mirrorTrackCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const source = await resolveMirrorSourceInput({
-      value: args.source,
+      value: args.repository,
       root: config.root,
       canonicalPrefix: config.canonicalPrefix,
       command: "mirror track",
-      usage: "dev mirror track <source> [branchName] [--branch <branch>]",
+      usage: "dev mirror track <repository> [branchName] [--branch <branch>]",
     });
     const branch = await resolveTextInput({
       value: args.branchName || args.branch,
@@ -357,7 +364,7 @@ export const mirrorTrackCommand = defineCommand({
       required: {
         command: "mirror track",
         field: "branch",
-        usage: "dev mirror track <source> [branchName] [--branch <branch>]",
+        usage: "dev mirror track <repository> [branchName] [--branch <branch>]",
         description: "Branch to track",
       },
     });
@@ -395,9 +402,9 @@ export const mirrorUntrackCommand = defineCommand({
     description: "Remove a sibling worktree for a secondary branch",
   },
   args: {
-    source: {
+    repository: {
       type: "positional",
-      description: "mirror source URL or alias",
+      description: "Repository URL, path, or a name dev knows",
       required: false,
     },
     branchName: { type: "positional", description: "Branch worktree to remove", required: false },
@@ -414,11 +421,11 @@ export const mirrorUntrackCommand = defineCommand({
   async run({ args }) {
     const config = getActiveConfig(args.root);
     const source = await resolveMirrorSourceInput({
-      value: args.source,
+      value: args.repository,
       root: config.root,
       canonicalPrefix: config.canonicalPrefix,
       command: "mirror untrack",
-      usage: "dev mirror untrack <source> [branchName] [--branch <branch>]",
+      usage: "dev mirror untrack <repository> [branchName] [--branch <branch>]",
     });
     const branch = await resolveTextInput({
       value: args.branchName || args.branch,
@@ -427,7 +434,7 @@ export const mirrorUntrackCommand = defineCommand({
       required: {
         command: "mirror untrack",
         field: "branch",
-        usage: "dev mirror untrack <source> [branchName] [--branch <branch>]",
+        usage: "dev mirror untrack <repository> [branchName] [--branch <branch>]",
         description: "Branch to untrack",
       },
     });
@@ -438,7 +445,7 @@ export const mirrorUntrackCommand = defineCommand({
       required: {
         command: "mirror untrack",
         field: "confirmation",
-        usage: "dev mirror untrack <source> [branchName] [--branch <branch>] --yes",
+        usage: "dev mirror untrack <repository> [branchName] [--branch <branch>] --yes",
         description: "Explicit confirmation (--yes)",
       },
     });

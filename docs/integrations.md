@@ -134,7 +134,7 @@ label_defs:
 
 A missing mirror is created by the next `dev mirror sync` or `dev sync --all`. `dev label add` offers to create it right away in a terminal, and `--sync` does it in a script. Taking a label off a repository never deletes its mirror; the command names the mirrors no label needs anymore.
 
-`dev mirror sync <source>` exits 2 with `SOURCE_NOT_FOUND` when no mirror matches that source; the error names the source and points to `dev mirror ls`. An unfiltered sync with no mirrors remains successful. A matching checkout whose admin repository vanished still reports `MIRROR_ADMIN_MISSING` without touching its files. Sync reports preserved local edits with the stash name, SHA, and `git -C "<path>" stash apply <sha>` recovery command.
+`dev mirror sync <repository>` exits 2 with `SOURCE_NOT_FOUND` when no mirror matches that repository; the error names the repository and points to `dev mirror ls`. An unfiltered sync with no mirrors remains successful. A matching checkout whose admin repository vanished still reports `MIRROR_ADMIN_MISSING` without touching its files. Sync reports preserved local edits with the stash name, SHA, and `git -C "<path>" stash apply <sha>` recovery command.
 
 The same label drives `dev pr --label`, `dev ws init --label`, `dev mirror list --label`, and `dev qmd sync`.
 

@@ -38,9 +38,9 @@ describe("source and root config input errors", () => {
       message: "Repository",
       required: {
         command: "ws add",
-        field: "source",
-        usage: "dev ws add <url|path|name>",
-        description: "Repository source",
+        field: "repository",
+        usage: "dev ws add <repository>",
+        description: "Repository",
       },
       ambient: {
         argv: [],

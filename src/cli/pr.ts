@@ -18,7 +18,7 @@ import * as fs from "../fs.ts";
 import { derivePullRequestWorkspaceName } from "../pr-workspace.ts";
 import { canPrompt, findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
-import { parsePositiveInteger, resolveChoiceInput } from "./input.ts";
+import { parsePositiveInteger, resolveChoiceInput, resolveDualInput } from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
@@ -39,8 +39,16 @@ export const prListCommand = defineCommand({
     description: "List open pull requests across all configured providers",
   },
   args: {
-    repoPositional: { type: "positional", description: "Target repository name", required: false },
-    repo: { type: "string", description: "Target repository name" },
+    repository: {
+      type: "positional",
+      description: "Repository URL, path, or a name dev knows",
+      required: false,
+    },
+    repo: {
+      type: "string",
+      description:
+        "Target repository; when the positional is also given, both must name the same repository",
+    },
     interactive: {
       type: "boolean",
       alias: "i",
@@ -76,7 +84,12 @@ export const prListCommand = defineCommand({
         ? undefined
         : parsePositiveInteger(args.limit, "--limit", "dev pr list --limit <count>");
     const config = getActiveConfig(args.root);
-    const requestedRepository = args.repoPositional || args.repo;
+    const requestedRepository = resolveDualInput(args.repository, args.repo, {
+      command: "pr list",
+      usage: "dev pr list [repository] [--repo <name>]",
+      positionalName: "repository",
+      flagName: "--repo",
+    });
     const requestedLabel = args.label;
     const workspaceContext = await resolveWorkspaceQueryContext({
       value: args.ws || findWorkspaceFlag(getAmbient().argv),
@@ -585,7 +598,7 @@ export const prCheckoutCommand = defineCommand({
         ? parsePositiveInteger(
             args.reference,
             "reference",
-            "dev pr checkout <url-or-id> [--review]",
+            "dev pr checkout <reference> [--review]",
           )
         : undefined;
     const config = getActiveConfig(args.root);
@@ -614,7 +627,7 @@ export const prCheckoutCommand = defineCommand({
         required: {
           command: "pr checkout",
           field: "reference",
-          usage: "dev pr checkout [url-or-id] [--review]",
+          usage: "dev pr checkout [reference] [--review]",
           description: "Pull request URL or ID",
         },
       });
@@ -636,7 +649,7 @@ export const prCheckoutCommand = defineCommand({
           required: {
             command: "pr checkout",
             field: "reference",
-            usage: "dev pr checkout <id> [--repo <name>]",
+            usage: "dev pr checkout <reference> [--repo <name>]",
             description: "Unambiguous pull request",
           },
         });
@@ -779,7 +792,7 @@ export const prViewCommand = defineCommand({
     description: "View details for a specific pull request",
   },
   args: {
-    id: { type: "positional", description: "Pull request URL or ID", required: false },
+    reference: { type: "positional", description: "Pull request URL or ID", required: false },
     repo: { type: "string", description: "Target repository name" },
     provider: { type: "string", description: "Limit to a specific provider id" },
     project: { type: "string", description: "Filter by Azure DevOps project" },
@@ -791,12 +804,14 @@ export const prViewCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    const urlReference = args.id ? parseAzureDevOpsPullRequestUrl(args.id) : undefined;
-    let idStr = urlReference ? String(urlReference.pullRequestId) : args.id;
+    const urlReference = args.reference
+      ? parseAzureDevOpsPullRequestUrl(args.reference)
+      : undefined;
+    let idStr = urlReference ? String(urlReference.pullRequestId) : args.reference;
     const explicitId =
       idStr === undefined
         ? undefined
-        : parsePositiveInteger(idStr, "id", "dev pr view <id> [--repo <name>]");
+        : parsePositiveInteger(idStr, "reference", "dev pr view <reference> [--repo <name>]");
     const config = getActiveConfig(args.root);
     let selected: cache.PullRequestRecord | undefined;
     if (!idStr) {
@@ -814,8 +829,8 @@ export const prViewCommand = defineCommand({
         hint: "Choose which pull request this command acts on.",
         required: {
           command: "pr view",
-          field: "id",
-          usage: "dev pr view <id> [--repo <name>]",
+          field: "reference",
+          usage: "dev pr view <reference> [--repo <name>]",
           description: "Pull request ID",
         },
       });
@@ -826,7 +841,9 @@ export const prViewCommand = defineCommand({
       throw Object.assign(new Error("Selected pull request is unavailable."), {
         details: { usage: "dev pr list" },
       });
-    const id = explicitId ?? parsePositiveInteger(idStr, "id", "dev pr view <id> [--repo <name>]");
+    const id =
+      explicitId ??
+      parsePositiveInteger(idStr, "reference", "dev pr view <reference> [--repo <name>]");
 
     // A URL names its organization, project, and repository, so a closed pull request
     // that no listing shows is still read live.

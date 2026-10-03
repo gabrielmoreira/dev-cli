@@ -46,7 +46,7 @@ export const NEXT_STEPS: Record<string, string | undefined> = {
   AUTH_FAILED: "gh auth login    # or: az login",
   CANCELLED: undefined,
   CANNOT_DETERMINE_COMMIT: "dev ws status",
-  CONFLICTING_OPTIONS: "<usage>",
+  CONFLICTING_OPTIONS: "Remove conflicting options, or make explicit selectors agree.",
   DEFAULT_BRANCH: "dev mirror ls",
   DEFAULT_BRANCH_UNKNOWN: "Pass --branch <branch> explicitly.",
   DIRTY_WORKTREE: "dev ws status",
@@ -79,10 +79,10 @@ export const NEXT_STEPS: Record<string, string | undefined> = {
   MOUNT_ALREADY_DECLARED: "dev ws status",
   MOUNT_ALREADY_EXISTS: "dev ws status",
   MOUNT_NOT_FOUND: "dev ws status",
-  MOUNT_PATH_EXISTS_ON_DISK: "dev ws add <source> --path <another-name>",
+  MOUNT_PATH_EXISTS_ON_DISK: "dev ws add <repository> --path <another-name>",
   PROVIDER_NOT_CONFIGURED: "dev provider add <type>",
   PROVIDER_NOT_FOUND: "dev provider list",
-  NETWORK: "Check connectivity to the source or provider, then retry.",
+  NETWORK: "Check connectivity to the repository or provider, then retry.",
   NOT_FOUND: "Check the repository URL or provider resource, then retry.",
   PATH_OUTSIDE_ROOT: "Choose a path inside <root>.",
   PULL_REQUEST_UNAVAILABLE: "dev pr list",
@@ -92,16 +92,16 @@ export const NEXT_STEPS: Record<string, string | undefined> = {
   REMOVE_FAILED: 'git -C "<path>" status',
   ROOT_ALIAS_EXISTS: "dev roots",
   ROOT_NOT_FOUND: "dev roots",
-  REF_NOT_FOUND: 'git ls-remote --heads --tags "<source>"',
+  REF_NOT_FOUND: 'git ls-remote --heads --tags "<repository>"',
   SOURCE_AMBIGUOUS: "<usage>",
   SOURCE_NOT_FOUND: "<usage>",
   STASH_RESTORE_FAILED: "<recovery>",
   UNMANAGED_CHECKOUT: 'git -C "<path>" status',
   UNSAFE_REMOVE: "git -C <path> status",
-  UNTRUSTED_HOOK_BLOCKED: "rerun with --consent to allow hooks from <source>",
+  UNTRUSTED_HOOK_BLOCKED: "rerun with --consent to allow hooks from <repository>",
   WORKSET_EXISTS: "dev workset list",
   WORKSET_CONFIG_UNWRITABLE: "Use a dev root with dev.yaml: dev init <path>.",
-  WORKSET_LAST_MEMBER: "dev workset show <name>",
+  WORKSET_LAST_MEMBER: "dev workset show <workset>",
   WORKSET_MEMBER_EXISTS: "dev workset list",
   WORKSET_MEMBER_NOT_FOUND: "dev workset list",
   WORKSET_NOT_FOUND: "dev workset list",
@@ -209,7 +209,11 @@ export interface StructuredError {
 
 function detailsOf(error: unknown): Record<string, unknown> | undefined {
   const raw = (error as { details?: unknown } | null)?.details;
-  return raw && typeof raw === "object" ? (raw as Record<string, unknown>) : undefined;
+  if (!raw || typeof raw !== "object") return undefined;
+  const details = raw as Record<string, unknown>;
+  if (!Object.hasOwn(details, "source")) return details;
+  const { source, ...rest } = details;
+  return { ...rest, repository: source };
 }
 
 function fillPlaceholders(hint: string, details?: Record<string, unknown>): string {

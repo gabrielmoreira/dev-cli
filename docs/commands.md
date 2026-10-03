@@ -43,7 +43,7 @@ An empty next step means the error message supplies the context; no generic reme
 | `BRANCH_ALREADY_MOUNTED`     | 3    | dev ws status                                                                             |
 | `CANCELLED`                  | 130  |                                                                                           |
 | `CANNOT_DETERMINE_COMMIT`    | 1    | dev ws status                                                                             |
-| `CONFLICTING_OPTIONS`        | 2    | <usage>                                                                                   |
+| `CONFLICTING_OPTIONS`        | 2    | Remove conflicting options, or make explicit selectors agree.                             |
 | `CREDENTIAL_NOT_AVAILABLE`   | 4    | gh auth login # or: az login                                                              |
 | `DEFAULT_BRANCH`             | 2    | dev mirror ls                                                                             |
 | `DEFAULT_BRANCH_UNKNOWN`     | 2    | Pass --branch <branch> explicitly.                                                        |
@@ -75,8 +75,8 @@ An empty next step means the error message supplies the context; no generic reme
 | `MOUNT_ALREADY_DECLARED`     | 3    | dev ws status                                                                             |
 | `MOUNT_ALREADY_EXISTS`       | 3    | dev ws status                                                                             |
 | `MOUNT_NOT_FOUND`            | 1    | dev ws status                                                                             |
-| `MOUNT_PATH_EXISTS_ON_DISK`  | 3    | dev ws add <source> --path <another-name>                                                 |
-| `NETWORK`                    | 4    | Check connectivity to the source or provider, then retry.                                 |
+| `MOUNT_PATH_EXISTS_ON_DISK`  | 3    | dev ws add <repository> --path <another-name>                                             |
+| `NETWORK`                    | 4    | Check connectivity to the repository or provider, then retry.                             |
 | `NOT_FOUND`                  | 1    | Check the repository URL or provider resource, then retry.                                |
 | `PATH_OUTSIDE_ROOT`          | 2    | Choose a path inside <root>.                                                              |
 | `PROVIDER_NOT_CONFIGURED`    | 2    | dev provider add <type>                                                                   |
@@ -85,7 +85,7 @@ An empty next step means the error message supplies the context; no generic reme
 | `QMD_FAILED`                 | 4    | dev qmd sync --help                                                                       |
 | `RATE_LIMITED`               | 4    | Wait for the provider rate limit to reset, then retry.                                    |
 | `REBASE_ABORT_FAILED`        | 1    | git -C "<worktreePath>" status                                                            |
-| `REF_NOT_FOUND`              | 2    | git ls-remote --heads --tags "<source>"                                                   |
+| `REF_NOT_FOUND`              | 2    | git ls-remote --heads --tags "<repository>"                                               |
 | `REMOVE_FAILED`              | 1    | git -C "<path>" status                                                                    |
 | `ROOT_ALIAS_EXISTS`          | 3    | dev roots                                                                                 |
 | `ROOT_NOT_FOUND`             | 2    | dev roots                                                                                 |
@@ -96,10 +96,10 @@ An empty next step means the error message supplies the context; no generic reme
 | `UNKNOWN_OPTION`             | 2    | <usage>                                                                                   |
 | `UNMANAGED_CHECKOUT`         | 3    | git -C "<path>" status                                                                    |
 | `UNSAFE_REMOVE`              | 3    | git -C <path> status                                                                      |
-| `UNTRUSTED_HOOK_BLOCKED`     | 3    | rerun with --consent to allow hooks from <source>                                         |
+| `UNTRUSTED_HOOK_BLOCKED`     | 3    | rerun with --consent to allow hooks from <repository>                                     |
 | `WORKSET_CONFIG_UNWRITABLE`  | 2    | Use a dev root with dev.yaml: dev init <path>.                                            |
 | `WORKSET_EXISTS`             | 3    | dev workset list                                                                          |
-| `WORKSET_LAST_MEMBER`        | 3    | dev workset show <name>                                                                   |
+| `WORKSET_LAST_MEMBER`        | 3    | dev workset show <workset>                                                                |
 | `WORKSET_MEMBER_EXISTS`      | 3    | dev workset list                                                                          |
 | `WORKSET_MEMBER_NOT_FOUND`   | 1    | dev workset list                                                                          |
 | `WORKSET_NOT_FOUND`          | 1    | dev workset list                                                                          |
@@ -176,27 +176,27 @@ List your workspaces
 
 Compare each mount with the plan in ws.md
 
-**Usage:** `dev status [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
+**Usage:** `dev status [workspace] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                     |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `target`         | positional | Workspace name                                  |
-| `--ws <value>`   | string     | Target workspace name                           |
-| `--refresh`      | boolean    | Fetch latest remote refs before comparing       |
-| `--offline`      | boolean    | Read strictly from local mirror without network |
-| `--root <value>` | string     | Explicit dev root directory                     |
-| `--json`         | boolean    | Output in structured JSON format                |
+| Argument         | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `workspace`      | positional | Workspace name                                                                              |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace |
+| `--refresh`      | boolean    | Fetch latest remote refs before comparing                                                   |
+| `--offline`      | boolean    | Read strictly from local mirror without network                                             |
+| `--root <value>` | string     | Explicit dev root directory                                                                 |
+| `--json`         | boolean    | Output in structured JSON format                                                            |
 
 ## `dev update`
 
 Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones
 
-**Usage:** `dev update [target] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
+**Usage:** `dev update [workspace] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                                                                                   |
 | ---------------- | ---------- | --------------------------------------------------------------------------------------------- |
-| `target`         | positional | Workspace name or path to ws.md                                                               |
-| `--ws <value>`   | string     | Target workspace name                                                                         |
+| `workspace`      | positional | Workspace name or path to ws.md                                                               |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace   |
 | `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
 | `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
@@ -235,11 +235,11 @@ Select a workspace and print its path for shell navigation
 
 Start or focus OMP in HerdR for a dev workspace
 
-**Usage:** `dev start [name] [--root <value>] [--session <value>] [--json]`
+**Usage:** `dev start [query] [--root <value>] [--session <value>] [--json]`
 
 | Argument            | Type       | Description                            |
 | ------------------- | ---------- | -------------------------------------- |
-| `name`              | positional | Optional workspace name or fuzzy query |
+| `query`             | positional | Optional workspace name or fuzzy query |
 | `--root <value>`    | string     | Explicit dev root directory            |
 | `--session <value>` | string     | HerdR session to target                |
 | `--json`            | boolean    | Output in structured JSON format       |
@@ -377,16 +377,16 @@ Remove a remote provider from dev.yaml
 
 Manage task-oriented multi-repo workspaces
 
-**Usage:** `dev ws [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json] <command>`
+**Usage:** `dev ws [workspace] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json] <command>`
 
-| Argument         | Type       | Description                                     |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `target`         | positional | Workspace name                                  |
-| `--ws <value>`   | string     | Target workspace name                           |
-| `--refresh`      | boolean    | Fetch latest remote refs before comparing       |
-| `--offline`      | boolean    | Read strictly from local mirror without network |
-| `--root <value>` | string     | Explicit dev root directory                     |
-| `--json`         | boolean    | Output in structured JSON format                |
+| Argument         | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `workspace`      | positional | Workspace name                                                                              |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace |
+| `--refresh`      | boolean    | Fetch latest remote refs before comparing                                                   |
+| `--offline`      | boolean    | Read strictly from local mirror without network                                             |
+| `--root <value>` | string     | Explicit dev root directory                                                                 |
+| `--json`         | boolean    | Output in structured JSON format                                                            |
 
 | Subcommand         | Description                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------- |
@@ -410,11 +410,11 @@ Manage task-oriented multi-repo workspaces
 
 Initialize a new workspace with ws.md and .local/
 
-**Usage:** `dev ws init [name] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--json]`
+**Usage:** `dev ws init [workspace] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--json]`
 
 | Argument            | Type       | Description                                                            |
 | ------------------- | ---------- | ---------------------------------------------------------------------- |
-| `name`              | positional | Workspace name, repository URI, or pull request URL                    |
+| `workspace`         | positional | Workspace name, repository URI, or pull request URL                    |
 | `--desc <value>`    | string     | Workspace description                                                  |
 | `--root <value>`    | string     | Explicit dev root directory                                            |
 | `--workset <value>` | string     | Initialize from a configured workset                                   |
@@ -426,52 +426,52 @@ Initialize a new workspace with ws.md and .local/
 
 Mount a repository into the workspace
 
-**Usage:** `dev ws add [source] [--ws <value>] [--path <value>] [--as <value>] [--branch <value>] [--tag <value>] [--commit <value>] [--readonly] [--consent] [--force] [--preHook <value>] [--postHook <value>] [--preCheckout <value>] [--postCheckout <value>] [--root <value>] [--json]`
+**Usage:** `dev ws add [repository] [--ws <value>] [--path <value>] [--as <value>] [--branch <value>] [--tag <value>] [--commit <value>] [--readonly] [--consent] [--force] [--preHook <value>] [--postHook <value>] [--preCheckout <value>] [--postCheckout <value>] [--root <value>] [--json]`
 
-| Argument                 | Type       | Description                                                         |
-| ------------------------ | ---------- | ------------------------------------------------------------------- |
-| `source`                 | positional | Repository URL, path, or the name of a repository dev already knows |
-| `--ws <value>`           | string     | Target workspace name                                               |
-| `--path <value>`         | string     | Mount folder name inside workspace                                  |
-| `--as <value>`           | string     | Alias for --path                                                    |
-| `--branch <value>`       | string     | Branch to track                                                     |
-| `--tag <value>`          | string     | Tag to pin                                                          |
-| `--commit <value>`       | string     | Commit SHA to lock                                                  |
-| `--readonly`             | boolean    | Mount as read-only worktree                                         |
-| `--consent`              | boolean    | Grant explicit consent to run repository hooks                      |
-| `--force`                | boolean    | Alias for --consent                                                 |
-| `--preHook <value>`      | string     | Hook command before checkout                                        |
-| `--postHook <value>`     | string     | Hook command after checkout                                         |
-| `--preCheckout <value>`  | string     | Hook command before checkout                                        |
-| `--postCheckout <value>` | string     | Hook command after checkout                                         |
-| `--root <value>`         | string     | Explicit dev root directory                                         |
-| `--json`                 | boolean    | Output in structured JSON format                                    |
+| Argument                 | Type       | Description                                    |
+| ------------------------ | ---------- | ---------------------------------------------- |
+| `repository`             | positional | Repository URL, path, or a name dev knows      |
+| `--ws <value>`           | string     | Target workspace name                          |
+| `--path <value>`         | string     | Mount folder name inside workspace             |
+| `--as <value>`           | string     | Alias for --path                               |
+| `--branch <value>`       | string     | Branch to track                                |
+| `--tag <value>`          | string     | Tag to pin                                     |
+| `--commit <value>`       | string     | Commit SHA to lock                             |
+| `--readonly`             | boolean    | Mount as read-only worktree                    |
+| `--consent`              | boolean    | Grant explicit consent to run repository hooks |
+| `--force`                | boolean    | Alias for --consent                            |
+| `--preHook <value>`      | string     | Hook command before checkout                   |
+| `--postHook <value>`     | string     | Hook command after checkout                    |
+| `--preCheckout <value>`  | string     | Hook command before checkout                   |
+| `--postCheckout <value>` | string     | Hook command after checkout                    |
+| `--root <value>`         | string     | Explicit dev root directory                    |
+| `--json`                 | boolean    | Output in structured JSON format               |
 
 ## `dev ws status`
 
 Compare each mount with the plan in ws.md
 
-**Usage:** `dev ws status [target] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
+**Usage:** `dev ws status [workspace] [--ws <value>] [--refresh] [--offline] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                     |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `target`         | positional | Workspace name                                  |
-| `--ws <value>`   | string     | Target workspace name                           |
-| `--refresh`      | boolean    | Fetch latest remote refs before comparing       |
-| `--offline`      | boolean    | Read strictly from local mirror without network |
-| `--root <value>` | string     | Explicit dev root directory                     |
-| `--json`         | boolean    | Output in structured JSON format                |
+| Argument         | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `workspace`      | positional | Workspace name                                                                              |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace |
+| `--refresh`      | boolean    | Fetch latest remote refs before comparing                                                   |
+| `--offline`      | boolean    | Read strictly from local mirror without network                                             |
+| `--root <value>` | string     | Explicit dev root directory                                                                 |
+| `--json`         | boolean    | Output in structured JSON format                                                            |
 
 ## `dev ws update`
 
 Converge mounts to ws.md: create missing ones, fix revisions, fast-forward clean ones
 
-**Usage:** `dev ws update [target] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
+**Usage:** `dev ws update [workspace] [--ws <value>] [--refresh] [--autostash] [--rebase] [--dry-run] [--consent] [--force] [--offline] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                                                                                   |
 | ---------------- | ---------- | --------------------------------------------------------------------------------------------- |
-| `target`         | positional | Workspace name or path to ws.md                                                               |
-| `--ws <value>`   | string     | Target workspace name                                                                         |
+| `workspace`      | positional | Workspace name or path to ws.md                                                               |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace   |
 | `--refresh`      | boolean    | Fetch remotes before fast-forwarding (default, unless --offline)                              |
 | `--autostash`    | boolean    | Stash local changes, fast-forward, then apply them back (the stash entry is kept as a backup) |
 | `--rebase`       | boolean    | Rebase diverged mounts onto the remote branch (aborts on conflict)                            |
@@ -574,12 +574,12 @@ List your workspaces
 
 Duplicate a workspace with independent worktrees
 
-**Usage:** `dev ws duplicate [source] [target] [--root <value>] [--json]`
+**Usage:** `dev ws duplicate [from] [to] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                      |
 | ---------------- | ---------- | -------------------------------- |
-| `source`         | positional | Source workspace name            |
-| `target`         | positional | Target workspace name            |
+| `from`           | positional | Workspace to copy                |
+| `to`             | positional | New workspace name               |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |
 
@@ -587,27 +587,27 @@ Duplicate a workspace with independent worktrees
 
 Print absolute path of target or current workspace
 
-**Usage:** `dev ws path [name] [--ws <value>] [--root <value>] [--json]`
+**Usage:** `dev ws path [workspace] [--ws <value>] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                      |
-| ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Optional workspace name          |
-| `--ws <value>`   | string     | Target workspace name            |
-| `--root <value>` | string     | Explicit dev root directory      |
-| `--json`         | boolean    | Output in structured JSON format |
+| Argument         | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `workspace`      | positional | Optional workspace name                                                                     |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace |
+| `--root <value>` | string     | Explicit dev root directory                                                                 |
+| `--json`         | boolean    | Output in structured JSON format                                                            |
 
 ## `dev ws jump`
 
 Print jump target path for shell cd integration
 
-**Usage:** `dev ws jump [name] [--ws <value>] [--root <value>] [--json]`
+**Usage:** `dev ws jump [workspace] [--ws <value>] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                      |
-| ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Optional workspace name          |
-| `--ws <value>`   | string     | Target workspace name            |
-| `--root <value>` | string     | Explicit dev root directory      |
-| `--json`         | boolean    | Output in structured JSON format |
+| Argument         | Type       | Description                                                                                 |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `workspace`      | positional | Optional workspace name                                                                     |
+| `--ws <value>`   | string     | Target workspace name; when the positional is also given, both must name the same workspace |
+| `--root <value>` | string     | Explicit dev root directory                                                                 |
+| `--json`         | boolean    | Output in structured JSON format                                                            |
 
 ## `dev ws pick`
 
@@ -625,11 +625,11 @@ Interactive picker for workspace mounts
 
 Start or focus OMP in HerdR for a dev workspace
 
-**Usage:** `dev ws start [name] [--root <value>] [--session <value>] [--json]`
+**Usage:** `dev ws start [query] [--root <value>] [--session <value>] [--json]`
 
 | Argument            | Type       | Description                            |
 | ------------------- | ---------- | -------------------------------------- |
-| `name`              | positional | Optional workspace name or fuzzy query |
+| `query`             | positional | Optional workspace name or fuzzy query |
 | `--root <value>`    | string     | Explicit dev root directory            |
 | `--session <value>` | string     | HerdR session to target                |
 | `--json`            | boolean    | Output in structured JSON format       |
@@ -640,11 +640,11 @@ Keep reference copies of repositories for reading and search
 
 **Usage:** `dev mirror [--label <value>] [--root <value>] [--json] <command>`
 
-| Argument          | Type    | Description                                        |
-| ----------------- | ------- | -------------------------------------------------- |
-| `--label <value>` | string  | Only show checkouts of sources carrying this label |
-| `--root <value>`  | string  | Explicit dev root directory                        |
-| `--json`          | boolean | Output in structured JSON format                   |
+| Argument          | Type    | Description                                             |
+| ----------------- | ------- | ------------------------------------------------------- |
+| `--label <value>` | string  | Only show checkouts of repositories carrying this label |
+| `--root <value>`  | string  | Explicit dev root directory                             |
+| `--json`          | boolean | Output in structured JSON format                        |
 
 | Subcommand           | Description                                                  |
 | -------------------- | ------------------------------------------------------------ |
@@ -659,15 +659,15 @@ Keep reference copies of repositories for reading and search
 
 Copy a repository as a mirror for reading, search and agents
 
-**Usage:** `dev mirror add [source] [--branch <value>] [--name <value>] [--root <value>] [--json]`
+**Usage:** `dev mirror add [repository] [--branch <value>] [--name <value>] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                                                         |
-| ------------------ | ---------- | ------------------------------------------------------------------- |
-| `source`           | positional | Repository URL, path, or the name of a repository dev already knows |
-| `--branch <value>` | string     | Default branch to track                                             |
-| `--name <value>`   | string     | Custom alias name                                                   |
-| `--root <value>`   | string     | Explicit dev root directory                                         |
-| `--json`           | boolean    | Output in structured JSON format                                    |
+| Argument           | Type       | Description                               |
+| ------------------ | ---------- | ----------------------------------------- |
+| `repository`       | positional | Repository URL, path, or a name dev knows |
+| `--branch <value>` | string     | Default branch to track                   |
+| `--name <value>`   | string     | Custom alias name                         |
+| `--root <value>`   | string     | Explicit dev root directory               |
+| `--json`           | boolean    | Output in structured JSON format          |
 
 ## `dev mirror list`
 
@@ -675,21 +675,21 @@ List all mirrors in /mirrors (optionally filtered by label)
 
 **Usage:** `dev mirror list [--label <value>] [--root <value>] [--json]`
 
-| Argument          | Type    | Description                                        |
-| ----------------- | ------- | -------------------------------------------------- |
-| `--label <value>` | string  | Only show checkouts of sources carrying this label |
-| `--root <value>`  | string  | Explicit dev root directory                        |
-| `--json`          | boolean | Output in structured JSON format                   |
+| Argument          | Type    | Description                                             |
+| ----------------- | ------- | ------------------------------------------------------- |
+| `--label <value>` | string  | Only show checkouts of repositories carrying this label |
+| `--root <value>`  | string  | Explicit dev root directory                             |
+| `--json`          | boolean | Output in structured JSON format                        |
 
 ## `dev mirror sync`
 
 Preserve local edits, then synchronize one or all mirrors
 
-**Usage:** `dev mirror sync [source] [--refresh] [--offline] [--root <value>] [--json]`
+**Usage:** `dev mirror sync [repository] [--refresh] [--offline] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                                                |
 | ---------------- | ---------- | ---------------------------------------------------------- |
-| `source`         | positional | Specific mirror source URL                                 |
+| `repository`     | positional | Repository URL, path, or a name dev knows                  |
 | `--refresh`      | boolean    | Fetch remotes before comparing (default, unless --offline) |
 | `--offline`      | boolean    | Read strictly from local mirror without network            |
 | `--root <value>` | string     | Explicit dev root directory                                |
@@ -699,26 +699,26 @@ Preserve local edits, then synchronize one or all mirrors
 
 Set up a sibling worktree tracking an additional branch
 
-**Usage:** `dev mirror track [source] [branchName] [--branch <value>] [--name <value>] [--root <value>] [--json]`
+**Usage:** `dev mirror track [repository] [branchName] [--branch <value>] [--name <value>] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                      |
-| ------------------ | ---------- | -------------------------------- |
-| `source`           | positional | mirror source URL or alias       |
-| `branchName`       | positional | Branch to check out and track    |
-| `--branch <value>` | string     | Branch to track                  |
-| `--name <value>`   | string     | Custom alias name                |
-| `--root <value>`   | string     | Explicit dev root directory      |
-| `--json`           | boolean    | Output in structured JSON format |
+| Argument           | Type       | Description                               |
+| ------------------ | ---------- | ----------------------------------------- |
+| `repository`       | positional | Repository URL, path, or a name dev knows |
+| `branchName`       | positional | Branch to check out and track             |
+| `--branch <value>` | string     | Branch to track                           |
+| `--name <value>`   | string     | Custom alias name                         |
+| `--root <value>`   | string     | Explicit dev root directory               |
+| `--json`           | boolean    | Output in structured JSON format          |
 
 ## `dev mirror untrack`
 
 Remove a sibling worktree for a secondary branch
 
-**Usage:** `dev mirror untrack [source] [branchName] [--branch <value>] [--name <value>] [--yes] [--force] [--root <value>] [--json]`
+**Usage:** `dev mirror untrack [repository] [branchName] [--branch <value>] [--name <value>] [--yes] [--force] [--root <value>] [--json]`
 
 | Argument           | Type       | Description                                           |
 | ------------------ | ---------- | ----------------------------------------------------- |
-| `source`           | positional | mirror source URL or alias                            |
+| `repository`       | positional | Repository URL, path, or a name dev knows             |
 | `branchName`       | positional | Branch worktree to remove                             |
 | `--branch <value>` | string     | Branch to untrack                                     |
 | `--name <value>`   | string     | Custom alias name                                     |
@@ -800,12 +800,12 @@ Refresh repository lists, work items and pull requests in one run
 
 Inspect and cache pull requests
 
-**Usage:** `dev pr [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json] <command>`
+**Usage:** `dev pr [repository] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json] <command>`
 
 | Argument              | Type       | Description                                                                                          |
 | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                                                               |
-| `--repo <value>`      | string     | Target repository name                                                                               |
+| `repository`          | positional | Repository URL, path, or a name dev knows                                                            |
+| `--repo <value>`      | string     | Target repository; when the positional is also given, both must name the same repository             |
 | `-i`, `--interactive` | boolean    | Pick one repository from those dev knows                                                             |
 | `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
 | `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
@@ -829,12 +829,12 @@ Inspect and cache pull requests
 
 List open pull requests across all configured providers
 
-**Usage:** `dev pr list [repoPositional] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json]`
+**Usage:** `dev pr list [repository] [--repo <value>] [--interactive] [--label <value>] [--mine] [--all] [--status <value>] [--provider <value>] [--offline] [--project <value>] [--ws <value>] [--limit <value>] [--root <value>] [--json]`
 
 | Argument              | Type       | Description                                                                                          |
 | --------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
-| `repoPositional`      | positional | Target repository name                                                                               |
-| `--repo <value>`      | string     | Target repository name                                                                               |
+| `repository`          | positional | Repository URL, path, or a name dev knows                                                            |
+| `--repo <value>`      | string     | Target repository; when the positional is also given, both must name the same repository             |
 | `-i`, `--interactive` | boolean    | Pick one repository from those dev knows                                                             |
 | `--label <value>`     | string     | Limit to repositories carrying a dev-cli label                                                       |
 | `--mine`              | boolean    | Show pull requests I wrote or am asked to review (default)                                           |
@@ -869,11 +869,11 @@ Create a workspace from a pull request
 
 View details for a specific pull request
 
-**Usage:** `dev pr view [id] [--repo <value>] [--provider <value>] [--project <value>] [--offline] [--root <value>] [--json]`
+**Usage:** `dev pr view [reference] [--repo <value>] [--provider <value>] [--project <value>] [--offline] [--root <value>] [--json]`
 
 | Argument             | Type       | Description                                             |
 | -------------------- | ---------- | ------------------------------------------------------- |
-| `id`                 | positional | Pull request URL or ID                                  |
+| `reference`          | positional | Pull request URL or ID                                  |
 | `--repo <value>`     | string     | Target repository name                                  |
 | `--provider <value>` | string     | Limit to a specific provider id                         |
 | `--project <value>`  | string     | Filter by Azure DevOps project                          |
@@ -972,12 +972,12 @@ List labels and the repositories carrying each
 
 Put a label on repositories, and pick a branch for any of them; a repository not in dev.yaml yet is declared
 
-**Usage:** `dev label add [label] [sources] [--ref <value>] [--fields <value>] [--sync] [--yes] [--root <value>] [--json]`
+**Usage:** `dev label add [label] [repository] [--ref <value>] [--fields <value>] [--sync] [--yes] [--root <value>] [--json]`
 
 | Argument           | Type       | Description                                                             |
 | ------------------ | ---------- | ----------------------------------------------------------------------- |
 | `label`            | positional | Label name                                                              |
-| `sources`          | positional | Repositories: URL, path, or name (several allowed)                      |
+| `repository`       | positional | Repository URL, path, or a name dev knows (several allowed)             |
 | `--ref <value>`    | string     | Branch or pinned ref for every repository given                         |
 | `--fields <value>` | string     | Label fields as key=value pairs, comma-separated                        |
 | `--sync`           | boolean    | Create the mirrors this label asks for now, instead of on the next sync |
@@ -989,17 +989,17 @@ Put a label on repositories, and pick a branch for any of them; a repository not
 
 Take a label off repositories; their mirrors stay on disk
 
-**Usage:** `dev label rm [label] [sources] [--ref <value>] [--all] [--yes] [--root <value>] [--json]`
+**Usage:** `dev label rm [label] [repository] [--ref <value>] [--all] [--yes] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                     |
-| ---------------- | ---------- | ----------------------------------------------- |
-| `label`          | positional | Label name                                      |
-| `sources`        | positional | Repositories to take it off (several allowed)   |
-| `--ref <value>`  | string     | Declared branch or pinned ref                   |
-| `--all`          | boolean    | Take the label off every repository carrying it |
-| `--yes`          | boolean    | Remove without confirmation                     |
-| `--root <value>` | string     | Explicit dev root directory                     |
-| `--json`         | boolean    | Output in structured JSON format                |
+| Argument         | Type       | Description                                                                       |
+| ---------------- | ---------- | --------------------------------------------------------------------------------- |
+| `label`          | positional | Label name                                                                        |
+| `repository`     | positional | Repository URL, path, or a name dev knows to take the label off (several allowed) |
+| `--ref <value>`  | string     | Declared branch or pinned ref                                                     |
+| `--all`          | boolean    | Take the label off every repository carrying it                                   |
+| `--yes`          | boolean    | Remove without confirmation                                                       |
+| `--root <value>` | string     | Explicit dev root directory                                                       |
+| `--json`         | boolean    | Output in structured JSON format                                                  |
 
 ## `dev label rename`
 
@@ -1053,31 +1053,31 @@ Index labeled repositories with QMD and search them
 
 **Usage:** `dev qmd [label] [--no-embed] [--root <value>] [--json] <command>`
 
-| Argument         | Type       | Description                                                          |
-| ---------------- | ---------- | -------------------------------------------------------------------- |
-| `label`          | positional | Label whose sources become collections (default: all index:* labels) |
-| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                             |
-| `--root <value>` | string     | Explicit dev root directory                                          |
-| `--json`         | boolean    | Output in structured JSON format                                     |
+| Argument         | Type       | Description                                                               |
+| ---------------- | ---------- | ------------------------------------------------------------------------- |
+| `label`          | positional | Label whose repositories become collections (default: all index:* labels) |
+| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                                  |
+| `--root <value>` | string     | Explicit dev root directory                                               |
+| `--json`         | boolean    | Output in structured JSON format                                          |
 
 | Subcommand       | Description                                                                                       |
 | ---------------- | ------------------------------------------------------------------------------------------------- |
-| `dev qmd sync`   | Reconcile qmd collections from sources carrying a label                                           |
+| `dev qmd sync`   | Reconcile qmd collections from repositories carrying a label                                      |
 | `dev qmd search` | Search the scoped qmd index; qmd options go after -- (dev qmd search <query> -- -n 5)             |
 | `dev qmd x`      | Run qmd with every word after x, unchanged; dev options go before x (dev --root <path> qmd x ...) |
 
 ## `dev qmd sync`
 
-Reconcile qmd collections from sources carrying a label
+Reconcile qmd collections from repositories carrying a label
 
 **Usage:** `dev qmd sync [label] [--no-embed] [--root <value>] [--json]`
 
-| Argument         | Type       | Description                                                          |
-| ---------------- | ---------- | -------------------------------------------------------------------- |
-| `label`          | positional | Label whose sources become collections (default: all index:* labels) |
-| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                             |
-| `--root <value>` | string     | Explicit dev root directory                                          |
-| `--json`         | boolean    | Output in structured JSON format                                     |
+| Argument         | Type       | Description                                                               |
+| ---------------- | ---------- | ------------------------------------------------------------------------- |
+| `label`          | positional | Label whose repositories become collections (default: all index:* labels) |
+| `--no-embed`     | boolean    | Skip vector indexing (lexical-only / CI)                                  |
+| `--root <value>` | string     | Explicit dev root directory                                               |
+| `--json`         | boolean    | Output in structured JSON format                                          |
 
 ## `dev qmd search`
 
@@ -1137,30 +1137,30 @@ List configured worksets
 
 Create a reusable repository workset
 
-**Usage:** `dev workset create [name] [source] [--description <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+**Usage:** `dev workset create [workset] [repository] [--description <value>] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
 
-| Argument                | Type       | Description                                                                |
-| ----------------------- | ---------- | -------------------------------------------------------------------------- |
-| `name`                  | positional | Workset name                                                               |
-| `source`                | positional | First repository: URL, path, or the name of a repository dev already knows |
-| `--description <value>` | string     | Workset description                                                        |
-| `--ref <value>`         | string     | Branch, tag, or revision                                                   |
-| `--path <value>`        | string     | Workspace mount path                                                       |
-| `--reason <value>`      | string     | Reason this repository belongs in the workset                              |
-| `--yes`                 | boolean    | Create without interactive confirmation                                    |
-| `--root <value>`        | string     | Explicit dev root directory                                                |
-| `--json`                | boolean    | Output in structured JSON format                                           |
+| Argument                | Type       | Description                                      |
+| ----------------------- | ---------- | ------------------------------------------------ |
+| `workset`               | positional | Workset name                                     |
+| `repository`            | positional | First repository: URL, path, or a name dev knows |
+| `--description <value>` | string     | Workset description                              |
+| `--ref <value>`         | string     | Branch, tag, or revision                         |
+| `--path <value>`        | string     | Workspace mount path                             |
+| `--reason <value>`      | string     | Reason this repository belongs in the workset    |
+| `--yes`                 | boolean    | Create without interactive confirmation          |
+| `--root <value>`        | string     | Explicit dev root directory                      |
+| `--json`                | boolean    | Output in structured JSON format                 |
 
 ## `dev workset rename`
 
 Rename a configured workset
 
-**Usage:** `dev workset rename [name] [newName] [--root <value>] [--json]`
+**Usage:** `dev workset rename [from] [to] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                      |
 | ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Current workset name             |
-| `newName`        | positional | New workset name                 |
+| `from`           | positional | Current workset name             |
+| `to`             | positional | New workset name                 |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |
 
@@ -1168,11 +1168,11 @@ Rename a configured workset
 
 Interactively manage a workset
 
-**Usage:** `dev workset manage [name] [--root <value>] [--json]`
+**Usage:** `dev workset manage [workset] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                      |
 | ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Workset name                     |
+| `workset`        | positional | Workset name                     |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |
 
@@ -1192,18 +1192,18 @@ Manage repositories in a workset
 
 Add a repository to a workset
 
-**Usage:** `dev workset repo add [workset] [source] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
+**Usage:** `dev workset repo add [workset] [repository] [--ref <value>] [--path <value>] [--reason <value>] [--yes] [--root <value>] [--json]`
 
-| Argument           | Type       | Description                                                         |
-| ------------------ | ---------- | ------------------------------------------------------------------- |
-| `workset`          | positional | Workset name                                                        |
-| `source`           | positional | Repository URL, path, or the name of a repository dev already knows |
-| `--ref <value>`    | string     | Branch, tag, or revision                                            |
-| `--path <value>`   | string     | Workspace mount path                                                |
-| `--reason <value>` | string     | Reason this repository belongs in the workset                       |
-| `--yes`            | boolean    | Add without interactive confirmation                                |
-| `--root <value>`   | string     | Explicit dev root directory                                         |
-| `--json`           | boolean    | Output in structured JSON format                                    |
+| Argument           | Type       | Description                                   |
+| ------------------ | ---------- | --------------------------------------------- |
+| `workset`          | positional | Workset name                                  |
+| `repository`       | positional | Repository URL, path, or a name dev knows     |
+| `--ref <value>`    | string     | Branch, tag, or revision                      |
+| `--path <value>`   | string     | Workspace mount path                          |
+| `--reason <value>` | string     | Reason this repository belongs in the workset |
+| `--yes`            | boolean    | Add without interactive confirmation          |
+| `--root <value>`   | string     | Explicit dev root directory                   |
+| `--json`           | boolean    | Output in structured JSON format              |
 
 ## `dev workset repo edit`
 
@@ -1214,7 +1214,7 @@ Edit repository metadata in a workset
 | Argument           | Type       | Description                                   |
 | ------------------ | ---------- | --------------------------------------------- |
 | `workset`          | positional | Workset name                                  |
-| `member`           | positional | Repository path or source                     |
+| `member`           | positional | Declared repository path or URL               |
 | `--ref <value>`    | string     | Branch, tag, or revision                      |
 | `--path <value>`   | string     | Workspace mount path                          |
 | `--reason <value>` | string     | Reason this repository belongs in the workset |
@@ -1231,7 +1231,7 @@ Remove a repository from a workset
 | Argument         | Type       | Description                             |
 | ---------------- | ---------- | --------------------------------------- |
 | `workset`        | positional | Workset name                            |
-| `member`         | positional | Repository path or source               |
+| `member`         | positional | Declared repository path or URL         |
 | `--force`        | boolean    | Remove without interactive confirmation |
 | `--root <value>` | string     | Explicit dev root directory             |
 | `--json`         | boolean    | Output in structured JSON format        |
@@ -1256,7 +1256,7 @@ Add every repository carrying a label to a workset
 | Argument           | Type       | Description                              |
 | ------------------ | ---------- | ---------------------------------------- |
 | `workset`          | positional | Workset name                             |
-| `label`            | positional | Label on declared sources                |
+| `label`            | positional | Label on declared repositories           |
 | `--reason <value>` | string     | Reason this label belongs in the workset |
 | `--yes`            | boolean    | Add without interactive confirmation     |
 | `--root <value>`   | string     | Explicit dev root directory              |
@@ -1280,10 +1280,10 @@ Remove a label from a workset
 
 Show one configured workset
 
-**Usage:** `dev workset show [name] [--root <value>] [--json]`
+**Usage:** `dev workset show [workset] [--root <value>] [--json]`
 
 | Argument         | Type       | Description                      |
 | ---------------- | ---------- | -------------------------------- |
-| `name`           | positional | Workset name                     |
+| `workset`        | positional | Workset name                     |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |

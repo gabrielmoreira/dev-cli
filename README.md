@@ -235,6 +235,12 @@ The workspace, pull request and work item commands take `--json`, and `dev --hel
 
 Under the hood every repository is cloned once, as a bare mirror in `.dev/`, and every mount and reference checkout is a worktree on it. If you already use `git worktree`, that is the mechanism. `dev` adds the folder per task, the manifest, the pinning, the update that skips your dirty work, and the pickers.
 
+## Choose the same target once
+
+Help names the subject you pass: `workspace` for a workspace, `query` for fuzzy navigation or start, `workset` for a saved recipe, `from` and `to` for copying or renaming, and `repository` for a repository URL, path, or a name dev knows. Label commands accept several repositories. A workset `member` is its declared repository path or URL, not a workspace mount. Pull request URLs and IDs are `reference`; root directories stay `path`, and root aliases or paths stay `target`.
+
+On `ws status`, `ws update`, `ws path`, `ws jump`, and `pr list`, a positional selector and `--ws` or `--repo` must name the same target when you pass both. A `ws.md` path uses its manifest's workspace name. Different explicit targets fail with `CONFLICTING_OPTIONS` and exit 2 before fetching or changing anything; pass one selector or make them equal.
+
 ## More
 
 - [Setup](docs/setup.md): what `dev init` creates, credentials, several roots, shell integration for each shell.

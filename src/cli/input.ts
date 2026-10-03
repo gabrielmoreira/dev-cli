@@ -25,6 +25,37 @@ export class CliInputRequiredError extends Error {
   }
 }
 
+export class CliInputConflictError extends Error {
+  readonly code = "CONFLICTING_OPTIONS";
+
+  constructor(
+    readonly details: {
+      command: string;
+      usage: string;
+      positional: string;
+      flag: string;
+      positionalName: string;
+      flagName: string;
+    },
+  ) {
+    super(
+      `Conflicting ${details.positionalName} and ${details.flagName}: '${details.positional}' versus '${details.flag}'.`,
+    );
+    this.name = "CliInputConflictError";
+  }
+}
+
+export function resolveDualInput(
+  positional: string | undefined,
+  flag: string | undefined,
+  options: { command: string; usage: string; positionalName: string; flagName: string },
+): string | undefined {
+  if (positional !== undefined && flag !== undefined && positional !== flag) {
+    throw new CliInputConflictError({ ...options, positional, flag });
+  }
+  return positional ?? flag;
+}
+
 export class CliInputError extends Error {
   constructor(
     readonly code: string,

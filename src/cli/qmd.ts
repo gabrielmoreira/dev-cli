@@ -15,12 +15,12 @@ import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 export const qmdSyncCommand = defineCommand({
   meta: {
     name: "sync",
-    description: "Reconcile qmd collections from sources carrying a label",
+    description: "Reconcile qmd collections from repositories carrying a label",
   },
   args: {
     label: {
       type: "positional",
-      description: `Label whose sources become collections (default: all ${DEFAULT_QMD_LABEL_PREFIX}* labels)`,
+      description: `Label whose repositories become collections (default: all ${DEFAULT_QMD_LABEL_PREFIX}* labels)`,
       required: false,
     },
     "no-embed": { type: "boolean", description: "Skip vector indexing (lexical-only / CI)" },

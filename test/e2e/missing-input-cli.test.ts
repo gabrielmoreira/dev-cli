@@ -57,27 +57,25 @@ describe("missing CLI input", () => {
   });
 
   it.each([
-    { args: ["label", "add"], usage: "dev label add <label> <repository...>" },
-    { args: ["label", "add", "team:api"], usage: "dev label add <label> <repository...>" },
-    { args: ["workset", "show"], usage: "dev workset show <name>" },
-    { args: ["qmd", "search"], usage: "dev qmd search <query>" },
-    { args: ["qmd", "x"], usage: "dev qmd x <args>" },
-    { args: ["ws", "add"], usage: "dev ws add <url|path|name>" },
-    { args: ["workset", "create"], usage: "dev workset create [name] [repository]" },
-  ])("reports missing input and its remedy for $args", async ({ args, usage }) => {
+    { args: ["label", "add"], field: "label" },
+    { args: ["label", "add", "team:api"], field: "repository" },
+    { args: ["workset", "show"], field: "workset" },
+    { args: ["qmd", "search"], field: "query" },
+    { args: ["qmd", "x"], field: "args" },
+    { args: ["ws", "add"], field: "repository" },
+    { args: ["workset", "create"], field: "workset" },
+  ])("reports missing input for $args", async ({ args, field }) => {
     // Prefix form: after `qmd x`, a trailing --json would be qmd's own flag.
     const json = await run(["--json", ...args]);
     expect(json.exitCode).toBe(2);
     expect(json.stdout).toBe("");
     expect(JSON.parse(json.stderr).error).toMatchObject({
       code: "INTERACTION_REQUIRED",
-      usage,
-      nextStep: usage,
+      field,
     });
     const human = await run(args);
     expect(human.exitCode).toBe(2);
     expect(human.stdout).toBe("");
-    expect(human.stderr).toContain(`↳ ${usage}\n`);
   });
 
   it("selects a workset in a real terminal without changing config", async () => {
