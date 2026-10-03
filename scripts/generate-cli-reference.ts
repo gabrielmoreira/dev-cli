@@ -1,5 +1,6 @@
 import { formatHelp } from "../src/cli/index.ts";
 import { EXIT_CODE_MEANINGS, EXIT_CODES, NEXT_STEPS } from "../src/cli/errors.ts";
+import { CONCEPTS } from "../src/concepts.ts";
 
 interface ArgumentDescription {
   name: string;
@@ -27,6 +28,18 @@ interface RootDescription {
 function escapeCell(value: string): string {
   return value.replaceAll("|", "\\|").replaceAll("\n", " ");
 }
+
+const concepts = [
+  "<!-- concepts:start -->",
+  "",
+  "| Concept | What it is for | How it differs |",
+  "| --- | --- | --- |",
+  ...CONCEPTS.map(
+    ({ name, job, contrast }) => `| **${name}** | ${escapeCell(job)} | ${escapeCell(contrast)} |`,
+  ),
+  "",
+  "<!-- concepts:end -->",
+].join("\n");
 
 function optionLabel(argument: ArgumentDescription): string {
   const long = `--${argument.name}`;
@@ -118,6 +131,10 @@ const output = [
   "",
   "Complete command, argument, option, and subcommand reference generated from the CLI definitions.",
   "",
+  "## Concepts",
+  "",
+  concepts,
+  "",
   "## Exit statuses",
   "",
   "| Exit | Meaning |",
@@ -142,3 +159,9 @@ const output = [
 ].join("\n");
 
 await Bun.write(new URL("../docs/commands.md", import.meta.url), `${output.trimEnd()}\n`);
+const readmeUrl = new URL("../README.md", import.meta.url);
+const readme = await Bun.file(readmeUrl).text();
+await Bun.write(
+  readmeUrl,
+  readme.replace(/<!-- concepts:start -->[\s\S]*?<!-- concepts:end -->/, concepts),
+);

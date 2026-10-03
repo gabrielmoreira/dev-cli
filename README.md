@@ -207,14 +207,20 @@ The workspace, pull request and work item commands take `--json`, and `dev --hel
 
 ## How it fits together
 
-| Concept       | What it is                                                                                                                                 |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Root**      | Your `dev` environment, `~/dev` by default, with its own configuration, workspaces and repositories. You can have several, one per client. |
-| **Workspace** | One task: a folder under `ws/` with a `ws.md` and one mount per repository.                                                                |
-| **Mount**     | A Git worktree inside a workspace, tracking a branch or pinned to a tag or commit.                                                         |
-| **Workset**   | A template for a workspace: which repositories or labels, on which refs, at which paths, and why.                                          |
-| **Mirror**    | A reference checkout under `mirrors/`, for repositories you read and index rather than change.                                             |
-| **Label**     | A named set of repositories, read by `dev pr`, `dev ws init`, `dev mirror list` and `dev qmd sync`. Some keep their repositories mirrored. |
+<!-- concepts:start -->
+
+| Concept        | What it is for                                                                              | How it differs                                                                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **root**       | The folder where dev keeps your workspaces, mirrors and settings, `~/dev` by default.       | Most people need one; add another to keep one client's work apart.                                                                               |
+| **provider**   | A connection to GitHub or Azure DevOps, so dev knows your repositories and pull requests.   | Without one, you work from repository URLs.                                                                                                      |
+| **repository** | A Git repository on GitHub, Azure DevOps or any URL.                                        | dev never changes where it lives; it copies it into a workspace or a mirror.                                                                     |
+| **workspace**  | A folder for one task: notes in `ws.md`, plus the repositories the task needs.              | A workset is a recipe; a workspace is what you work in.                                                                                          |
+| **mount**      | One repository inside a workspace, on its own branch. You edit and commit here.             | A mirror is for reading; a mount is for changing.                                                                                                |
+| **workset**    | A saved recipe for a workspace: which repositories, on which branches, and why.             | Start a workspace from it with `dev ws init --workset <name>`.                                                                                   |
+| **label**      | A name for a group of repositories, like `team:payments`.                                   | A label groups repositories; a workset says what one task needs from them. `index:` labels also keep their repositories mirrored and searchable. |
+| **mirror**     | A reference copy of a repository that dev keeps up to date, for reading, search and agents. | Do task work in a workspace mount, not in a mirror.                                                                                              |
+
+<!-- concepts:end -->
 
 ```text
 ~/dev/

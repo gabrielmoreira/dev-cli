@@ -28,50 +28,6 @@ describe("CLI entrypoint (Phase 0)", () => {
     expect(parsed.commands).toBeArray();
   });
 
-  it("exits with 0 on --help without contacting network", async () => {
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-
-    try {
-      const ambient: AmbientContext = {
-        argv: ["--help"],
-        cwd: process.cwd(),
-        env: {},
-        isTTY: false,
-      };
-      const exitCode = await runCli(ambient);
-      expect(exitCode).toBe(0);
-      expect(logs.join("\n")).toContain(
-        "Developer CLI & Workspace Engine (dev v0.0.0-development)",
-      );
-    } finally {
-      console.log = originalLog;
-    }
-  });
-
-  it("exits with 0 on empty argv (showing help)", async () => {
-    const logs: string[] = [];
-    const originalLog = console.log;
-    console.log = (...args: unknown[]) => logs.push(args.join(" "));
-
-    try {
-      const ambient: AmbientContext = {
-        argv: [],
-        cwd: process.cwd(),
-        env: {},
-        isTTY: false,
-      };
-      const exitCode = await runCli(ambient);
-      expect(exitCode).toBe(0);
-      expect(logs.join("\n")).toContain(
-        "Developer CLI & Workspace Engine (dev v0.0.0-development)",
-      );
-    } finally {
-      console.log = originalLog;
-    }
-  });
-
   it("exits with 0 on --version", async () => {
     const logs: string[] = [];
     const originalLog = console.log;

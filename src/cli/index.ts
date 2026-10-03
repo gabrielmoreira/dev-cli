@@ -37,6 +37,17 @@ import { qmdCommand, qmdXCommand } from "./qmd.ts";
 import { worksetCommand } from "./workset.ts";
 import { VERSION } from "../version.ts";
 import { parsePullRequestUrl } from "../pr-workspace.ts";
+import { CONCEPTS } from "../concepts.ts";
+
+export const COMMAND_GROUPS: readonly { title: string; commands: readonly string[] }[] = [
+  { title: "Start here", commands: ["init", "ws", "ls", "go", "status", "start", "update"] },
+  { title: "Repositories and knowledge", commands: ["mirror", "label", "workset", "sync", "qmd"] },
+  { title: "Pull requests and work items", commands: ["pr", "wi"] },
+  {
+    title: "Setup",
+    commands: ["provider", "root", "use", "current", "roots", "shell-init", "doctor", "hardware"],
+  },
+];
 
 export { type AmbientContext, detectWorkspaceFromCwd };
 
@@ -132,15 +143,43 @@ async function describeCommand(
 }
 
 export async function formatHelp(isLlms = false): Promise<string> {
-  if (!isLlms) return await renderCommandUsage(mainCommand);
-
   const command = await describeCommand(mainCommand as unknown as InspectableCommand, "dev");
+  if (!isLlms) {
+    const lines = [
+      `dev v${VERSION}: Keep the repositories for one task together in a workspace.`,
+      "",
+      "USAGE dev <command> [options]",
+      "",
+      "COMMANDS",
+    ];
+    for (const group of COMMAND_GROUPS) {
+      lines.push("", group.title);
+      for (const name of group.commands) {
+        const child = command.subcommands?.find((child) => child.name === name);
+        const aliases = child?.aliases?.length ? ` (alias: ${child.aliases.join(", ")})` : "";
+        lines.push(`  ${name}${aliases}  ${child?.description ?? ""}`);
+      }
+    }
+    lines.push("", "OPTIONS");
+    for (const option of command.arguments)
+      lines.push(`  --${option.name}  ${option.description ?? ""}`);
+    lines.push(
+      "",
+      "Concepts",
+      ...CONCEPTS.map(({ name, job }) => `  ${name}: ${job}`),
+      "",
+      "Use dev <command> --help",
+    );
+    return lines.join("\n");
+  }
   return JSON.stringify(
     {
       name: command.name,
       description: command.description,
       options: command.arguments,
       commands: command.subcommands ?? [],
+      concepts: CONCEPTS,
+      groups: COMMAND_GROUPS,
       exitCodes: EXIT_CODE_MEANINGS,
       errorCodes: Object.fromEntries(
         Object.entries(EXIT_CODES).map(([code, exitCode]) => [
@@ -204,7 +243,7 @@ export async function formatCommandHelp(path: string[], allowArguments = false):
     command = await resolveDefinition(next);
     names.push(word);
   }
-  if (names.length === 0) return await renderCommandUsage(mainCommand);
+  if (names.length === 0) return await formatHelp(false);
   const parent: InspectableCommand = { meta: { name: ["dev", ...names.slice(0, -1)].join(" ") } };
   const meta = await resolveDefinition(command.meta ?? {});
   return await renderCommandUsage({ ...command, meta: { ...meta, name: names.at(-1) } }, parent);

@@ -124,4 +124,53 @@ describe("CLI help through pipes", () => {
     ).toBeDefined();
     expect(schema.exitCodes[2]).toContain("usage");
   });
+
+  it("teaches concepts and orders command groups before their definitions", async () => {
+    const result = await run(["--help"]);
+    expect(result.exitCode).toBe(0);
+    const titles = [
+      "Start here",
+      "Repositories and knowledge",
+      "Pull requests and work items",
+      "Setup",
+      "Concepts",
+    ];
+    let previous = -1;
+    for (const title of titles) {
+      const position = result.stdout.indexOf(title);
+      expect(position).toBeGreaterThan(previous);
+      previous = position;
+    }
+    expect(result.stdout).toContain("workspace: A folder for one task:");
+    expect(result.stdout).toContain("Use dev <command> --help");
+  });
+
+  it("assigns each registered command and alias to exactly one group", async () => {
+    const result = await run(["--help", "--llms"]);
+    const schema = JSON.parse(result.stdout);
+    expect(schema.groups).toBeArray();
+    expect(schema.concepts).toHaveLength(8);
+    const grouped = schema.groups.flatMap((group: { commands: string[] }) => group.commands);
+    const canonical = schema.commands.map((command: { name: string }) => command.name);
+    expect([...grouped].sort()).toEqual([...canonical].sort());
+    expect(new Set(grouped).size).toBe(grouped.length);
+    expect(
+      schema.commands.find((command: { name: string }) => command.name === "wi").aliases,
+    ).toContain("workitem");
+  });
+
+  it("keeps the published concept definitions in README and reference in sync", async () => {
+    const result = await run(["--help", "--llms"]);
+    const schema = JSON.parse(result.stdout);
+    const readme = await Bun.file(new URL("../../README.md", import.meta.url)).text();
+    const reference = await Bun.file(new URL("../../docs/commands.md", import.meta.url)).text();
+    const block = (text: string) =>
+      text.match(/<!-- concepts:start -->[\s\S]*?<!-- concepts:end -->/)?.[0];
+    expect(block(readme)).toBeDefined();
+    expect(block(readme)).toBe(block(reference));
+    for (const concept of schema.concepts) {
+      expect(block(readme)).toContain(concept.job);
+      expect(block(readme)).toContain(concept.contrast);
+    }
+  });
 });
