@@ -157,7 +157,7 @@ bun run verify:all
 
 ## 7. Regenerating the terminal demo
 
-The README demo (`docs/assets/dev-cli-demo.gif` and `.mp4`) is rendered by [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` inside a disposable Docker image built from `docs/demo/`. VHS renders only the MP4; `docs/demo/render.sh` builds the GIF from that MP4 with a two-pass ffmpeg, because VHS's own GIF output buffers every frame of the recording in memory and dies on a 16 GB machine once the demo passes about two minutes.
+The README demo (`docs/assets/dev-cli-demo.gif`) is rendered by [VHS](https://github.com/charmbracelet/vhs) from `docs/demo.tape` inside a disposable Docker image built from `docs/demo/`. VHS renders only the MP4; `docs/demo/render.sh` builds the GIF from that MP4 with a two-pass ffmpeg, because VHS's own GIF output buffers every frame of the recording in memory and dies on a 16 GB machine once the demo passes about two minutes. The GIF is built at 880 px and 8 frames per second, the size a README displays it, which keeps one release's asset near 5 MB. The MP4 is not committed: it is a workflow artifact and the source the GIF is built from.
 
 The recording starts from a blank dev root in a Debian container configured with Mise, zsh, Spaceship, and CaskaydiaCove Nerd Font. Every step runs the interactive form of a command, so the tape never types a long flag list. Scenes go from the simplest command to the most involved one: create a workspace from one repository URL and jump into it with `dev go`, then create an empty workspace and add a repository through the picker. It then defines an `incident` workset (the seeded service plus the public `gabrielmoreira/skills` catalog), creates a workspace from it, and picks it from the `dev go` list. Pinned OMP docs and the skills catalog become reference checkouts, one label puts both into a QMD index, and OMP finds the evidence-first skill through that index. The demo runs through `openrouter/free`; no paid-model fallback is configured.
 
@@ -170,3 +170,5 @@ mise run demo
 ```
 
 The README references the GIF with a `?v=` query string, or GitHub's image cache keeps serving the old frame. The release workflow sets it to the release tag when it commits a refreshed demo; bump it by hand only when you commit a GIF yourself.
+
+The release workflow renders and commits the demo only when `docs/demo.tape` or `docs/demo/` changed since the previous release, because the asset is a large binary and a CLI fix is usually invisible in the recording. The `Demo` workflow runs on those same paths.

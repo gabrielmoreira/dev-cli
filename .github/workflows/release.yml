@@ -48,15 +48,26 @@ jobs:
             echo "tag=$release_tag" >> "$GITHUB_OUTPUT"
             echo "version=${release_tag#v}" >> "$GITHUB_OUTPUT"
           fi
+          # The committed demo is a large binary. Refresh it only when the files
+          # that shape it changed since the previous release; a fix to the CLI
+          # does not make the recording different enough to justify the bytes.
+          demo_changed="false"
+          if [[ "$release_tag" == v* ]]; then
+            previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep --invert-match -- "^${release_tag}$" | head -n 1 || true)"
+            if [[ -z "$previous_tag" ]] || ! git diff --quiet "$previous_tag" "$release_tag" -- docs/demo.tape docs/demo; then
+              demo_changed="true"
+            fi
+          fi
+          echo "demo_changed=$demo_changed" >> "$GITHUB_OUTPUT"
 
       - name: Require demo credentials for a release
-        if: steps.release.outputs.tag != '' && env.OPENROUTER_API_KEY == ''
+        if: steps.release.outputs.demo_changed == 'true' && env.OPENROUTER_API_KEY == ''
         run: |
           echo '::error::OPENROUTER_API_KEY is required to refresh the release demo.'
           exit 1
 
       - name: Install demo dependencies
-        if: steps.release.outputs.tag != ''
+        if: steps.release.outputs.demo_changed == 'true'
         env:
           NERD_FONTS_VERSION: v3.5.1
         run: |
@@ -69,27 +80,25 @@ jobs:
           fc-cache --force
 
       - name: Render released version demo
-        if: steps.release.outputs.tag != ''
+        if: steps.release.outputs.demo_changed == 'true'
         env:
           DEV_VERSION: ${{ steps.release.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: mise run demo
 
       - name: Commit refreshed demo
-        if: steps.release.outputs.tag != ''
+        if: steps.release.outputs.demo_changed == 'true'
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          demo_outputs="$RUNNER_TEMP/dev-cli-demo-$GITHUB_RUN_ID"
-          mkdir --parents "$demo_outputs"
-          cp docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4 "$demo_outputs/"
+          demo_output="$RUNNER_TEMP/dev-cli-demo-$GITHUB_RUN_ID.gif"
+          cp docs/assets/dev-cli-demo.gif "$demo_output"
           git fetch origin main
           git checkout --force -B demo-refresh origin/main
-          cp "$demo_outputs/dev-cli-demo.gif" docs/assets/dev-cli-demo.gif
-          cp "$demo_outputs/dev-cli-demo.mp4" docs/assets/dev-cli-demo.mp4
-          git add docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4
+          cp "$demo_output" docs/assets/dev-cli-demo.gif
+          git add docs/assets/dev-cli-demo.gif
           if git diff --cached --quiet; then
             echo 'Rendered demo is unchanged.'
             exit 0

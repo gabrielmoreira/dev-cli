@@ -72,13 +72,16 @@ fi
 # VHS's own GIF output buffers every frame of the recording in memory, which
 # dies on a 16 GB machine once the demo passes about two minutes. A two-pass
 # ffmpeg from the rendered MP4 builds the same GIF with constant memory:
-# pass one collects the palette, pass two applies it.
+# pass one collects the palette, pass two applies it. The GIF is built at the
+# width a README displays it, which is most of the size win: a 1200 px
+# recording costs about twice the bytes for pixels nobody sees.
+gif_filter="fps=8,scale=880:-1:flags=lanczos"
 palette="$(mktemp --suffix=.png)"
 trap 'rm -f "$palette"' EXIT
 ffmpeg -v error -y -i docs/assets/dev-cli-demo.mp4 \
-  -vf "fps=12,palettegen=stats_mode=diff" "$palette"
+  -vf "$gif_filter,palettegen=max_colors=128:stats_mode=diff" "$palette"
 ffmpeg -v error -y -i docs/assets/dev-cli-demo.mp4 -i "$palette" \
-  -lavfi "fps=12 [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=4" \
+  -lavfi "$gif_filter [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=5" \
   docs/assets/dev-cli-demo.gif
 for demo_output in docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4; do
   if [[ ! -s "$demo_output" ]]; then

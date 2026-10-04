@@ -8,3 +8,4 @@ dist/
 coverage/
 .dev/
 .bun-cache/
+docs/assets/dev-cli-demo.mp4

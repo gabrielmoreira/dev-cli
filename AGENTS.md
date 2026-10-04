@@ -176,7 +176,8 @@ How to read this file: each bullet is a rule in bold followed by the reason or t
 - **Observe a control in a real PTY before automating it.** A timeout log shows where the tape stopped; the PTY shows why.
 - **A confirmation that hands control back to the shell needs two waits.** The confirmation text, then the shell prompt. "Text appeared" and "process exited" are different events.
 - **A completion gate watches the completion protocol, not a content detail.** The agent prompt asks for a closing marker spelled so the prompt itself never contains it literally, and the tape waits for that marker.
-- **Render fresh and validate.** Delete old outputs first, require a non-empty GIF and MP4 after, run VHS in its own session so its teardown signal cannot kill the render script, and accept only exit 0 or 143.
+- **Render fresh and validate.** Delete old outputs first, build the GIF from the rendered MP4 with the streaming two-pass ffmpeg, require a non-empty GIF after, run VHS in its own session so its teardown signal cannot kill the render script, and accept only exit 0 or 143. The GIF is the only committed asset; the MP4 stays a workflow artifact.
+- **Refresh the demo only when the demo changed.** The committed GIF is a large binary, so the release workflow renders it when `docs/demo.tape` or `docs/demo/` changed since the previous release, not on every release.
 - **An external failure is its own layer.** A 403 from the model provider is a provider failure; it does not justify loosening the tape or touching the CLI.
 
 ## Delivery and verification
