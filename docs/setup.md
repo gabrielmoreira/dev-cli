@@ -63,7 +63,7 @@ Boolean flags accept `--json=true`, `--json=false`, and `--no-json`; the same sp
 
 On `ws status`, `ws update`, `ws path`, `ws jump`, and `pr list`, a positional selector and `--ws` or `--repo` must name the same target when you pass both. A `ws.md` path counts as its workspace's name. Different targets fail with `CONFLICTING_OPTIONS` and exit 2 before anything is fetched or changed; pass one selector, or the same one twice. Argument names are in the [command reference](commands.md).
 
-`label add --json` retains `sources` for the requested repositories and separates changed assignments in `added` from identical assignments in `unchanged`; each entry includes its URL, ref/path and effective metadata. `init --json` returns `created` for a new dev.yaml and `changed` for configuration creation, instructions repair or a registry change. Its `agentsCreated`, `registrationChanged`, and `defaultRootChanged` fields identify those effects.
+`label add --json` retains `sources` for the requested repositories and separates changed assignments in `added` from identical assignments in `unchanged`; each entry includes its URL, ref/path and effective metadata. `init --json` returns `created` for a new dev.yaml and `changed` for configuration creation, an instructions write or a registry change. Its `agentsCreated`, `agentsUpdated`, `agentsManaged`, `registrationChanged`, and `defaultRootChanged` fields identify those effects: `agentsCreated` means the root `AGENTS.md` was written, `agentsUpdated` means its dev block was replaced, and `agentsManaged` is false when the file exists without one unambiguous dev block, which is the file `dev` leaves alone.
 
 ## What `dev init` creates
 
@@ -86,9 +86,9 @@ The registry accepts an optional string `default_root` and a `roots` table whose
 └── .dev/     # bare mirrors, worktree admin repositories, caches; rebuildable
 ```
 
-Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are created when first needed. `AGENTS.md` is not a global machine or user configuration. Running `dev init` again preserves existing `dev.yaml` and `AGENTS.md` files; concurrent initializations do not replace a configuration created by another initializer.
+Work inside `ws/`. Do not edit `mirrors/` or `.dev/` directly. Directories are created when first needed. `AGENTS.md` is not a global machine or user configuration. Running `dev init` again preserves an existing `dev.yaml`. The root `AGENTS.md` is written between `<!-- dev:begin -->` and `<!-- dev:end -->` markers: `dev init` replaces that block, whose notice says so, and every byte outside the markers survives untouched. A file with no markers, or with duplicated ones, belongs to whoever wrote it and is never rewritten; `dev init` reports `agentsManaged: false` and prints the remedy. Concurrent initializations do not replace a configuration created by another initializer.
 
-Repeating an identical initialization reports that the root is already configured. A new alias/default or a missing instructions file is reported as an update rather than a no-op.
+Repeating an identical initialization reports that the root is already configured. A new alias/default, a missing instructions file, or a dev block whose text changed is reported as an update rather than a no-op.
 
 Results use `✓` for a completed action, `○` for a fact or an already-applied request, `⚠` for a caveat, `✗` for a failure, and `↳` for the next command. Fetching and other progress use `↻` on stderr; JSON carries the same state without presentation symbols.
 
