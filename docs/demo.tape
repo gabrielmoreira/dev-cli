@@ -37,9 +37,15 @@ Wait+Screen@10s /demo@devbox/
 Show
 Sleep 1s
 
-Type "mise install"
+Type "mise use -g github:gabrielmoreira/dev-cli"
 Sleep 500ms
 Enter
+Sleep 3s
+Hide
+Type "mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION --quiet"
+Enter
+Sleep 500ms
+Show
 Type "dev --version"
 Enter
 Wait+Screen@20s /dev v\d/
