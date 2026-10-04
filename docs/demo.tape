@@ -37,10 +37,6 @@ Wait+Screen@10s /demo@devbox/
 Show
 Sleep 1s
 
-# The image preinstalls the published tools pinned in mise.toml; install is repeatable.
-Type@25ms "# Tools are pinned in mise.toml; install is repeatable"
-Enter
-Sleep 500ms
 Type "mise install"
 Sleep 500ms
 Enter
