@@ -85,3 +85,9 @@ The decisions taken while executing `.local/plan-2026-10-02-dx/`, one section ea
 **Decision.** The `AGENTS.md` that `dev init` writes at the root describes `dev qmd search`, and coding agents inherit it from every workspace below the root, so a question about indexed documentation leads the agent to the index without naming the command. Workspaces carry no copy. Verified on 2026-10-04 with the pinned OMP: the root file appears in the session's system prompt, and a prompt that names no command made the agent run `dev qmd search` and cite the indexed skill.
 
 **Rejected alternative.** Putting the command in the demo prompt, or writing an `AGENTS.md` into each workspace. The first shows a workaround instead of the product; the second duplicates the root file and drifts from it.
+
+## D23: Build the demo GIF from the rendered MP4, not inside VHS
+
+**Decision.** VHS renders only the MP4 of `docs/demo.tape`, and `docs/demo/render.sh` builds the GIF from that MP4 with a two-pass ffmpeg: pass one collects a palette file, pass two applies it. VHS's own GIF output sends every frame of the recording through one `palettegen`/`paletteuse` graph, which buffers the whole recording in memory; a kernel log showed ffmpeg at 14.4 GB resident for a 137-second recording, and release renders died the same way twice on 16 GB GitHub runners, mid-encode, with the runner canceling the step. The two passes stream: a 228-second MP4 became a 10 MB GIF in 16 seconds with 123 MB resident. The GIF runs at 12 frames per second; the recording length no longer sets the memory ceiling.
+
+**Rejected alternative.** Re-running the canceled release renders and hoping. The kill offsets varied (76 s and 120 s into the same encode), which is a resource threshold, not a deadline; a green render this morning was luck of a shorter decode, not headroom. Raising the runner size or shortening the demo instead would spend money or cut scenes to protect a renderer defect.

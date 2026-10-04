@@ -65,6 +65,21 @@ fi
 if (( vhs_status != 0 && vhs_status != 143 )); then
   exit "$vhs_status"
 fi
+if [[ ! -s docs/assets/dev-cli-demo.mp4 ]]; then
+  printf 'VHS completed without writing docs/assets/dev-cli-demo.mp4.\n' >&2
+  exit 1
+fi
+# VHS's own GIF output buffers every frame of the recording in memory, which
+# dies on a 16 GB machine once the demo passes about two minutes. A two-pass
+# ffmpeg from the rendered MP4 builds the same GIF with constant memory:
+# pass one collects the palette, pass two applies it.
+palette="$(mktemp --suffix=.png)"
+trap 'rm -f "$palette"' EXIT
+ffmpeg -v error -y -i docs/assets/dev-cli-demo.mp4 \
+  -vf "fps=12,palettegen=stats_mode=diff" "$palette"
+ffmpeg -v error -y -i docs/assets/dev-cli-demo.mp4 -i "$palette" \
+  -lavfi "fps=12 [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=4" \
+  docs/assets/dev-cli-demo.gif
 for demo_output in docs/assets/dev-cli-demo.gif docs/assets/dev-cli-demo.mp4; do
   if [[ ! -s "$demo_output" ]]; then
     printf 'VHS completed without writing %s.\n' "$demo_output" >&2

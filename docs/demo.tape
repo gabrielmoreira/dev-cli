@@ -7,7 +7,7 @@
 # 4 rows (spacer, question, hint, answer), the shell prompt 3, and a caption line 3 more.
 # Captions: one short "# ..." line per scene says what comes next; where a scene is near the
 # budget, the caption trails the command on the same line instead.
-Output docs/assets/dev-cli-demo.gif
+
 Output docs/assets/dev-cli-demo.mp4
 
 Require docker
