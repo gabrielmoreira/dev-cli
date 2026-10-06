@@ -67,6 +67,8 @@ A label names a group of repositories.
   This uses OMP, the agent, and HerdR, its terminal manager.
 
 Replace values in angle brackets with your own values.
+Read \`dev skill\` for how to operate this root, unless you already have the
+dev skill in your context.
 Use \`dev --help --llms\` for the full command contract for agents,
 or \`dev <command> --help\` for options.
 

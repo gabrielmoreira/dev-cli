@@ -74,6 +74,9 @@ describe("Root Management and mise-Style Ergonomics CLI E2E (Phase 2.4)", () => 
 
     const agentsPath = join(agentsRoot, "AGENTS.md");
     expect(fs.exists(agentsPath)).toBe(true);
+    const instructions = await fs.readText(agentsPath);
+    expect(instructions).toContain("`dev skill`");
+    expect(instructions).toContain("`dev --help --llms`");
   });
 
   it("dev init preserves an existing AGENTS.md", async () => {
