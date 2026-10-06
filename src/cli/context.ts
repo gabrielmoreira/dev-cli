@@ -55,6 +55,11 @@ const AGENT_ENV = [
   "CODEX_SANDBOX",
 ];
 
+/** The agent markers present in this environment, empty when none is set. */
+export function detectAgentContext(ambient: AmbientContext = currentAmbient): string[] {
+  return AGENT_ENV.filter((name) => ambient.env[name]);
+}
+
 export function canPrompt(ambient: AmbientContext = currentAmbient): boolean {
   const flags = readGlobalFlags(ambient.argv);
   return (
@@ -63,7 +68,7 @@ export function canPrompt(ambient: AmbientContext = currentAmbient): boolean {
     !flags.json &&
     !flags["non-interactive"] &&
     !ambient.env.CI &&
-    !AGENT_ENV.some((name) => ambient.env[name])
+    detectAgentContext(ambient).length === 0
   );
 }
 

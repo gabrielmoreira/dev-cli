@@ -23,7 +23,9 @@ import { doctorCommand, hardwareCommand } from "./doctor.ts";
 import { shellInitCommand } from "./shell.ts";
 import { initCommand, useCommand, currentCommand, rootCommand, rootsCommand } from "./root.ts";
 import { providerCommand } from "./provider.ts";
-import { type AmbientContext, getAmbient, setAmbient } from "./context.ts";
+import { type AmbientContext, detectAgentContext, getAmbient, setAmbient } from "./context.ts";
+import { AGENT_RESOURCES, HELP_NEXT_STEPS, renderAgentResources } from "../agentGuide.ts";
+import { skillCommand } from "./skill.ts";
 import { detectWorkspaceFromCwd, WorkspaceError } from "../ws.ts";
 import { ui } from "../ui.ts";
 import {
@@ -46,7 +48,17 @@ export const COMMAND_GROUPS: readonly { title: string; commands: readonly string
   { title: "Pull requests and work items", commands: ["pr", "wi"] },
   {
     title: "Setup",
-    commands: ["provider", "root", "use", "current", "roots", "shell-init", "doctor", "hardware"],
+    commands: [
+      "provider",
+      "root",
+      "use",
+      "current",
+      "roots",
+      "shell-init",
+      "doctor",
+      "hardware",
+      "skill",
+    ],
   },
 ];
 
@@ -171,6 +183,9 @@ export async function formatHelp(isLlms = false): Promise<string> {
       "",
       "Use dev <command> --help",
     );
+    // Only in human help, and only when this shell looks like an agent's: the
+    // block never reaches --json, --quiet or a command result.
+    if (detectAgentContext().length > 0) lines.push("", renderAgentResources());
     return lines.join("\n");
   }
   return JSON.stringify(
@@ -180,6 +195,7 @@ export async function formatHelp(isLlms = false): Promise<string> {
       options: command.arguments,
       commands: command.subcommands ?? [],
       concepts: CONCEPTS,
+      resources: AGENT_RESOURCES,
       groups: COMMAND_GROUPS,
       exitCodes: EXIT_CODE_MEANINGS,
       errorCodes: Object.fromEntries(
@@ -247,7 +263,12 @@ export async function formatCommandHelp(path: string[], allowArguments = false):
   if (names.length === 0) return await formatHelp(false);
   const parent: InspectableCommand = { meta: { name: ["dev", ...names.slice(0, -1)].join(" ") } };
   const meta = await resolveDefinition(command.meta ?? {});
-  return await renderCommandUsage({ ...command, meta: { ...meta, name: names.at(-1) } }, parent);
+  const usage = await renderCommandUsage(
+    { ...command, meta: { ...meta, name: names.at(-1) } },
+    parent,
+  );
+  const next = HELP_NEXT_STEPS[names.join(" ")];
+  return next ? `${usage}\n\nnext: ${next}\n` : usage;
 }
 
 /**
@@ -441,6 +462,7 @@ export const mainCommand = defineCommand({
     "shell-init": shellInitCommand,
     qmd: qmdCommand,
     workset: worksetCommand,
+    skill: skillCommand,
   },
 });
 

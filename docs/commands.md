@@ -147,6 +147,7 @@ Developer CLI & Workspace Engine
 | `dev shell-init` | Generate shell wrapper functions for bash, zsh, fish, or powershell                                                    |
 | `dev qmd`        | Index labeled repositories with QMD and search them                                                                    |
 | `dev workset`    | Manage reusable repository worksets                                                                                    |
+| `dev skill`      | Print the instructions for an agent operating a dev root                                                               |
 
 ## `dev init`
 
@@ -1311,3 +1312,13 @@ Show one configured workset
 | `workset`        | positional | Workset name                     |
 | `--root <value>` | string     | Explicit dev root directory      |
 | `--json`         | boolean    | Output in structured JSON format |
+
+## `dev skill`
+
+Print the instructions for an agent operating a dev root
+
+**Usage:** `dev skill [--json]`
+
+| Argument | Type    | Description                      |
+| -------- | ------- | -------------------------------- |
+| `--json` | boolean | Output in structured JSON format |

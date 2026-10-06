@@ -42,9 +42,20 @@ it("describes every command and argument without internal vocabulary", async () 
     );
     const [stdout, code] = await Promise.all([new Response(child.stdout).text(), child.exited]);
     expect(code).toBe(0);
-    const all = descriptions(JSON.parse(stdout).commands);
+    const schema = JSON.parse(stdout) as {
+      commands: unknown;
+      resources: { task: string; action: string; note?: string }[];
+    };
+    const all = descriptions(schema.commands);
     expect(all.length).toBeGreaterThan(100);
-    const leaks = all.flatMap(({ path, text }) =>
+    // The agent block is prose too, and a reader meets it through --help and --llms.
+    const resources = schema.resources.flatMap(({ task, action, note }) => [
+      { path: `dev resources: ${task}`, text: task },
+      { path: `dev resources: ${task}`, text: action },
+      ...(note ? [{ path: `dev resources: ${task}`, text: note }] : []),
+    ]);
+    expect(resources.length).toBeGreaterThan(0);
+    const leaks = [...all, ...resources].flatMap(({ path, text }) =>
       INTERNAL_TERMS.filter((term) => text.toLowerCase().includes(term)).map(
         (term) => `${path}: '${term}' in "${text}"`,
       ),
