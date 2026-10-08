@@ -31,12 +31,9 @@ ENV SHELL=/bin/zsh
 ENV MISE_DISABLE_UPDATE_WARNING=true
 # The tape types the install a viewer would type, `mise use -g github:gabrielmoreira/dev-cli`,
 # then restores this build's pin behind the scenes, so the recording keeps running the release
-# under test. DEV_VERSION makes that pin available to the restore. Mise keeps the configured
-# version for an unversioned `use` while it is installed, which is why the visible command
-# reports "already installed" without downloading a different release.
+# under test. DEV_VERSION makes that pin available to the restore. An unversioned `use` rewrites
+# the entry to "latest", so the visible command alone would follow the newest release instead.
 ENV DEV_VERSION=${DEV_VERSION}
-# Keep one Mise configuration active both here and inside the created workspaces.
-ENV MISE_GLOBAL_CONFIG_FILE=/demo/mise.toml
 ENV SSL_CERT_FILE=/home/demo/.cache/certs/ca-bundle.pem
 ENV NODE_EXTRA_CA_CERTS=/home/demo/.cache/certs/ca-bundle.pem
 ENV GIT_SSL_CAINFO=/home/demo/.cache/certs/ca-bundle.pem

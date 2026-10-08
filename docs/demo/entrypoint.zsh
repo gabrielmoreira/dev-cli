@@ -26,9 +26,9 @@ seed_repository() {
   # has real work to do. The version is read from the image's global config so the two agree.
   if [[ "$name" == "checkout-api" ]]; then
     local node_pin
-    node_pin="$(grep -m1 '^node *=' /demo/mise.toml | cut -d'"' -f2 || true)"
+    node_pin="$(grep -m1 '^node *=' "$HOME/.config/mise/config.toml" | cut -d'"' -f2 || true)"
     if [[ -z "$node_pin" ]]; then
-      printf 'No node pin in /demo/mise.toml; cannot seed the checkout toolchain.\n' >&2
+      printf 'No node pin in ~/.config/mise/config.toml; cannot seed the checkout toolchain.\n' >&2
       exit 1
     fi
     printf '[tools]\nnode = "%s"\n' "$node_pin" > "$seed/mise.toml"

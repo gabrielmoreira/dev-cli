@@ -40,11 +40,18 @@ Sleep 1s
 Type "mise use -g github:gabrielmoreira/dev-cli"
 Sleep 500ms
 Enter
+Wait+Screen@60s /tools: github:gabrielmoreira\/dev-cli@/
 Sleep 3s
+# Restore the image's exact pin out of sight. Hide stops recording frames, not the terminal, so
+# the hidden command stays on screen until a clear removes it; the marker is printed in two
+# parts so the typed command never contains it.
 Hide
-Type "mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION --quiet"
+Type `mise use -g github:gabrielmoreira/dev-cli@$DEV_VERSION --quiet && printf 'pin-%s\n' restored`
 Enter
-Sleep 500ms
+Wait+Screen@60s /pin-restored/
+Type "clear"
+Enter
+Sleep 1s
 Show
 Type "dev --version"
 Enter
@@ -53,12 +60,10 @@ Sleep 1s
 Type@25ms "# Let dev go change your shell's directory"
 Enter
 Sleep 500ms
-Type `echo 'eval "$(dev shell-init zsh)"' >> ~/.zshrc`
+Type `eval "$(dev shell-init zsh)"`
 Sleep 500ms
 Enter
-Type "source ~/.zshrc"
-Enter
-Sleep 6s
+Sleep 4s
 
 # First-time setup: accept ~/dev and skip remote providers for this local demo.
 Type "clear"
