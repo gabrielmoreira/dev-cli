@@ -9,7 +9,7 @@
 
 ## See it in action
 
-![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=v5.1.4)
+![dev CLI terminal demo](docs/assets/dev-cli-demo.gif?v=v5.4.1)
 
 Under three minutes from `dev init`: a workspace from one URL and a jump into it with `dev go`, an incident workspace built from a workset, and a coding agent answering from the indexed docs. Each workflow's `Demo` run keeps the full-quality MP4 as a workflow artifact.
 
