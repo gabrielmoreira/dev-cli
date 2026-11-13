@@ -139,6 +139,58 @@ export function describeSkipReason(
   }
 }
 
+function parseMountsJson(
+  value: string,
+  inventory: InventoryRecord[],
+  defaultSetup?: string,
+): PlannedMount[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new ws.WorkspaceError("INVALID_MOUNT_PLAN", "--mounts-json must contain valid JSON.");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new ws.WorkspaceError("INVALID_MOUNT_PLAN", "--mounts-json must be a JSON array.");
+  }
+  return parsed.map((entry, index) => {
+    if (
+      typeof entry !== "object" ||
+      entry === null ||
+      Array.isArray(entry) ||
+      !("source" in entry) ||
+      typeof entry.source !== "string" ||
+      !entry.source.trim() ||
+      (entry.branch !== undefined && typeof entry.branch !== "string") ||
+      (entry.path !== undefined && typeof entry.path !== "string") ||
+      (entry.reason !== undefined && typeof entry.reason !== "string") ||
+      (entry.setup !== undefined && entry.setup !== false && typeof entry.setup !== "string")
+    ) {
+      throw new ws.WorkspaceError(
+        "INVALID_MOUNT_PLAN",
+        `Mount ${index + 1} must have a source, optional string branch, path and reason, and string or false setup.`,
+      );
+    }
+    const source = entry.source.trim();
+    const branch =
+      typeof entry.branch === "string" && entry.branch.trim()
+        ? entry.branch.trim()
+        : inventory.find((record) => record.url === source)?.default_branch;
+    const path =
+      typeof entry.path === "string" && entry.path.trim()
+        ? entry.path.trim()
+        : git.deriveDefaultMountPath(source);
+    const setup = entry.setup === false ? undefined : (entry.setup ?? defaultSetup);
+    return {
+      source,
+      ...(branch ? { branch } : {}),
+      path,
+      ...(typeof entry.reason === "string" && entry.reason ? { reason: entry.reason } : {}),
+      ...(setup !== undefined ? { setup } : {}),
+    };
+  });
+}
+
 export const wsInitCommand = defineCommand({
   meta: {
     name: "init",
@@ -158,6 +210,15 @@ export const wsInitCommand = defineCommand({
       description: "Add every repository carrying this label (comma-separated for several)",
     },
     yes: { type: "boolean", description: "Accept the generated mount plan" },
+    "dry-run": {
+      type: "boolean",
+      description: "Resolve and return the workspace plan without creating it",
+    },
+    "mounts-json": { type: "string", description: "Reviewed mounts as a JSON array" },
+    name: {
+      type: "string",
+      description: "Workspace name override for a repository or pull request URL",
+    },
     setup: {
       type: "string",
       description: "Command to run in every mount after the workspace is created",
@@ -175,14 +236,36 @@ export const wsInitCommand = defineCommand({
     // non-empty string is a command.
     const setupCommand =
       typeof args.setup === "string" && args.setup.trim() ? args.setup.trim() : undefined;
-    const inventory = canPrompt(ambient) ? await cache.loadAllCachedInventories(config.root) : [];
+    const inventory =
+      canPrompt(ambient) || args["dry-run"] || args["mounts-json"] !== undefined
+        ? await cache.loadAllCachedInventories(config.root)
+        : [];
     let rawName = args.workspace;
     let suggestedName: string | undefined;
     let suggestedDescription: string | undefined;
     let mounts: PlannedMount[] = [];
     let reviewPlan = false;
 
-    if (rawName && isExplicitSource(rawName)) {
+    if (args["mounts-json"] !== undefined) {
+      try {
+        mounts = parseMountsJson(args["mounts-json"], inventory, setupCommand);
+      } catch (error) {
+        return reportWorkspaceError(error, config, args.json);
+      }
+      if (args.name !== undefined) {
+        return reportWorkspaceError(
+          new ws.WorkspaceError(
+            "INVALID_WORKSPACE_NAME",
+            "--name is only valid with a repository or pull request URL.",
+          ),
+          config,
+          args.json,
+        );
+      }
+      if (!rawName && mounts.length === 1) {
+        suggestedName = ws.deriveWorkspaceNameFromRepository(mounts[0]!.source);
+      }
+    } else if (rawName && isExplicitSource(rawName)) {
       const resolvedPullRequest = await resolvePullRequestPlan(config, rawName);
       if (resolvedPullRequest) {
         const { plan } = resolvedPullRequest;
@@ -195,15 +278,31 @@ export const wsInitCommand = defineCommand({
             setup: setupCommand,
           },
         ];
-        suggestedName = plan.workspaceName;
+        suggestedName = args.name ?? plan.workspaceName;
         suggestedDescription = plan.description;
       } else {
         mounts = [
-          { source: rawName, path: git.deriveDefaultMountPath(rawName), setup: setupCommand },
+          {
+            source: rawName,
+            branch: args["dry-run"]
+              ? inventory.find((record) => record.url === rawName)?.default_branch
+              : undefined,
+            path: git.deriveDefaultMountPath(rawName),
+            setup: setupCommand,
+          },
         ];
-        suggestedName = ws.deriveWorkspaceNameFromRepository(rawName);
+        suggestedName = args.name ?? ws.deriveWorkspaceNameFromRepository(rawName);
       }
       rawName = undefined;
+    } else if (args.name !== undefined) {
+      return reportWorkspaceError(
+        new ws.WorkspaceError(
+          "INVALID_WORKSPACE_NAME",
+          "--name requires a repository or pull request URL.",
+        ),
+        config,
+        args.json,
+      );
     } else if (args.workset || args.label) {
       const labels = (args.label ?? "")
         .split(",")
@@ -228,8 +327,8 @@ export const wsInitCommand = defineCommand({
       }
       suggestedName =
         args.workset ?? (labels.length === 1 ? labels[0]!.replaceAll(":", "-") : undefined);
-      reviewPlan = canPrompt(ambient);
-    } else if (!rawName && canPrompt(ambient)) {
+      reviewPlan = !args["dry-run"] && canPrompt(ambient);
+    } else if (!rawName && canPrompt(ambient) && !args["dry-run"]) {
       const labelCounts = declaredLabels(config);
       const choices = [
         { label: "Blank workspace", value: "blank" },
@@ -305,7 +404,7 @@ export const wsInitCommand = defineCommand({
     }
 
     const name = await resolveTextInput({
-      value: rawName ?? (!canPrompt(ambient) ? suggestedName : undefined),
+      value: rawName ?? (!canPrompt(ambient) || args["dry-run"] ? suggestedName : undefined),
       message: "Workspace name",
       hint: "One task folder under ws/. Enter keeps the proposed name.",
       initial: suggestedName,
@@ -318,13 +417,30 @@ export const wsInitCommand = defineCommand({
       },
       ambient,
     });
-    // Init reuses an existing workspace as it is, so a typed description would be dropped.
-    const exists = fs.exists(
-      join(ws.deriveWorkspacePath(config.root, name.value, config.workspacePrefix), "ws.md"),
+    const workspaceName = name.value.trim();
+    if (args["dry-run"]) {
+      const validation = ws.validateWorkspaceName(workspaceName);
+      if (!validation.valid) {
+        return reportWorkspaceError(
+          new ws.WorkspaceError(
+            "INVALID_WORKSPACE_NAME",
+            validation.error ?? "Invalid workspace name",
+          ),
+          config,
+          args.json,
+        );
+      }
+    }
+    const workspacePath = ws.deriveWorkspacePath(
+      config.root,
+      workspaceName,
+      config.workspacePrefix,
     );
+    const exists = fs.exists(workspacePath);
+    const hasManifest = fs.exists(join(workspacePath, "ws.md"));
     const description =
       args.desc ??
-      (canPrompt(ambient) && !exists
+      (canPrompt(ambient) && !args["dry-run"] && !hasManifest
         ? (
             await ui.text({
               message: "What is this task about?",
@@ -343,6 +459,26 @@ export const wsInitCommand = defineCommand({
       validateMountPlan(mounts);
     } catch (error) {
       return reportWorkspaceError(error, config, args.json);
+    }
+    if (args["dry-run"]) {
+      ui.result({
+        data: {
+          name: workspaceName,
+          ...(description ? { description } : {}),
+          path: workspacePath,
+          exists,
+          mounts: mounts.map(({ source, branch, path, reason, setup }) => ({
+            source: git.stripCredentialsFromUrl(source),
+            ...(branch !== undefined ? { branch } : {}),
+            path,
+            ...(reason !== undefined ? { reason } : {}),
+            ...(setup !== undefined ? { setup } : {}),
+          })),
+        },
+        json: args.json,
+        text: () => `Workspace plan for '${workspaceName}' (${mounts.length} mounts).`,
+      });
+      return 0;
     }
 
     let initializedPath: string | undefined;
@@ -731,6 +867,13 @@ function validateMountPlan(mounts: PlannedMount[]): void {
       branch: mount.branch,
       existingMounts: declared,
     });
+    if (planned.declared) {
+      throw new ws.WorkspaceError(
+        "MOUNT_ALREADY_EXISTS",
+        `Mount path '${planned.mountName}' appears more than once in the workspace plan.`,
+        { mountName: planned.mountName },
+      );
+    }
     declared.push({
       path: planned.mountName,
       source: mount.source,

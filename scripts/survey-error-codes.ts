@@ -7,7 +7,7 @@ export async function surveyErrorCodes(
   const codes = new Set<string>();
   for await (const path of new Bun.Glob("**/*.ts").scan({ cwd: root, absolute: true })) {
     const text = await Bun.file(path).text();
-    for (const match of text.matchAll(/new\s+\w+Error\s*\(\s*["']([A-Z][A-Z0-9_]+)["']/g))
+    for (const match of text.matchAll(/new\s+(?:\w+\.)?\w+Error\s*\(\s*["']([A-Z][A-Z0-9_]+)["']/g))
       codes.add(match[1]!);
     for (const match of text.matchAll(/\bcode\s*(?:=|:)\s*["']([A-Z][A-Z0-9_]+)["']/g))
       codes.add(match[1]!);

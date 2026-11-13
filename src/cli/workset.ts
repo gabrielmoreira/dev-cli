@@ -1,11 +1,17 @@
 import { defineCommand } from "citty";
+import { ZodError } from "zod";
 import * as git from "../git.ts";
 import * as workset from "../workset.ts";
 import type { RuntimeConfig, WorksetDefinition, WorksetMember } from "../config.ts";
 import { LabelError } from "../labels.ts";
 import { ui } from "../ui.ts";
 import { canPrompt, getActiveConfig, getAmbient } from "./context.ts";
-import { resolveChoiceInput, resolveConfirmation, resolveTextInput } from "./input.ts";
+import {
+  CliInputError,
+  resolveChoiceInput,
+  resolveConfirmation,
+  resolveTextInput,
+} from "./input.ts";
 import { resolveRepositoryInput } from "./repository-input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { reportError } from "./errors.ts";
@@ -1212,6 +1218,67 @@ export const worksetShowCommand = defineCommand({
   },
 });
 
+export const worksetSaveCommand = defineCommand({
+  meta: { name: "save", description: "Save a complete workset definition" },
+  args: {
+    workset: { type: "positional", description: "Workset name", required: true },
+    "definition-json": {
+      type: "string",
+      description: "Complete workset definition as JSON",
+      required: true,
+    },
+    original: { type: "string", description: "Existing workset name to replace or rename" },
+    root: { type: "string", description: "Explicit dev root directory" },
+    json: { type: "boolean", description: "Output in structured JSON format" },
+  },
+  async run({ args }) {
+    const config = getActiveConfig(args.root);
+    const usage = "dev workset save <workset> --definition-json <json> [--original <name>]";
+    try {
+      if (!args.workset.trim()) {
+        throw new CliInputError("INVALID_ARGUMENT", "Workset name cannot be empty.", {
+          field: "workset",
+          usage,
+        });
+      }
+      let definition: unknown;
+      try {
+        definition = JSON.parse(args["definition-json"]);
+      } catch {
+        throw new CliInputError("INVALID_ARGUMENT", "--definition-json must contain valid JSON.", {
+          field: "definition-json",
+          usage,
+        });
+      }
+      const saved = await workset.saveWorksetDraft(
+        config,
+        args.original,
+        args.workset,
+        definition as WorksetDefinition,
+      );
+      ui.result({
+        data: { name: args.workset.trim(), ...saved },
+        json: args.json,
+        text: () => `✓ Saved workset '${args.workset.trim()}'.`,
+      });
+      return 0;
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reportWorksetError(
+          new CliInputError(
+            "INVALID_ARGUMENT",
+            "--definition-json must contain a valid workset definition.",
+            { field: "definition-json", usage },
+          ),
+          config,
+          args.json,
+        );
+      }
+      return reportWorksetError(error, config, args.json);
+    }
+  },
+});
+
 export const worksetCommand = defineCommand({
   meta: { name: "workset", description: "Manage reusable repository worksets" },
   args: worksetListCommand.args,
@@ -1219,6 +1286,7 @@ export const worksetCommand = defineCommand({
     list: worksetListCommand,
     ls: worksetListCommand,
     create: worksetCreateCommand,
+    save: worksetSaveCommand,
     rename: worksetRenameCommand,
     manage: worksetManageCommand,
     repo: worksetRepoCommand,

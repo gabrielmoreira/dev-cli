@@ -214,6 +214,16 @@ function assertSafeMountPath(path: string): string {
   return trimmed;
 }
 
+function mountPathsOverlap(left: string, right: string): boolean {
+  let a = left.replaceAll("\\", "/");
+  let b = right.replaceAll("\\", "/");
+  if (process.platform === "win32") {
+    a = a.toLowerCase();
+    b = b.toLowerCase();
+  }
+  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+}
+
 function assertSafeManifestMountPaths(workspaceManifest: manifest.WorkspaceManifest): void {
   for (const mount of workspaceManifest.mounts) assertSafeMountPath(mount.path);
 }
@@ -537,6 +547,16 @@ export function planMount(input: {
       "MOUNT_ALREADY_EXISTS",
       `Mount path '${mountName}' is already declared for ${declared.source} @ ${describeRevision(declared.revision)}`,
       { mountName },
+    );
+  }
+  const overlapping = input.existingMounts.find((mount) =>
+    mountPathsOverlap(mount.path, mountName),
+  );
+  if (overlapping) {
+    throw new WorkspaceError(
+      "MOUNT_PATH_OVERLAP",
+      `Mount path '${mountName}' overlaps existing mount '${overlapping.path}'.`,
+      { mountName, existingMountPath: overlapping.path },
     );
   }
 

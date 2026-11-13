@@ -64,6 +64,7 @@ An empty next step means the error message supplies the context; no generic reme
 | `INVALID_LABEL_FIELD`        | 2    | Pass fields as key=value pairs, using names and types declared for the label in dev.yaml. |
 | `INVALID_MANIFEST`           | 2    | Edit <filePath> to fix the workspace manifest, then retry.                                |
 | `INVALID_MOUNT_PATH`         | 2    | Choose a relative mount path without '..' or an absolute path prefix.                     |
+| `INVALID_MOUNT_PLAN`         | 2    | Pass --mounts-json as a JSON array of {source, branch?, path?, reason?, setup?} objects.  |
 | `INVALID_SOURCE`             | 2    | Pass a repository URL or local path.                                                      |
 | `INVALID_UPDATE_PLAN`        | 1    |                                                                                           |
 | `INVALID_WORKSPACE_NAME`     | 2    | Pass a non-empty workspace name without path separators.                                  |
@@ -76,6 +77,7 @@ An empty next step means the error message supplies the context; no generic reme
 | `MOUNT_ALREADY_EXISTS`       | 3    | dev ws status                                                                             |
 | `MOUNT_NOT_FOUND`            | 1    | dev ws status                                                                             |
 | `MOUNT_PATH_EXISTS_ON_DISK`  | 3    | dev ws add <repository> --path <another-name>                                             |
+| `MOUNT_PATH_OVERLAP`         | 3    | Choose a mount path that does not overlap another repository's path.                      |
 | `NETWORK`                    | 4    | Check connectivity to the repository or provider, then retry.                             |
 | `NOT_FOUND`                  | 1    | Check the repository URL or provider resource, then retry.                                |
 | `PATH_OUTSIDE_ROOT`          | 2    | Choose a path inside <root>.                                                              |
@@ -414,19 +416,22 @@ Manage task-oriented multi-repo workspaces
 
 Initialize a new workspace with ws.md and .local/
 
-**Usage:** `dev ws init [workspace] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--setup <value>] [--consent] [--json]`
+**Usage:** `dev ws init [workspace] [--desc <value>] [--root <value>] [--workset <value>] [--label <value>] [--yes] [--dry-run] [--mounts-json <value>] [--name <value>] [--setup <value>] [--consent] [--json]`
 
-| Argument            | Type       | Description                                                            |
-| ------------------- | ---------- | ---------------------------------------------------------------------- |
-| `workspace`         | positional | Workspace name, repository URI, or pull request URL                    |
-| `--desc <value>`    | string     | Workspace description                                                  |
-| `--root <value>`    | string     | Explicit dev root directory                                            |
-| `--workset <value>` | string     | Initialize from a configured workset                                   |
-| `--label <value>`   | string     | Add every repository carrying this label (comma-separated for several) |
-| `--yes`             | boolean    | Accept the generated mount plan                                        |
-| `--setup <value>`   | string     | Command to run in every mount after the workspace is created           |
-| `--consent`         | boolean    | Allow setup commands from repositories dev does not trust              |
-| `--json`            | boolean    | Output in structured JSON format                                       |
+| Argument                | Type       | Description                                                            |
+| ----------------------- | ---------- | ---------------------------------------------------------------------- |
+| `workspace`             | positional | Workspace name, repository URI, or pull request URL                    |
+| `--desc <value>`        | string     | Workspace description                                                  |
+| `--root <value>`        | string     | Explicit dev root directory                                            |
+| `--workset <value>`     | string     | Initialize from a configured workset                                   |
+| `--label <value>`       | string     | Add every repository carrying this label (comma-separated for several) |
+| `--yes`                 | boolean    | Accept the generated mount plan                                        |
+| `--dry-run`             | boolean    | Resolve and return the workspace plan without creating it              |
+| `--mounts-json <value>` | string     | Reviewed mounts as a JSON array                                        |
+| `--name <value>`        | string     | Workspace name override for a repository or pull request URL           |
+| `--setup <value>`       | string     | Command to run in every mount after the workspace is created           |
+| `--consent`             | boolean    | Allow setup commands from repositories dev does not trust              |
+| `--json`                | boolean    | Output in structured JSON format                                       |
 
 ## `dev ws add`
 
@@ -1136,6 +1141,7 @@ Manage reusable repository worksets
 | -------------------- | ------------------------------------ |
 | `dev workset list`   | List configured worksets             |
 | `dev workset create` | Create a reusable repository workset |
+| `dev workset save`   | Save a complete workset definition   |
 | `dev workset rename` | Rename a configured workset          |
 | `dev workset manage` | Interactively manage a workset       |
 | `dev workset repo`   | Manage repositories in a workset     |
@@ -1171,6 +1177,20 @@ Create a reusable repository workset
 | `--yes`                 | boolean    | Create without interactive confirmation                                        |
 | `--root <value>`        | string     | Explicit dev root directory                                                    |
 | `--json`                | boolean    | Output in structured JSON format                                               |
+
+## `dev workset save`
+
+Save a complete workset definition
+
+**Usage:** `dev workset save <workset> --definition-json <value> [--original <value>] [--root <value>] [--json]`
+
+| Argument                    | Type       | Description                                   |
+| --------------------------- | ---------- | --------------------------------------------- |
+| `workset`                   | positional | Workset name Required.                        |
+| `--definition-json <value>` | string     | Complete workset definition as JSON Required. |
+| `--original <value>`        | string     | Existing workset name to replace or rename    |
+| `--root <value>`            | string     | Explicit dev root directory                   |
+| `--json`                    | boolean    | Output in structured JSON format              |
 
 ## `dev workset rename`
 

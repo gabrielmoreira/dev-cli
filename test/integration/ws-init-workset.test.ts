@@ -7,6 +7,7 @@ import { runCli } from "../../src/cli";
 import * as git from "../../src/git.ts";
 import * as manifest from "../../src/manifest.ts";
 import { ui } from "../../src/ui.ts";
+import * as ws from "../../src/ws.ts";
 
 async function createRemote(
   root: string,
@@ -98,6 +99,129 @@ worksets:
       ["mobile-app", { mode: "track", branch: "main" }],
       ["wiki-docs", { mode: "track", branch: "master" }],
       ["wiki-docs-internal", { mode: "track", branch: "internal" }],
+    ]);
+  });
+
+  test.each(["url", "label", "workset"])(
+    "repeating %s init preserves a declared non-default branch despite inventory defaults",
+    async (mode) => {
+      await Bun.write(
+        join(root, "dev.yaml"),
+        `version: 1
+sources:
+  - url: ${wikiRemote}
+    labels:
+      docs: {}
+worksets:
+  docs:
+    members:
+      - label: docs
+`,
+      );
+      const name = ws.deriveWorkspaceNameFromRepository(wikiRemote);
+      const init = (args: string[]) =>
+        runCli({
+          argv: ["ws", "init", ...args, "--root", root, "--json", "--non-interactive"],
+          cwd: root,
+          env: {},
+          isTTY: false,
+        });
+      expect(
+        await init([
+          name,
+          "--mounts-json",
+          JSON.stringify([{ source: wikiRemote, branch: "internal", path: "wiki-docs" }]),
+        ]),
+      ).toBe(0);
+      await cache.writeInventory({
+        root,
+        tenant: "local/test",
+        records: [
+          {
+            id: "wiki",
+            name: "wiki-docs",
+            url: wikiRemote,
+            default_branch: "master",
+            description: "Documentation",
+            syncedAt: "2026-09-18T00:00:00Z",
+            last_changed: "2026-09-18T00:00:00Z",
+          },
+        ],
+      });
+      const manifestPath = join(root, "ws", name, "ws.md");
+      const before = await Bun.file(manifestPath).text();
+      const repeat = mode === "url" ? [wikiRemote] : [name, `--${mode}`, "docs"];
+      expect(await init(repeat)).toBe(0);
+      expect(await Bun.file(manifestPath).text()).toBe(before);
+      const branch = await git.runGit(["branch", "--show-current"], {
+        cwd: join(root, "ws", name, "wiki-docs"),
+      });
+      expect(branch.exitCode).toBe(0);
+      expect(branch.stdout).toBe("internal");
+    },
+  );
+
+  test("derives a dry-run name from one reviewed repository mount", async () => {
+    const code = await runCli({
+      argv: [
+        "ws",
+        "init",
+        "--mounts-json",
+        JSON.stringify([{ source: appRemote, branch: "main", path: "mobile-reviewed" }]),
+        "--dry-run",
+        "--root",
+        root,
+        "--json",
+        "--non-interactive",
+      ],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    const name = ws.deriveWorkspaceNameFromRepository(appRemote);
+    expect(code).toBe(0);
+    const preview = JSON.parse(logs.find((line) => line.includes('"mounts"')) ?? "{}");
+    expect(preview).toEqual({
+      name,
+      path: ws.deriveWorkspacePath(root, name),
+      exists: false,
+      mounts: [{ source: appRemote, branch: "main", path: "mobile-reviewed" }],
+    });
+    expect(logs.join("\n")).not.toContain("extraHeader");
+    expect(await Bun.file(join(root, "ws", name, "ws.md")).exists()).toBe(false);
+  });
+
+  test("creates the exact reviewed mounts from JSON inputs", async () => {
+    const mounts = [
+      { source: appRemote, branch: "main", path: "mobile-reviewed" },
+      { source: wikiRemote, branch: "internal", path: "docs-reviewed" },
+    ];
+    const code = await runCli({
+      argv: [
+        "ws",
+        "init",
+        "reviewed-multi",
+        "--mounts-json",
+        JSON.stringify(mounts),
+        "--yes",
+        "--root",
+        root,
+        "--json",
+        "--non-interactive",
+      ],
+      cwd: root,
+      env: {},
+      isTTY: false,
+    });
+
+    expect(code).toBe(0);
+    const parsed = await manifest.readWorkspace(join(root, "ws", "reviewed-multi", "ws.md"));
+    expect(
+      parsed.manifest.mounts.map((mount) => [mount.source, mount.path, mount.revision]),
+    ).toEqual([
+      [appRemote, "mobile-reviewed", { mode: "track", branch: "main" }],
+      [wikiRemote, "docs-reviewed", { mode: "track", branch: "internal" }],
     ]);
   });
 

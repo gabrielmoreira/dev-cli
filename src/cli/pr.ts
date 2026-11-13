@@ -311,6 +311,7 @@ export const prListCommand = defineCommand({
       const filtered = all.filter(
         (item) =>
           pr.matchesStatus(item, statusFilter) &&
+          (!args.project || item.project?.toLowerCase() === args.project.toLowerCase()) &&
           (targetRepositories.size === 0 || targetRepositories.has(item.repository)) &&
           ((!args.provider && providers.length === 0) || allowedTenants.has(item.tenant)),
       );

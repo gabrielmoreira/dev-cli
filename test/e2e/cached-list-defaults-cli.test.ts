@@ -92,6 +92,16 @@ describe("cached CLI list omission and explicit intent", () => {
     expect(await ids(["pr", "list", "--status", "all", "--limit", "2"])).toEqual([62, 61]);
   });
 
+  it("filters offline PRs by project without changing status or limit semantics", async () => {
+    expect(await ids(["pr", "list", "--all", "--project", "missing"])).toEqual([]);
+    expect(await ids(["pr", "list", "--all", "--project", "PROJECT", "--limit", "1"])).toEqual([
+      60,
+    ]);
+    expect(
+      await ids(["pr", "list", "--all", "--project", "project", "--status", "completed"]),
+    ).toEqual([62, 61]);
+  });
+
   it("keeps omitted WI display bounded and explicit limits authoritative", async () => {
     expect(await ids(["wi", "list"])).toEqual(Array.from({ length: 50 }, (_, index) => 60 - index));
     expect(await ids(["wi", "list", "--limit", "2"])).toEqual([60, 59]);
