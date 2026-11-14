@@ -21,7 +21,7 @@ describe("cached CLI list omission and explicit intent", () => {
         return {
           id,
           title: `PR ${id}`,
-          description: "",
+          description: "Cached description ".repeat(128),
           status: id <= 60 ? ("open" as const) : ("completed" as const),
           sourceBranch: "feature",
           targetBranch: "main",
@@ -44,7 +44,7 @@ describe("cached CLI list omission and explicit intent", () => {
       records: Array.from({ length: 60 }, (_, index) => ({
         id: index + 1,
         type: "Task",
-        title: `WI ${index + 1}`,
+        title: `WI ${index + 1} ${"cached detail ".repeat(160)}`,
         state: "New",
         url: `https://example.test/wi/${index + 1}`,
         tenant: "fixture",
@@ -58,12 +58,27 @@ describe("cached CLI list omission and explicit intent", () => {
   });
 
   async function ids(args: string[]): Promise<number[]> {
+    const command = [process.execPath, CLI, ...args, "--offline", "--json", "--root", root];
+    // Exercise a real pipe on macOS rather than Bun's captured-stdout transport.
     const child = Bun.spawn(
-      [process.execPath, CLI, ...args, "--offline", "--json", "--root", root],
+      process.platform === "darwin"
+        ? [
+            "/bin/bash",
+            "--noprofile",
+            "--norc",
+            "-o",
+            "pipefail",
+            "-c",
+            '"$@" | cat',
+            "dev-list-test",
+            ...command,
+          ]
+        : command,
       {
         cwd: root,
         env: {
           ...process.env,
+          BASH_ENV: "",
           HOME: root,
           USERPROFILE: root,
           DEV_ROOT: root,
@@ -86,7 +101,7 @@ describe("cached CLI list omission and explicit intent", () => {
     return JSON.parse(stdout).map((record: { id: number }) => record.id);
   }
 
-  it("keeps omitted PR status open and display unlimited while explicit choices win", async () => {
+  it("keeps large cached PR JSON complete with open status and explicit choices", async () => {
     expect(await ids(["pr", "list"])).toEqual(Array.from({ length: 60 }, (_, index) => 60 - index));
     expect(await ids(["pr", "list", "--status", "completed", "--limit", "1"])).toEqual([62]);
     expect(await ids(["pr", "list", "--status", "all", "--limit", "2"])).toEqual([62, 61]);
@@ -102,7 +117,7 @@ describe("cached CLI list omission and explicit intent", () => {
     ).toEqual([62, 61]);
   });
 
-  it("keeps omitted WI display bounded and explicit limits authoritative", async () => {
+  it("keeps large cached WI JSON complete with bounded defaults and explicit limits", async () => {
     expect(await ids(["wi", "list"])).toEqual(Array.from({ length: 50 }, (_, index) => 60 - index));
     expect(await ids(["wi", "list", "--limit", "2"])).toEqual([60, 59]);
     expect(await ids(["wi", "list", "--limit", "60"])).toEqual(

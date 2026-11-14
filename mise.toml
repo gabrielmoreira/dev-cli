@@ -1,5 +1,6 @@
 [tools]
-bun = "1.4.2"
+# 1.4.4 fixes truncated large JSON writes to macOS pipes after stdout TTY detection.
+bun = "1.4.4"
 node = "26.10.0"
 vhs = "0.12.1"
 
