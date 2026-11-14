@@ -6,7 +6,12 @@ import { resolveAzureDevOpsCredential } from "../credentials.ts";
 import { ui } from "../ui.ts";
 import { findWorkspaceFlag, getActiveConfig, getAmbient } from "./context.ts";
 import type { ProviderConfig } from "../config.ts";
-import { parsePositiveInteger, resolveChoiceInput } from "./input.ts";
+import {
+  CliInputError,
+  CliInputRequiredError,
+  parsePositiveInteger,
+  resolveChoiceInput,
+} from "./input.ts";
 import { hasExplicitSubcommand, runNestedCommand } from "./run.ts";
 import { resolveWorkspaceQueryContext } from "./workspace-input.ts";
 import { reportError, reportExitCode } from "./errors.ts";
@@ -316,8 +321,13 @@ export const wiViewCommand = defineCommand({
   },
   args: {
     id: { type: "positional", description: "Work item ID", required: false },
-    project: { type: "string", description: "Filter by Azure DevOps project" },
+    project: { type: "string", description: "Limit to an Azure DevOps project" },
     provider: { type: "string", description: "Limit to a specific provider id" },
+    tenant: {
+      type: "string",
+      description:
+        "Limit to a cache namespace, as shown by `dev wi list --json` (for example dev.azure.com/<org>)",
+    },
     offline: {
       type: "boolean",
       description: "Read strictly from local cache with zero network access",
@@ -326,21 +336,53 @@ export const wiViewCommand = defineCommand({
     json: { type: "boolean", description: "Output in structured JSON format" },
   },
   async run({ args }) {
-    let idStr = args.id;
+    const usage = "dev wi view <id> [--tenant <tenant>] [--project <name>]";
     const explicitId =
-      idStr === undefined
-        ? undefined
-        : parsePositiveInteger(idStr, "id", "dev wi view <id> [--project <name>]");
+      args.id === undefined ? undefined : parsePositiveInteger(args.id, "id", usage);
     const config = getActiveConfig(args.root);
-    let selected: cache.WorkItemRecord | undefined;
-    if (!idStr) {
-      const candidates = (await cache.loadAllCachedWorkItems(config.root)).filter(
-        (item) => !args.project || item.project === args.project,
+    const adoProviders = config.providers.filter(
+      (p): p is Extract<ProviderConfig, { type: "azure_devops" }> => p.type === "azure_devops",
+    );
+    const sameTenant = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+    let provider: (typeof adoProviders)[number] | undefined;
+    if (args.provider) {
+      provider = adoProviders.find((p) => p.id === args.provider);
+      if (!provider) {
+        throw new CliInputError(
+          "PROVIDER_NOT_FOUND",
+          `No Azure DevOps provider with id '${args.provider}' found.`,
+          {
+            kind: "provider",
+            value: args.provider,
+            candidates: adoProviders.map((p) => p.id),
+            usage: "dev provider list",
+          },
+        );
+      }
+    }
+    const requestedTenant = args.tenant ? adoTenant(args.tenant) : undefined;
+    const providerTenant = provider ? adoTenant(provider.organization) : undefined;
+    if (requestedTenant && providerTenant && !sameTenant(requestedTenant, providerTenant)) {
+      throw new CliInputError(
+        "CONFLICTING_OPTIONS",
+        `Conflicting provider and tenant: '${provider!.id}' belongs to '${providerTenant}', not '${requestedTenant}'.`,
+        { usage: "Pass a --provider and --tenant that name the same organization, or only one." },
       );
+    }
+    const scopeTenant = requestedTenant ?? providerTenant;
+    const inScope = (item: cache.WorkItemRecord) =>
+      (!scopeTenant || sameTenant(item.tenant, scopeTenant)) &&
+      (!args.project || item.project === args.project);
+
+    const cached = (await cache.loadAllCachedWorkItems(config.root)).filter(inScope);
+    let id: number;
+    let matched: cache.WorkItemRecord | undefined;
+    if (explicitId === undefined) {
       const choice = await resolveChoiceInput({
         choices: async () =>
-          candidates.map((item, index) => ({
-            label: `#${item.id} [${item.type} / ${item.state}]: ${item.title}`,
+          cached.map((item, index) => ({
+            label: `${item.tenant}/${item.project} #${item.id} [${item.type} / ${item.state}]: ${item.title}`,
             value: String(index),
           })),
         message: "Select work item",
@@ -348,46 +390,93 @@ export const wiViewCommand = defineCommand({
         required: {
           command: "wi view",
           field: "id",
-          usage: "dev wi view <id> [--project <name>]",
+          usage,
           description: "Work item ID",
         },
       });
-      selected = candidates[Number(choice.value)];
-      idStr = selected ? String(selected.id) : undefined;
+      matched = cached[Number(choice.value)];
+      if (!matched) {
+        throw Object.assign(new Error("Selected work item is unavailable."), {
+          details: { usage: "dev wi list" },
+        });
+      }
+      id = matched.id;
+    } else {
+      id = explicitId;
+      const matches = cached.filter((item) => item.id === id);
+      if (matches.length > 1) {
+        // The same id exists in several organizations or projects: never pick one for the user.
+        const tenants = [...new Set(matches.map((item) => item.tenant))];
+        const byTenant = tenants.length > 1;
+        const choices = byTenant ? tenants : matches.map((item) => item.project);
+        throw new CliInputRequiredError({
+          command: "wi view",
+          field: byTenant ? "tenant" : "project",
+          usage: byTenant
+            ? `dev wi view ${id} --tenant <tenant>${args.project ? ` --project ${args.project}` : ""}`
+            : `dev wi view ${id} --tenant ${tenants[0]} --project <name>`,
+          description: byTenant
+            ? `Organization for work item #${id}`
+            : `Project for work item #${id}`,
+          choices,
+        });
+      }
+      matched = matches[0];
     }
-    if (!idStr)
-      throw Object.assign(new Error("Selected work item is unavailable."), {
-        details: { usage: "dev wi list" },
-      });
-    const id =
-      explicitId ?? parsePositiveInteger(idStr, "id", "dev wi view <id> [--project <name>]");
 
-    const adoProvider = config.providers.find(
-      (p): p is Extract<ProviderConfig, { type: "azure_devops" }> =>
-        p.type === "azure_devops" && (!args.provider || p.id === args.provider),
-    );
-
-    const tenant =
-      selected?.tenant || (adoProvider ? adoTenant(adoProvider.organization) : undefined);
+    // Live reads follow the explicit provider, else the record's own organization, else the
+    // explicit scope. When that still leaves several destinations, ask instead of querying
+    // the first configured one.
+    const tenant = matched?.tenant ?? scopeTenant;
+    const project = args.project || matched?.project;
+    let liveProvider: (typeof adoProviders)[number] | undefined;
+    if (!args.offline) {
+      const candidates = provider
+        ? [provider]
+        : adoProviders.filter((p) => !tenant || sameTenant(adoTenant(p.organization), tenant));
+      const tenants = [...new Set(candidates.map((p) => adoTenant(p.organization).toLowerCase()))];
+      if (tenants.length > 1) {
+        throw new CliInputRequiredError({
+          command: "wi view",
+          field: "tenant",
+          usage: `dev wi view ${id} --tenant <tenant> [--project <name>]`,
+          description: `Organization for work item #${id}`,
+          choices: [...new Set(candidates.map((p) => adoTenant(p.organization)))],
+        });
+      }
+      // Providers on one organization differ only by default project.
+      if (!project && new Set(candidates.map((p) => p.project ?? "")).size > 1) {
+        throw new CliInputRequiredError({
+          command: "wi view",
+          field: "provider",
+          usage: `dev wi view ${id} --provider <id> [--project <name>]`,
+          description: `Provider for work item #${id}`,
+          choices: candidates.map((p) => p.id),
+        });
+      }
+      liveProvider = candidates[0];
+    }
 
     let client;
-    if (!args.offline && adoProvider) {
+    if (liveProvider) {
       try {
         const cred = await resolveAzureDevOpsCredential(config);
-        client = createAzureDevOps({ organization: adoProvider.organization, token: cred.token });
+        client = createAzureDevOps({ organization: liveProvider.organization, token: cred.token });
       } catch {
         // offline fallback
       }
     }
 
-    const item = await workitem.getWorkItem({
-      root: config.root,
-      id,
-      tenant,
-      project: args.project || selected?.project || adoProvider?.project,
-      offline: args.offline || !client,
-      client,
-    });
+    const item = client
+      ? await workitem.getWorkItem({
+          root: config.root,
+          id,
+          tenant: tenant ?? adoTenant(liveProvider!.organization),
+          project: project || liveProvider!.project,
+          offline: false,
+          client,
+        })
+      : matched;
 
     if (!item) {
       return reportError(

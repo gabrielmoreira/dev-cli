@@ -951,16 +951,17 @@ List work items across all configured ADO providers (cached or live)
 
 View details for a specific work item
 
-**Usage:** `dev wi view [id] [--project <value>] [--provider <value>] [--offline] [--root <value>] [--json]`
+**Usage:** `dev wi view [id] [--project <value>] [--provider <value>] [--tenant <value>] [--offline] [--root <value>] [--json]`
 
-| Argument             | Type       | Description                                             |
-| -------------------- | ---------- | ------------------------------------------------------- |
-| `id`                 | positional | Work item ID                                            |
-| `--project <value>`  | string     | Filter by Azure DevOps project                          |
-| `--provider <value>` | string     | Limit to a specific provider id                         |
-| `--offline`          | boolean    | Read strictly from local cache with zero network access |
-| `--root <value>`     | string     | Explicit dev root directory                             |
-| `--json`             | boolean    | Output in structured JSON format                        |
+| Argument             | Type       | Description                                                                                    |
+| -------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `id`                 | positional | Work item ID                                                                                   |
+| `--project <value>`  | string     | Limit to an Azure DevOps project                                                               |
+| `--provider <value>` | string     | Limit to a specific provider id                                                                |
+| `--tenant <value>`   | string     | Limit to a cache namespace, as shown by `dev wi list --json` (for example dev.azure.com/<org>) |
+| `--offline`          | boolean    | Read strictly from local cache with zero network access                                        |
+| `--root <value>`     | string     | Explicit dev root directory                                                                    |
+| `--json`             | boolean    | Output in structured JSON format                                                               |
 
 ## `dev label`
 
